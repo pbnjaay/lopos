@@ -158,7 +158,14 @@ export function PosPage() {
         </div>
       </header>
 
-      <OfflineBanner pendingSalesCount={pendingSalesCount} />
+      <div className="offline-status-row">
+        <OfflineBanner pendingSalesCount={pendingSalesCount} />
+        {pendingSalesCount > 0 ? (
+          <Link className="text-button" to="/sales/pending">
+            Voir les ventes en attente
+          </Link>
+        ) : null}
+      </div>
 
       {storeQuery.error && !localSession?.storeName ? (
         <p className="form-error" role="alert">

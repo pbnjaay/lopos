@@ -7,6 +7,7 @@ import { CashSessionReportPage } from "../pages/CashSessionReportPage"
 import { CloseCashSessionPage } from "../pages/CloseCashSessionPage"
 import { LoginPage } from "../pages/LoginPage"
 import { OpenCashSessionPage } from "../pages/OpenCashSessionPage"
+import { PendingSalesPage } from "../pages/PendingSalesPage"
 import { PosPage } from "../pages/PosPage"
 import { SaleReceiptPage } from "../pages/SaleReceiptPage"
 
@@ -46,6 +47,10 @@ export const router = createBrowserRouter([
       {
         path: "/cash-sessions/:sessionId/report",
         element: <CashSessionReportPage />,
+      },
+      {
+        path: "/sales/pending",
+        element: <PendingSalesPage />,
       },
       {
         path: "/sales/:saleId/receipt",
