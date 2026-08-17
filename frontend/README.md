@@ -30,9 +30,12 @@ npm run build
 ## Contrats backend constatés
 
 - toutes les routes API exigent une session Django authentifiée ; un accès
-  anonyme produit actuellement un `403` DRF ;
-- `/api/v1/auth/login/` est le formulaire HTML fourni par DRF, pas un endpoint
-  JSON de connexion ;
+  anonyme produit un `403` DRF ;
+- `GET /api/v1/auth/csrf/` émet `csrftoken` ;
+- `POST /api/v1/auth/login/` accepte `{ username, password }`, crée la session
+  Django et retourne l'utilisateur JSON ;
+- `POST /api/v1/auth/logout/` détruit la session ;
+- `GET /api/v1/auth/me/` retourne l'utilisateur courant ou `403` ;
 - les listes `stores`, `cash-registers` et `products` sont des tableaux JSON non
   paginés ;
 - `GET /products/` accepte `search`, `barcode` et `store_id`, mais le champ
@@ -45,7 +48,18 @@ npm run build
   validation DRF sont structurées par champ et les erreurs d'authentification
   utilisent généralement `{ detail }`.
 
-Avant l'étape 2, il faudra décider du contrat de connexion navigateur. Le
-formulaire HTML DRF existant peut dépanner, mais une petite vue JSON
-login/logout/état utilisateur avec émission du cookie CSRF sera plus adaptée à
-une interface React.
+## Séquence d'authentification React
+
+1. Appeler `GET /api/v1/auth/csrf/` avec `credentials: "include"`.
+2. Lire le cookie `csrftoken`.
+3. Appeler `POST /api/v1/auth/login/` en envoyant `X-CSRFToken` et le JSON des
+   identifiants.
+4. Après succès, laisser le navigateur gérer `sessionid` et la nouvelle valeur
+   de `csrftoken` émise par Django.
+5. Envoyer `credentials: "include"` sur tous les appels et `X-CSRFToken` sur
+   chaque méthode mutante.
+6. Utiliser `GET /api/v1/auth/me/` pour restaurer l'utilisateur au chargement.
+7. Appeler `POST /api/v1/auth/logout/` avec le token CSRF courant.
+
+Le proxy Vite garde les échanges en même origine ; aucune autorisation CORS
+globale n'est ajoutée au backend.

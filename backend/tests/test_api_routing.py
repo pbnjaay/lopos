@@ -30,8 +30,17 @@ def test_current_cash_session_route() -> None:
     ) == f"/api/v1/cash-registers/{register_id}/current-session/"
 
 
-def test_session_login_route() -> None:
-    assert reverse("rest_framework:login") == "/api/v1/auth/login/"
+@pytest.mark.parametrize(
+    ("route_name", "expected_path"),
+    [
+        ("auth-csrf", "/api/v1/auth/csrf/"),
+        ("auth-login", "/api/v1/auth/login/"),
+        ("auth-logout", "/api/v1/auth/logout/"),
+        ("auth-me", "/api/v1/auth/me/"),
+    ],
+)
+def test_auth_route(route_name: str, expected_path: str) -> None:
+    assert reverse(route_name) == expected_path
 
 
 @pytest.mark.django_db

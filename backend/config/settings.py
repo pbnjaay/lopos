@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     "apps.inventory",
     "apps.cash",
     "apps.sales",
+    "apps.accounts",
 ]
 
 MIDDLEWARE = [
@@ -91,3 +92,22 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
 }
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "DJANGO_CSRF_TRUSTED_ORIGINS",
+        "http://localhost:5173",
+    ).split(",")
+    if origin.strip()
+]
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SECURE = os.getenv("DJANGO_COOKIE_SECURE", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE
+CSRF_FAILURE_VIEW = "config.csrf.csrf_failure"

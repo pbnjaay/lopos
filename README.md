@@ -65,8 +65,8 @@ Créer un administrateur :
 docker compose exec backend python backend/manage.py createsuperuser
 ```
 
-L'administration se trouve sur `http://localhost:8000/admin/`. La connexion à
-l'API navigable est disponible sur `http://localhost:8000/api/v1/auth/login/`.
+L'administration se trouve sur `http://localhost:8000/admin/`. L'authentification
+du frontend utilise les endpoints JSON décrits ci-dessous.
 
 ## Développement local
 
@@ -86,17 +86,30 @@ configuration d'un processus Python local, exportez les variables concernées.
 ## Authentification
 
 La Phase A utilise `SessionAuthentication` et exige un utilisateur Django
-authentifié sur toutes les routes API. Le caissier d'une ouverture provient de
+authentifié sur les routes métier. Le caissier d'une ouverture provient de
 `request.user` et n'est jamais choisi dans le corps de la requête. Une vente ne
 peut être enregistrée que par le caissier propriétaire de la session.
 
-Cette configuration est adaptée au développement et à l'API navigable. Le JWT
-et les rôles avancés restent hors périmètre de cette phase.
+Le frontend doit d'abord appeler `GET /api/v1/auth/csrf/`, puis reprendre la
+valeur du cookie `csrftoken` dans l'en-tête `X-CSRFToken` du login et de toute
+requête mutante. Toutes les requêtes utilisent `credentials: "include"`. Django
+émet le cookie de session `sessionid` après un login réussi et renouvelle alors
+le token CSRF.
+
+Le proxy Vite `/api` conserve les appels dans l'origine du frontend : aucune
+configuration CORS n'est nécessaire. `http://localhost:5173` est la seule
+origine CSRF de développement autorisée par défaut. Elle est configurable avec
+`DJANGO_CSRF_TRUSTED_ORIGINS`. Le JWT et les rôles avancés restent hors
+périmètre.
 
 ## API v1
 
 | Méthode | Route | Usage |
 |---|---|---|
+| `GET` | `/api/v1/auth/csrf/` | Émettre le cookie CSRF |
+| `POST` | `/api/v1/auth/login/` | Créer une session Django |
+| `POST` | `/api/v1/auth/logout/` | Détruire la session Django |
+| `GET` | `/api/v1/auth/me/` | Lire l'utilisateur courant |
 | `POST` | `/api/v1/stores/` | Créer un magasin |
 | `GET` | `/api/v1/stores/` | Lister les magasins |
 | `POST` | `/api/v1/products/` | Créer un produit |

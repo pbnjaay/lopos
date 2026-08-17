@@ -1,6 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from apps.accounts.views import CsrfCookieView, LoginView, LogoutView, MeView
 from apps.cash.views import OpenCashSessionView
 from apps.catalog.views import ProductViewSet
 from apps.inventory.views import StockInView
@@ -15,7 +16,10 @@ router.register("products", ProductViewSet, basename="product")
 
 urlpatterns = [
     path("", include(router.urls)),
-    path("auth/", include("rest_framework.urls")),
+    path("auth/csrf/", CsrfCookieView.as_view(), name="auth-csrf"),
+    path("auth/login/", LoginView.as_view(), name="auth-login"),
+    path("auth/logout/", LogoutView.as_view(), name="auth-logout"),
+    path("auth/me/", MeView.as_view(), name="auth-me"),
     path("inventory/stock-in/", StockInView.as_view(), name="inventory-stock-in"),
     path(
         "cash-sessions/open/",
