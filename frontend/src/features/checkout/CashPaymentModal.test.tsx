@@ -61,4 +61,20 @@ describe("CashPaymentModal", () => {
     resolveConfirmation?.()
     await confirmation
   })
+
+  it("can return to payment methods without closing checkout", async () => {
+    const user = userEvent.setup()
+    const onBack = vi.fn()
+    render(
+      <CashPaymentModal
+        total={1_000}
+        onClose={vi.fn()}
+        onBack={onBack}
+        onConfirm={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole("button", { name: /Changer de moyen de paiement/ }))
+    expect(onBack).toHaveBeenCalledOnce()
+  })
 })

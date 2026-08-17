@@ -9,8 +9,11 @@ import { Cart } from "../features/cart/Cart"
 import { useCart } from "../features/cart/useCart"
 import { usePosSession } from "../features/cash-session/queries"
 import { CashPaymentModal } from "../features/checkout/CashPaymentModal"
+import { MobileMoneyConfirmation } from "../features/checkout/MobileMoneyConfirmation"
+import { PaymentMethodModal } from "../features/checkout/PaymentMethodModal"
 import { SaleSuccessModal } from "../features/checkout/SaleSuccessModal"
 import { ProductSearch } from "../features/products/ProductSearch"
+import type { CompleteSaleInput, PaymentMethod } from "../types/api"
 import { toBackendMoney } from "../utils/money"
 
 export function PosPage() {
@@ -18,7 +21,7 @@ export function PosPage() {
   const { ownSession, selectedRegister } = usePosSession(user.id)
   const queryClient = useQueryClient()
   const cart = useCart()
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
+  const [checkoutStep, setCheckoutStep] = useState<"METHODS" | PaymentMethod | null>(null)
   const [completedSale, setCompletedSale] = useState<Awaited<ReturnType<typeof completeSale>> | null>(
     null,
   )
@@ -33,7 +36,7 @@ export function PosPage() {
     mutationFn: completeSale,
     onSuccess: (sale) => {
       cart.clearCart()
-      setIsCheckoutOpen(false)
+      setCheckoutStep(null)
       setCompletedSale(sale)
       void queryClient.invalidateQueries({ queryKey: ["products"] })
     },
@@ -58,7 +61,7 @@ export function PosPage() {
     cart.addItem(product)
   }
 
-  async function handleCashPayment(receivedAmount: number) {
+  async function submitPayment(payment: CompleteSaleInput["payment"]) {
     if (!ownSession || cart.items.length === 0) return
 
     await saleMutation.mutateAsync({
@@ -67,11 +70,19 @@ export function PosPage() {
         product_id: item.productId,
         quantity: item.quantity,
       })),
-      payment: {
-        method: "CASH",
-        received_amount: toBackendMoney(receivedAmount),
-      },
+      payment,
     })
+  }
+
+  function handleCashPayment(receivedAmount: number) {
+    return submitPayment({
+      method: "CASH",
+      received_amount: toBackendMoney(receivedAmount),
+    })
+  }
+
+  function handleMobilePayment(method: Exclude<PaymentMethod, "CASH">) {
+    return submitPayment({ method })
   }
 
   return (
@@ -110,7 +121,7 @@ export function PosPage() {
             onClear={cart.clearCart}
             onCheckout={() => {
               saleMutation.reset()
-              setIsCheckoutOpen(true)
+              setCheckoutStep("METHODS")
             }}
           />
         </div>
@@ -119,15 +130,45 @@ export function PosPage() {
           Impossible de déterminer le magasin de cette caisse.
         </p>
       )}
-      {isCheckoutOpen ? (
+      {checkoutStep === "METHODS" ? (
+        <PaymentMethodModal
+          total={cart.total}
+          onClose={() => setCheckoutStep(null)}
+          onSelect={(method) => {
+            saleMutation.reset()
+            setCheckoutStep(method)
+          }}
+        />
+      ) : null}
+      {checkoutStep === "CASH" ? (
         <CashPaymentModal
           total={cart.total}
           isSubmitting={saleMutation.isPending}
           errorMessage={saleMutation.error?.message}
+          onBack={() => {
+            saleMutation.reset()
+            setCheckoutStep("METHODS")
+          }}
           onClose={() => {
-            if (!saleMutation.isPending) setIsCheckoutOpen(false)
+            if (!saleMutation.isPending) setCheckoutStep(null)
           }}
           onConfirm={handleCashPayment}
+        />
+      ) : null}
+      {checkoutStep === "WAVE" || checkoutStep === "ORANGE_MONEY" ? (
+        <MobileMoneyConfirmation
+          method={checkoutStep}
+          total={cart.total}
+          isSubmitting={saleMutation.isPending}
+          errorMessage={saleMutation.error?.message}
+          onBack={() => {
+            saleMutation.reset()
+            setCheckoutStep("METHODS")
+          }}
+          onClose={() => {
+            if (!saleMutation.isPending) setCheckoutStep(null)
+          }}
+          onConfirm={() => handleMobilePayment(checkoutStep)}
         />
       ) : null}
       {completedSale ? (

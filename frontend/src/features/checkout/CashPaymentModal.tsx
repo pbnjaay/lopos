@@ -8,6 +8,7 @@ type CashPaymentModalProps = {
   onConfirm: (receivedAmount: number) => void | Promise<void>
   isSubmitting?: boolean
   errorMessage?: string | null
+  onBack?: () => void
 }
 
 const FIXED_QUICK_AMOUNTS = [1_000, 2_000, 5_000, 10_000, 20_000]
@@ -18,6 +19,7 @@ export function CashPaymentModal({
   onConfirm,
   isSubmitting = false,
   errorMessage = null,
+  onBack,
 }: CashPaymentModalProps) {
   const submissionLock = useRef(false)
   const [receivedInput, setReceivedInput] = useState("")
@@ -76,6 +78,16 @@ export function CashPaymentModal({
         <header className="checkout-modal-header">
           <div>
             <p className="eyebrow">Encaissement</p>
+            {onBack ? (
+              <button
+                className="payment-back-button"
+                type="button"
+                disabled={isSubmitting}
+                onClick={onBack}
+              >
+                ← Changer de moyen de paiement
+              </button>
+            ) : null}
             <h2 id="cash-payment-title">Paiement en espèces</h2>
           </div>
           <button

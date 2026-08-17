@@ -1,4 +1,4 @@
-# LoPOS frontend — étapes 1 à 8
+# LoPOS frontend — étapes 1 à 9
 
 Socle React, TypeScript et Vite du POS, avec authentification par session Django,
 restauration de l'utilisateur courant, guards de session et ouverture de caisse.
@@ -125,3 +125,13 @@ verrouillé pendant la requête. Une erreur backend reste affichée dans la moda
 et conserve le panier. Après un succès, les montants affichés viennent de la
 réponse Django, le panier est vidé, les recherches produit sont invalidées et
 `Nouvelle vente` redonne le focus au champ scanner.
+
+## Wave et Orange Money — étape 9
+
+`Encaisser` propose maintenant Espèces, Wave et Orange Money. Pour les deux
+modes mobiles, le POS demande au caissier de vérifier la réception sur le
+téléphone puis d'appuyer explicitement sur `Paiement reçu`. La vente envoie
+uniquement `{ method: "WAVE" }` ou `{ method: "ORANGE_MONEY" }`, sans montant
+reçu et sans intégration opérateur simulée. Depuis chaque formulaire, le
+caissier peut revenir directement au choix du moyen de paiement sans fermer
+l'encaissement ni perdre le panier.

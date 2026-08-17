@@ -7,6 +7,12 @@ type SaleSuccessModalProps = {
 }
 
 export function SaleSuccessModal({ sale, onNewSale }: SaleSuccessModalProps) {
+  const paymentLabel = {
+    CASH: "Espèces",
+    WAVE: "Wave",
+    ORANGE_MONEY: "Orange Money",
+  }[sale.payment.method]
+
   return (
     <div className="modal-backdrop">
       <section
@@ -22,6 +28,10 @@ export function SaleSuccessModal({ sale, onNewSale }: SaleSuccessModalProps) {
         <h2 id="sale-success-title">Vente validée</h2>
 
         <dl className="sale-amounts">
+          <div>
+            <dt>Paiement</dt>
+            <dd>{paymentLabel}</dd>
+          </div>
           <div>
             <dt>Total</dt>
             <dd>{formatMoney(Number(sale.total))}</dd>

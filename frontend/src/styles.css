@@ -519,6 +519,7 @@ h1 {
   place-items: center;
   padding: 1rem;
   background: rgb(12 28 22 / 58%);
+  backdrop-filter: blur(3px);
 }
 
 .checkout-modal {
@@ -536,11 +537,28 @@ h1 {
   justify-content: space-between;
   gap: 1rem;
   padding: 1.5rem;
-  border-bottom: 1px solid #e1e8e4;
 }
 
 .checkout-modal-header h2 {
-  margin: 0.3rem 0 0;
+  margin: 0.45rem 0 0;
+}
+
+.payment-back-button {
+  min-height: 2.25rem;
+  margin: 0.2rem 0 0 -0.5rem;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  background: transparent;
+  color: #176b4d;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.payment-back-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .modal-close {
@@ -558,6 +576,88 @@ h1 {
   display: grid;
   gap: 1.25rem;
   padding: 1.5rem;
+}
+
+.payment-method-content,
+.mobile-payment-content {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.5rem;
+}
+
+.payment-method-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.payment-method-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 5rem;
+  padding: 1rem 1.15rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: #f2f5f3;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.payment-method-card:hover,
+.payment-method-card:focus-visible {
+  background: #e8f0ec;
+  transform: translateY(-1px);
+}
+
+.payment-method-card strong {
+  font-size: 1.1rem;
+}
+
+.payment-method-copy {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.payment-method-copy small {
+  color: #527064;
+  font-size: 0.85rem;
+}
+
+.payment-method-wave {
+  background: #eaf8f7;
+}
+
+.payment-method-orange_money {
+  background: #fff3e9;
+}
+
+.payment-method-arrow {
+  color: #36594c;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.mobile-payment-instructions {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  background: #f4f8f6;
+}
+
+.mobile-payment-instructions span {
+  color: #527064;
+}
+
+.mobile-payment-wave {
+  background: #eaf8f7;
+}
+
+.mobile-payment-orange_money {
+  background: #fff3e9;
 }
 
 .payment-total,
@@ -595,7 +695,6 @@ h1 {
 }
 
 .change-preview {
-  border: 1px solid #b7d7c8;
   background: #edf8f2;
   color: #12563f;
 }
@@ -609,6 +708,11 @@ h1 {
   grid-template-columns: 1fr 1.5fr;
   gap: 0.75rem;
   margin-top: 0.5rem;
+}
+
+.checkout-modal .button-secondary {
+  border: 0;
+  background: #edf1ef;
 }
 
 .sale-success-modal {
