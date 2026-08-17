@@ -1,4 +1,4 @@
-# LoPOS frontend — étapes 1 à 11
+# LoPOS frontend — étapes 1 à 12
 
 Socle React, TypeScript et Vite du POS, avec authentification par session Django,
 restauration de l'utilisateur courant, guards de session et ouverture de caisse.
@@ -151,3 +151,35 @@ insuffisants ou valides, les modes mobiles et le scanner. Deux tests intégrés 
 POS mockent maintenant le réseau complet : une réponse `201` vérifie la monnaie
 serveur, le vidage du panier et le retour du focus ; une erreur
 `INSUFFICIENT_STOCK` vérifie le message Django et la conservation du panier.
+
+## Test end-to-end manuel — étape 12
+
+Préparer les données de démonstration et démarrer l'application :
+
+```bash
+docker compose up -d --build
+docker compose exec backend python backend/manage.py seed_demo --open-session
+cd frontend
+npm install
+npm run dev
+```
+
+Ouvrir `http://localhost:5173`, puis se connecter avec le compte de démonstration
+`caissier` et le mot de passe initial `password123`. Si ce compte existait déjà,
+la commande `seed_demo` conserve son mot de passe actuel.
+
+Dans le POS :
+
+1. vérifier que `Caisse 01` et sa session ouverte sont retrouvées après connexion ;
+2. scanner deux fois le code `3017620422003` ;
+3. vérifier `Coca 50cl × 2` et un total de `1 000 FCFA` ;
+4. choisir `Espèces`, saisir `2 000`, puis valider ;
+5. vérifier le succès, le total serveur de `1 000 FCFA`, la monnaie de
+   `1 000 FCFA`, le panier vide et le focus revenu sur le scanner ;
+6. scanner à nouveau le Coca pour confirmer que le stock rafraîchi est utilisé ;
+7. rafraîchir le navigateur et vérifier que la session ouverte est restaurée.
+
+Dans Django Unfold, contrôler que la vente est `COMPLETED`, que le paiement est
+`CASH`, que la ligne contient deux Coca à `500 FCFA` et qu'un mouvement de stock
+`SALE -2` a été créé. Répéter séparément avec Wave et Orange Money en confirmant
+manuellement `Paiement reçu` ; aucune confirmation opérateur n'est simulée.
