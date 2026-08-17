@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -64,8 +65,30 @@ class CompleteSaleView(APIView):
             )
 
         sale = (
-            Sale.objects.prefetch_related("items")
-            .select_related("payment")
+            Sale.objects.select_related(
+                "payment", "cashier", "cash_session__cash_register__store"
+            )
+            .prefetch_related("items")
             .get(pk=sale.pk)
         )
         return Response(SaleSerializer(sale).data, status=status.HTTP_201_CREATED)
+
+
+class SaleDetailView(APIView):
+    def get(self, request, pk=None) -> Response:
+        sale = get_object_or_404(
+            Sale.objects.select_related(
+                "payment", "cashier", "cash_session__cash_register__store"
+            ).prefetch_related("items"),
+            pk=pk,
+        )
+        if sale.cashier_id != request.user.pk and not request.user.is_staff:
+            return Response(
+                {
+                    "code": "SALE_NOT_OWNED",
+                    "message": "Cette vente appartient à un autre caissier.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return Response(SaleSerializer(sale).data, status=status.HTTP_200_OK)

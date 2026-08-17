@@ -37,4 +37,12 @@ class CashRegisterViewSet(
             cash_register=cash_register,
             status=CashSession.Status.OPEN,
         )
+        if session.cashier_id != request.user.pk and not request.user.is_staff:
+            return Response(
+                {
+                    "code": "CASH_SESSION_NOT_OWNED",
+                    "message": "Cette session appartient à un autre caissier.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         return Response(CashSessionSerializer(session).data, status=status.HTTP_200_OK)

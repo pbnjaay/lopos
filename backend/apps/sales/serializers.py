@@ -55,16 +55,33 @@ class PaymentSerializer(serializers.ModelSerializer):
 class SaleSerializer(serializers.ModelSerializer):
     items = SaleItemSerializer(many=True, read_only=True)
     payment = PaymentSerializer(read_only=True)
+    store = serializers.SerializerMethodField()
+    cash_register = serializers.SerializerMethodField()
+    cashier = serializers.SerializerMethodField()
 
     class Meta:
         model = Sale
         fields = (
             "id",
+            "created_at",
+            "store",
+            "cash_register",
+            "cashier",
             "status",
             "subtotal",
             "discount",
             "total",
             "payment",
             "items",
-            "created_at",
         )
+
+    def get_store(self, sale: Sale) -> dict:
+        store = sale.cash_session.cash_register.store
+        return {"id": store.id, "name": store.name}
+
+    def get_cash_register(self, sale: Sale) -> dict:
+        register = sale.cash_session.cash_register
+        return {"id": register.id, "name": register.name}
+
+    def get_cashier(self, sale: Sale) -> dict:
+        return {"id": sale.cashier_id, "username": sale.cashier.username}

@@ -11,14 +11,18 @@ class CashSessionAdmin(admin.ModelAdmin):
         "cashier",
         "opening_balance",
         "status",
+        "expected_balance",
+        "closing_balance",
+        "difference",
         "closed_at",
     )
-    list_filter = ("status", "cash_register__store")
+    list_filter = ("status", "cash_register__store", "cash_register", "cashier", "opened_at")
     search_fields = (
         "cash_register__name",
         "cash_register__store__name",
         "cashier__username",
     )
+    date_hierarchy = "opened_at"
     readonly_fields = (
         "id",
         "cash_register",

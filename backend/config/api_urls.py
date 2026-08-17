@@ -2,10 +2,14 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from apps.accounts.views import CsrfCookieView, LoginView, LogoutView, MeView
-from apps.cash.views import OpenCashSessionView
+from apps.cash.views import (
+    CashSessionSummaryView,
+    CloseCashSessionView,
+    OpenCashSessionView,
+)
 from apps.catalog.views import ProductViewSet
 from apps.inventory.views import StockInView
-from apps.sales.views import CompleteSaleView
+from apps.sales.views import CompleteSaleView, SaleDetailView
 from apps.stores.views import CashRegisterViewSet, StoreViewSet
 
 
@@ -26,5 +30,16 @@ urlpatterns = [
         OpenCashSessionView.as_view(),
         name="cash-session-open",
     ),
+    path(
+        "cash-sessions/<uuid:pk>/summary/",
+        CashSessionSummaryView.as_view(),
+        name="cash-session-summary",
+    ),
+    path(
+        "cash-sessions/<uuid:pk>/close/",
+        CloseCashSessionView.as_view(),
+        name="cash-session-close",
+    ),
     path("sales/", CompleteSaleView.as_view(), name="sale-complete"),
+    path("sales/<uuid:pk>/", SaleDetailView.as_view(), name="sale-detail"),
 ]
