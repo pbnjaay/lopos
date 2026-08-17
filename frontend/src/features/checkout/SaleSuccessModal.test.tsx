@@ -36,6 +36,14 @@ describe("SaleSuccessModal", () => {
     expect(screen.getByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
     expect(screen.getByText("2 000 FCFA")).toBeInTheDocument()
     expect(screen.getAllByText("1 000 FCFA")).toHaveLength(2)
+    expect(screen.getByRole("link", { name: "Imprimer le ticket" })).toHaveAttribute(
+      "href",
+      "/sales/sale-id/receipt",
+    )
+    expect(screen.getByRole("link", { name: "Imprimer le ticket" })).toHaveAttribute(
+      "target",
+      "_blank",
+    )
     await user.click(screen.getByRole("button", { name: "Nouvelle vente" }))
     expect(onNewSale).toHaveBeenCalledOnce()
   })

@@ -1,5 +1,5 @@
 import type { SaleResponse } from "../../types/api"
-import { formatMoney } from "../../utils/money"
+import { formatBackendMoney } from "../../utils/money"
 
 type SaleSuccessModalProps = {
   sale: SaleResponse
@@ -34,25 +34,35 @@ export function SaleSuccessModal({ sale, onNewSale }: SaleSuccessModalProps) {
           </div>
           <div>
             <dt>Total</dt>
-            <dd>{formatMoney(Number(sale.total))}</dd>
+            <dd>{formatBackendMoney(sale.total)}</dd>
           </div>
           {sale.payment.received_amount !== null ? (
             <div>
               <dt>Reçu</dt>
-              <dd>{formatMoney(Number(sale.payment.received_amount))}</dd>
+              <dd>{formatBackendMoney(sale.payment.received_amount)}</dd>
             </div>
           ) : null}
           {sale.payment.change_amount !== null ? (
             <div className="sale-change">
               <dt>Monnaie</dt>
-              <dd>{formatMoney(Number(sale.payment.change_amount))}</dd>
+              <dd>{formatBackendMoney(sale.payment.change_amount)}</dd>
             </div>
           ) : null}
         </dl>
 
-        <button className="button button-primary new-sale-button" type="button" onClick={onNewSale}>
-          Nouvelle vente
-        </button>
+        <div className="sale-success-actions">
+          <a
+            className="button button-secondary receipt-link"
+            href={`/sales/${encodeURIComponent(sale.id)}/receipt`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Imprimer le ticket
+          </a>
+          <button className="button button-primary" type="button" onClick={onNewSale}>
+            Nouvelle vente
+          </button>
+        </div>
       </section>
     </div>
   )
