@@ -12,7 +12,7 @@ type SessionRouteProps = {
 
 export function SessionRoute({ requireOpen, children }: SessionRouteProps) {
   const userQuery = useCurrentUser()
-  const session = usePosSession(userQuery.data!.id)
+  const session = usePosSession(userQuery.data!)
 
   if (session.isLoading) return <RouteState message="Recherche de la caisse…" />
   if (session.error) {

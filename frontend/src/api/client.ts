@@ -30,6 +30,10 @@ export class NetworkError extends Error {
   }
 }
 
+export function isApiUnavailable(error: unknown): boolean {
+  return error instanceof NetworkError || (error instanceof ApiError && error.status >= 500)
+}
+
 type ApiRequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown
 }

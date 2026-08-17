@@ -13,6 +13,10 @@ import { SELECTED_CASH_REGISTER_KEY } from "../features/cash-session/queries"
 import type { CashRegister, CashSession, CurrentUser } from "../types/api"
 import { OpenCashSessionPage } from "./OpenCashSessionPage"
 
+vi.mock("../db/sessions", () => ({
+  saveLocalCashSession: vi.fn().mockResolvedValue(undefined),
+}))
+
 const cashier: CurrentUser = {
   id: 7,
   username: "cashier",

@@ -1,5 +1,5 @@
 import { getProducts } from "../../api/products"
-import { ApiError, NetworkError } from "../../api/client"
+import { isApiUnavailable } from "../../api/client"
 import {
   findLocalProductByBarcode,
   hasLocalProductCatalog,
@@ -7,6 +7,7 @@ import {
 } from "../../db/products"
 import type { Product } from "../../types/api"
 import type { LocalProduct } from "../../db/types"
+import { isNavigatorOnline } from "../../utils/network"
 import type { CatalogProduct } from "./types"
 
 export class LocalCatalogUnavailableError extends Error {
@@ -47,14 +48,6 @@ function fromLocalProduct(product: LocalProduct): CatalogProduct {
   }
 }
 
-function browserIsOnline(): boolean {
-  return typeof navigator === "undefined" || navigator.onLine
-}
-
-function canUseLocalFallback(error: unknown): boolean {
-  return error instanceof NetworkError || (error instanceof ApiError && error.status >= 500)
-}
-
 async function ensureLocalCatalog(storeId: string): Promise<void> {
   if (!(await hasLocalProductCatalog(storeId))) {
     throw new LocalCatalogUnavailableError()
@@ -75,13 +68,13 @@ export async function getProductByBarcode(
   storeId: string,
   barcode: string,
 ): Promise<CatalogProduct | null> {
-  if (!browserIsOnline()) return getLocalProductByBarcode(storeId, barcode)
+  if (!isNavigatorOnline()) return getLocalProductByBarcode(storeId, barcode)
 
   try {
     const products = await getProducts({ storeId, barcode })
     return products[0] ? fromApiProduct(products[0]) : null
   } catch (error) {
-    if (!canUseLocalFallback(error)) throw error
+    if (!isApiUnavailable(error)) throw error
     return getLocalProductByBarcode(storeId, barcode)
   }
 }
@@ -90,7 +83,7 @@ export async function searchProducts(
   storeId: string,
   search: string,
 ): Promise<CatalogProduct[]> {
-  if (!browserIsOnline()) {
+  if (!isNavigatorOnline()) {
     await ensureLocalCatalog(storeId)
     return (await searchLocalProducts(storeId, search)).map(fromLocalProduct)
   }
@@ -98,7 +91,7 @@ export async function searchProducts(
   try {
     return (await getProducts({ storeId, search })).map(fromApiProduct)
   } catch (error) {
-    if (!canUseLocalFallback(error)) throw error
+    if (!isApiUnavailable(error)) throw error
     await ensureLocalCatalog(storeId)
     return (await searchLocalProducts(storeId, search)).map(fromLocalProduct)
   }

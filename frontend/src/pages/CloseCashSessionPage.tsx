@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom"
 
 import { closeCashSession, getCashSessionSummary } from "../api/cashSessions"
 import { RouteState } from "../components/ui/RouteState"
+import { markLocalCashSessionClosed } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
 import { CashClosingResult } from "../features/cash-session/CashClosingResult"
 import { usePosSession } from "../features/cash-session/queries"
@@ -17,7 +18,7 @@ import {
 
 export function CloseCashSessionPage() {
   const user = useCurrentUser().data!
-  const { ownSession } = usePosSession(user.id)
+  const { ownSession } = usePosSession(user)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [countedCash, setCountedCash] = useState("")
@@ -32,7 +33,12 @@ export function CloseCashSessionPage() {
   const closeMutation = useMutation({
     mutationFn: (amount: number) =>
       closeCashSession(ownSession!.id, { counted_cash: toBackendMoney(amount) }),
-    onSuccess: (closedSummary) => {
+    onSuccess: async (closedSummary) => {
+      try {
+        await markLocalCashSessionClosed(ownSession!.cash_register_id)
+      } catch {
+        // The server session is already closed; do not invite a duplicate request.
+      }
       setIsConfirming(false)
       queryClient.setQueryData(
         ["cash-sessions", closedSummary.id, "summary"],

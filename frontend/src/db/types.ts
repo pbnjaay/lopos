@@ -18,7 +18,7 @@ export type LocalCashSession = {
   cashRegisterId: string
   cashRegisterName: string
   storeId: string
-  storeName: string
+  storeName?: string
   cashierId: number
   cashierName: string
   openingBalance: number

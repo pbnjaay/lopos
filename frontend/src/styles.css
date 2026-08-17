@@ -643,6 +643,47 @@ h1 {
   font-weight: 800;
 }
 
+.network-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.network-status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+}
+
+.network-status-online {
+  background: #dff5e9;
+  color: #12563f;
+}
+
+.network-status-online .network-status-dot {
+  background: #1f9d63;
+}
+
+.network-status-offline {
+  background: #fdf1de;
+  color: #8a4b0b;
+}
+
+.network-status-offline .network-status-dot {
+  background: #d97a17;
+}
+
+.network-status-detail,
+.network-status-pending {
+  font-weight: 500;
+  opacity: 0.9;
+}
+
 .product-search {
   padding: 1.75rem;
   border: 1px solid #dce4df;

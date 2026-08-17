@@ -3,9 +3,10 @@ import { Navigate } from "react-router-dom"
 import { RouteState } from "../components/ui/RouteState"
 import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
+import type { CurrentUser } from "../types/api"
 
-function AuthenticatedEntry({ cashierId }: { cashierId: number }) {
-  const session = usePosSession(cashierId)
+function AuthenticatedEntry({ user }: { user: CurrentUser }) {
+  const session = usePosSession(user)
 
   if (session.isLoading) return <RouteState message="Recherche de la caisse…" />
   if (session.error) {
@@ -36,5 +37,5 @@ export function AppEntryPage() {
   }
   if (!userQuery.data) return <Navigate to="/login" replace />
 
-  return <AuthenticatedEntry cashierId={userQuery.data.id} />
+  return <AuthenticatedEntry user={userQuery.data} />
 }

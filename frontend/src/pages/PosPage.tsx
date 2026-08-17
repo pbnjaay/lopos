@@ -1,10 +1,11 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
 
 import { completeSale } from "../api/sales"
 import { getStore } from "../api/stores"
 import { ApiError } from "../api/client"
+import { updateLocalCashSessionStoreName } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
 import { Cart } from "../features/cart/Cart"
 import { useCart } from "../features/cart/useCart"
@@ -13,6 +14,7 @@ import { CashPaymentModal } from "../features/checkout/CashPaymentModal"
 import { MobileMoneyConfirmation } from "../features/checkout/MobileMoneyConfirmation"
 import { PaymentMethodModal } from "../features/checkout/PaymentMethodModal"
 import { SaleSuccessModal } from "../features/checkout/SaleSuccessModal"
+import { OfflineBanner } from "../features/offline/OfflineBanner"
 import { ProductSearch } from "../features/products/ProductSearch"
 import { useProductCatalogCache } from "../features/products/queries"
 import type { CompleteSaleInput, PaymentMethod } from "../types/api"
@@ -20,7 +22,7 @@ import { toBackendMoney } from "../utils/money"
 
 export function PosPage() {
   const user = useCurrentUser().data!
-  const { ownSession, selectedRegister } = usePosSession(user.id)
+  const { ownSession, selectedRegister, localSession } = usePosSession(user)
   const queryClient = useQueryClient()
   const cart = useCart()
   const [checkoutStep, setCheckoutStep] = useState<"METHODS" | PaymentMethod | null>(null)
@@ -34,6 +36,13 @@ export function PosPage() {
     enabled: selectedRegister !== null,
     staleTime: 60_000,
   })
+
+  useEffect(() => {
+    if (!ownSession || !storeQuery.data) return
+    void updateLocalCashSessionStoreName(ownSession.id, storeQuery.data.name).catch(
+      () => undefined,
+    )
+  }, [ownSession, storeQuery.data])
 
   const saleMutation = useMutation({
     mutationFn: completeSale,
@@ -104,7 +113,7 @@ export function PosPage() {
       <header className="pos-heading">
         <div>
           <p className="eyebrow">Point de vente</p>
-          <h1>{storeQuery.data?.name ?? "Magasin"}</h1>
+          <h1>{storeQuery.data?.name ?? localSession?.storeName ?? "Magasin"}</h1>
           <p className="pos-register-name">{selectedRegister?.name ?? "Caisse"}</p>
         </div>
         <div className="session-summary">
@@ -116,7 +125,9 @@ export function PosPage() {
         </div>
       </header>
 
-      {storeQuery.error ? (
+      <OfflineBanner />
+
+      {storeQuery.error && !localSession?.storeName ? (
         <p className="form-error" role="alert">
           {storeQuery.error.message}
         </p>

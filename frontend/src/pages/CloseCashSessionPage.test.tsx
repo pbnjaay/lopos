@@ -18,6 +18,10 @@ import type {
 } from "../types/api"
 import { CloseCashSessionPage } from "./CloseCashSessionPage"
 
+vi.mock("../db/sessions", () => ({
+  markLocalCashSessionClosed: vi.fn().mockResolvedValue(undefined),
+}))
+
 const cashier: CurrentUser = {
   id: 7,
   username: "cashier",

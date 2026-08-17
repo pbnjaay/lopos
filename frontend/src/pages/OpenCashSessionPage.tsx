@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom"
 
 import { getCurrentCashSession } from "../api/cashRegisters"
 import { openCashSession } from "../api/cashSessions"
+import { saveLocalCashSession } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
 import { storeCashRegisterId, usePosSession } from "../features/cash-session/queries"
 import { formatMoney, parseMoneyInput, toBackendMoney } from "../utils/money"
@@ -12,7 +13,7 @@ export function OpenCashSessionPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const user = useCurrentUser().data!
-  const { registers, selectedRegister } = usePosSession(user.id)
+  const { registers, selectedRegister } = usePosSession(user)
   const activeRegisters = registers.filter((register) => register.is_active)
   const [cashRegisterId, setCashRegisterId] = useState(selectedRegister?.id ?? "")
   const [openingBalance, setOpeningBalance] = useState("")
@@ -29,8 +30,18 @@ export function OpenCashSessionPage() {
   const occupiedByAnotherCashier = currentSession !== null && !sessionOwnedByUser
   const openingMutation = useMutation({
     mutationFn: openCashSession,
-    onSuccess: (session) => {
+    onSuccess: async (session) => {
       storeCashRegisterId(session.cash_register_id)
+      const openedRegister = activeRegisters.find(
+        (register) => register.id === session.cash_register_id,
+      )
+      if (openedRegister) {
+        try {
+          await saveLocalCashSession(session, openedRegister, user)
+        } catch {
+          // The server session is already open; keep the online flow usable.
+        }
+      }
       queryClient.setQueryData(
         ["cash-registers", session.cash_register_id, "current-session"],
         session,
