@@ -13,17 +13,21 @@ class Stock(models.Model):
         Store,
         on_delete=models.PROTECT,
         related_name="stocks",
+        verbose_name="magasin",
     )
     product = models.ForeignKey(
         Product,
         on_delete=models.PROTECT,
         related_name="stocks",
+        verbose_name="produit",
     )
-    quantity = models.IntegerField(default=0)
-    updated_at = models.DateTimeField(auto_now=True)
+    quantity = models.IntegerField("quantité", default=0)
+    updated_at = models.DateTimeField("modifié le", auto_now=True)
 
     class Meta:
         ordering = ("store_id", "product_id")
+        verbose_name = "stock"
+        verbose_name_plural = "stocks"
         constraints = [
             models.UniqueConstraint(
                 fields=("store", "product"),
@@ -50,19 +54,25 @@ class InventoryMovement(models.Model):
         Store,
         on_delete=models.PROTECT,
         related_name="inventory_movements",
+        verbose_name="magasin",
     )
     product = models.ForeignKey(
         Product,
         on_delete=models.PROTECT,
         related_name="inventory_movements",
+        verbose_name="produit",
     )
-    movement_type = models.CharField(max_length=16, choices=Type.choices)
-    quantity = models.IntegerField()
-    reference = models.UUIDField(blank=True, null=True, db_index=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    movement_type = models.CharField(
+        "type de mouvement", max_length=16, choices=Type.choices
+    )
+    quantity = models.IntegerField("quantité")
+    reference = models.UUIDField("référence", blank=True, null=True, db_index=True)
+    created_at = models.DateTimeField("créé le", auto_now_add=True)
 
     class Meta:
         ordering = ("-created_at",)
+        verbose_name = "mouvement de stock"
+        verbose_name_plural = "mouvements de stock"
         constraints = [
             models.CheckConstraint(
                 condition=~Q(quantity=0),

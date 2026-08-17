@@ -19,20 +19,26 @@ class Sale(models.Model):
         CashSession,
         on_delete=models.PROTECT,
         related_name="sales",
+        verbose_name="session de caisse",
     )
     cashier = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="sales",
+        verbose_name="caissier",
     )
-    subtotal = models.DecimalField(max_digits=14, decimal_places=2)
-    discount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
-    total = models.DecimalField(max_digits=14, decimal_places=2)
-    status = models.CharField(max_length=10, choices=Status.choices)
-    created_at = models.DateTimeField(auto_now_add=True)
+    subtotal = models.DecimalField("sous-total", max_digits=14, decimal_places=2)
+    discount = models.DecimalField(
+        "remise", max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    total = models.DecimalField("total", max_digits=14, decimal_places=2)
+    status = models.CharField("statut", max_length=10, choices=Status.choices)
+    created_at = models.DateTimeField("créée le", auto_now_add=True)
 
     class Meta:
         ordering = ("-created_at",)
+        verbose_name = "vente"
+        verbose_name_plural = "ventes"
         constraints = [
             models.CheckConstraint(
                 condition=Q(status__in=("COMPLETED", "CANCELLED")),
@@ -63,19 +69,23 @@ class SaleItem(models.Model):
         Sale,
         on_delete=models.PROTECT,
         related_name="items",
+        verbose_name="vente",
     )
     product = models.ForeignKey(
         Product,
         on_delete=models.PROTECT,
         related_name="sale_items",
+        verbose_name="produit",
     )
-    product_name = models.CharField(max_length=255)
-    unit_price = models.DecimalField(max_digits=14, decimal_places=2)
-    quantity = models.PositiveIntegerField()
-    line_total = models.DecimalField(max_digits=14, decimal_places=2)
+    product_name = models.CharField("nom du produit", max_length=255)
+    unit_price = models.DecimalField("prix unitaire", max_digits=14, decimal_places=2)
+    quantity = models.PositiveIntegerField("quantité")
+    line_total = models.DecimalField("total de la ligne", max_digits=14, decimal_places=2)
 
     class Meta:
         ordering = ("id",)
+        verbose_name = "article vendu"
+        verbose_name_plural = "articles vendus"
         constraints = [
             models.CheckConstraint(
                 condition=Q(quantity__gt=0),
@@ -107,25 +117,30 @@ class Payment(models.Model):
         Sale,
         on_delete=models.PROTECT,
         related_name="payment",
+        verbose_name="vente",
     )
-    method = models.CharField(max_length=16, choices=Method.choices)
-    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    method = models.CharField("mode de paiement", max_length=16, choices=Method.choices)
+    amount = models.DecimalField("montant", max_digits=14, decimal_places=2)
     received_amount = models.DecimalField(
+        "montant reçu",
         max_digits=14,
         decimal_places=2,
         blank=True,
         null=True,
     )
     change_amount = models.DecimalField(
+        "monnaie rendue",
         max_digits=14,
         decimal_places=2,
         blank=True,
         null=True,
     )
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField("créé le", auto_now_add=True)
 
     class Meta:
         ordering = ("-created_at",)
+        verbose_name = "paiement"
+        verbose_name_plural = "paiements"
         constraints = [
             models.CheckConstraint(
                 condition=Q(amount__gte=Decimal("0")),

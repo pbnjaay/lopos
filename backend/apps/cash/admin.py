@@ -1,10 +1,11 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import CashSession
 
 
 @admin.register(CashSession)
-class CashSessionAdmin(admin.ModelAdmin):
+class CashSessionAdmin(ModelAdmin):
     list_display = (
         "opened_at",
         "cash_register",

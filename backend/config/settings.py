@@ -13,6 +13,7 @@ ALLOWED_HOSTS = [
 ]
 
 INSTALLED_APPS = [
+    "unfold",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -27,6 +28,13 @@ INSTALLED_APPS = [
     "apps.sales",
     "apps.accounts",
 ]
+
+UNFOLD = {
+    "SITE_TITLE": "LoPOS Admin",
+    "SITE_HEADER": "LoPOS",
+    "SITE_SUBHEADER": "Administration du point de vente",
+    "SITE_SYMBOL": "point_of_sale",
+}
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

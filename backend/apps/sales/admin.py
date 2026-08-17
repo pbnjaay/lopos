@@ -1,9 +1,10 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import Payment, Sale, SaleItem
 
 
-class ReadOnlySalesAdmin(admin.ModelAdmin):
+class ReadOnlySalesAdmin(ModelAdmin):
     def has_add_permission(self, request) -> bool:
         return False
 

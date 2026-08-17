@@ -1,10 +1,11 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import CashRegister, Store
 
 
 @admin.register(Store)
-class StoreAdmin(admin.ModelAdmin):
+class StoreAdmin(ModelAdmin):
     list_display = ("name", "is_active", "created_at", "updated_at")
     list_filter = ("is_active",)
     search_fields = ("name", "address")
@@ -12,7 +13,7 @@ class StoreAdmin(admin.ModelAdmin):
 
 
 @admin.register(CashRegister)
-class CashRegisterAdmin(admin.ModelAdmin):
+class CashRegisterAdmin(ModelAdmin):
     list_display = ("name", "store", "is_active", "created_at")
     list_filter = ("is_active", "store")
     search_fields = ("name", "store__name")

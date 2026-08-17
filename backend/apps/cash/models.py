@@ -18,41 +18,51 @@ class CashSession(models.Model):
         CashRegister,
         on_delete=models.PROTECT,
         related_name="cash_sessions",
+        verbose_name="caisse",
     )
     cashier = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="cash_sessions",
+        verbose_name="caissier",
     )
-    opening_balance = models.DecimalField(max_digits=14, decimal_places=2)
+    opening_balance = models.DecimalField(
+        "solde d'ouverture", max_digits=14, decimal_places=2
+    )
     status = models.CharField(
+        "statut",
         max_length=8,
         choices=Status.choices,
         default=Status.OPEN,
     )
-    opened_at = models.DateTimeField(auto_now_add=True)
+    opened_at = models.DateTimeField("ouverte le", auto_now_add=True)
     closing_balance = models.DecimalField(
+        "solde de clôture",
         max_digits=14,
         decimal_places=2,
         blank=True,
         null=True,
     )
     expected_balance = models.DecimalField(
+        "solde attendu",
         max_digits=14,
         decimal_places=2,
         blank=True,
         null=True,
     )
     difference = models.DecimalField(
+        "écart",
         max_digits=14,
         decimal_places=2,
         blank=True,
         null=True,
     )
-    closed_at = models.DateTimeField(blank=True, null=True)
+    closed_at = models.DateTimeField("fermée le", blank=True, null=True)
 
     class Meta:
         ordering = ("-opened_at",)
+        verbose_name = "session de caisse"
+        verbose_name_plural = "sessions de caisse"
         constraints = [
             models.UniqueConstraint(
                 fields=("cash_register",),

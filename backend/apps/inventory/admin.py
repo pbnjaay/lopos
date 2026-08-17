@@ -1,10 +1,11 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import InventoryMovement, Stock
 
 
 @admin.register(Stock)
-class StockAdmin(admin.ModelAdmin):
+class StockAdmin(ModelAdmin):
     list_display = ("store", "product", "quantity", "updated_at")
     list_filter = ("store",)
     search_fields = ("product__name", "product__barcode", "store__name")
@@ -13,7 +14,7 @@ class StockAdmin(admin.ModelAdmin):
 
 
 @admin.register(InventoryMovement)
-class InventoryMovementAdmin(admin.ModelAdmin):
+class InventoryMovementAdmin(ModelAdmin):
     list_display = (
         "created_at",
         "movement_type",

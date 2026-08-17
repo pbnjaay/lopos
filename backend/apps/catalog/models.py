@@ -7,21 +7,24 @@ from django.db.models import Q
 
 class Product(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=255)
-    barcode = models.CharField(max_length=64, blank=True, null=True)
-    selling_price = models.DecimalField(max_digits=14, decimal_places=2)
+    name = models.CharField("nom", max_length=255)
+    barcode = models.CharField("code-barres", max_length=64, blank=True, null=True)
+    selling_price = models.DecimalField("prix de vente", max_digits=14, decimal_places=2)
     purchase_price = models.DecimalField(
+        "prix d'achat",
         max_digits=14,
         decimal_places=2,
         blank=True,
         null=True,
     )
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField("actif", default=True)
+    created_at = models.DateTimeField("créé le", auto_now_add=True)
+    updated_at = models.DateTimeField("modifié le", auto_now=True)
 
     class Meta:
         ordering = ("name",)
+        verbose_name = "produit"
+        verbose_name_plural = "produits"
         constraints = [
             models.CheckConstraint(
                 condition=Q(selling_price__gte=Decimal("0")),

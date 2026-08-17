@@ -380,13 +380,9 @@ split payment, intégration API Wave/Orange Money, impression ESC/POS, Celery,
 Redis ou microservices. La génération du rapport Z (mise en page, impression)
 et la page de clôture du frontend appartiennent à la Phase D.
 
-## Note sur Django Unfold
+## Administration Django Unfold
 
-Le back-office utilise actuellement l'admin Django standard
-(`django.contrib.admin`) : `django-unfold` n'est pas présent dans les
-dépendances du projet (`pyproject.toml`) ni dans `INSTALLED_APPS`. Les
-exigences d'auditabilité de la Phase C (colonnes de clôture, filtres par
-statut/caisse/caissier/date, lecture seule sur les sessions et ventes) ont été
-implémentées sur `admin.ModelAdmin` existant. Installer `django-unfold` reste
-possible sans changement de logique métier si un habillage visuel est
-souhaité.
+Le back-office disponible sur `http://localhost:8000/admin/` utilise Django
+Unfold. Les écrans produits, magasins, caisses et stocks conservent les actions
+de l'admin Django. Les sessions de caisse, mouvements de stock et ventes
+restent en lecture seule afin de préserver leur auditabilité.
