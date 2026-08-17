@@ -7,6 +7,7 @@ from apps.sales.models import Payment
 from .models import ProcessedSyncEvent
 
 MAX_BATCH_SIZE = 50
+MAX_PULL_PAGE_SIZE = 1000
 
 
 class SyncOfflineItemSerializer(serializers.Serializer):
@@ -54,3 +55,7 @@ class SyncPushRequestSerializer(serializers.Serializer):
                 "événements."
             )
         return value
+
+
+class SyncPullQuerySerializer(serializers.Serializer):
+    cursor = serializers.DateTimeField(required=False, allow_null=True, default=None)

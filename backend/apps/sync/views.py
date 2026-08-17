@@ -1,9 +1,13 @@
+import logging
+
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import ProcessedSyncEvent
-from .serializers import SyncPushRequestSerializer
-from .services import EventOutcome, process_sale_completed_event
+from .serializers import SyncPullQuerySerializer, SyncPushRequestSerializer
+from .services import EventOutcome, process_sale_completed_event, pull_catalog_changes
+
+logger = logging.getLogger("apps.sync")
 
 
 def _serialize_outcome(outcome: EventOutcome) -> dict:
@@ -33,6 +37,11 @@ class SyncPushView(APIView):
         terminal_id = serializer.validated_data["terminal_id"]
         events = serializer.validated_data["events"]
 
+        logger.info(
+            "sync_batch_received",
+            extra={"terminal_id": str(terminal_id), "event_count": len(events)},
+        )
+
         results = []
         for event in events:
             if event["type"] != ProcessedSyncEvent.EventType.SALE_COMPLETED:
@@ -57,3 +66,19 @@ class SyncPushView(APIView):
             results.append(_serialize_outcome(outcome))
 
         return Response({"results": results}, status=200)
+
+
+class SyncPullView(APIView):
+    """Delta catalogue minimal pour rafraîchir le cache local d'un POS.
+
+    `GET /api/v1/sync/pull/?cursor=<iso8601>` — sans `cursor`, renvoie tout
+    le catalogue actif ou non (premier chargement / réinstallation).
+    """
+
+    def get(self, request) -> Response:
+        query_serializer = SyncPullQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+        since = query_serializer.validated_data["cursor"]
+
+        page = pull_catalog_changes(since=since)
+        return Response({"cursor": page.cursor, "changes": page.changes}, status=200)

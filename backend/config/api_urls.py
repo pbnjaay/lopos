@@ -11,7 +11,7 @@ from apps.catalog.views import ProductViewSet
 from apps.inventory.views import StockInView
 from apps.sales.views import CompleteSaleView, SaleDetailView
 from apps.stores.views import CashRegisterViewSet, StoreViewSet
-from apps.sync.views import SyncPushView
+from apps.sync.views import SyncPullView, SyncPushView
 
 
 router = DefaultRouter()
@@ -44,4 +44,5 @@ urlpatterns = [
     path("sales/", CompleteSaleView.as_view(), name="sale-complete"),
     path("sales/<uuid:pk>/", SaleDetailView.as_view(), name="sale-detail"),
     path("sync/push/", SyncPushView.as_view(), name="sync-push"),
+    path("sync/pull/", SyncPullView.as_view(), name="sync-pull"),
 ]

@@ -31,7 +31,8 @@ backend/
 │   ├── catalog/        # catalogue produit et prix courants
 │   ├── inventory/      # stock courant, mouvements et réception
 │   ├── cash/           # sessions de caisse et ouverture
-│   └── sales/          # ventes, articles, paiements et finalisation
+│   ├── sales/          # ventes, articles, paiements et finalisation
+│   └── sync/           # synchronisation offline (push idempotent, pull catalogue)
 ├── tests/              # modèles, services, API et concurrence PostgreSQL
 └── manage.py
 ```
@@ -122,6 +123,8 @@ périmètre.
 | `POST` | `/api/v1/cash-sessions/{id}/close/` | Clôturer une session |
 | `POST` | `/api/v1/sales/` | Finaliser et payer une vente |
 | `GET` | `/api/v1/sales/{id}/` | Détail d'une vente (données de ticket) |
+| `POST` | `/api/v1/sync/push/` | Synchroniser un batch de ventes réalisées hors-ligne |
+| `GET` | `/api/v1/sync/pull/` | Récupérer le delta catalogue depuis un curseur |
 
 Recherche produit :
 
@@ -318,12 +321,141 @@ transaction arrivée en second attend que la première commit. Il ne peut donc
 jamais exister une vente `COMPLETED` absente du rapport de clôture, ni une
 vente acceptée après `CLOSED`.
 
+### Synchronisation offline (Phase F)
+
+Un POS peut vendre hors-ligne (catalogue et panier gérés côté client dans
+IndexedDB). Le contrat de synchronisation reconcilie ces ventes locales avec
+le serveur de façon idempotente, transactionnelle et retry-safe : renvoyer le
+même événement une, deux ou dix fois ne crée jamais plus d'une vente.
+
+#### Push — `POST /api/v1/sync/push/`
+
+Auth : session Django, même règle que `/sales/`. Le serveur vérifie que
+`cash_session.cashier_id == request.user.pk` pour **chaque** événement — un
+`terminal_id` seul ne suffit jamais à autoriser une écriture, il sert
+uniquement de trace d'audit sur `ProcessedSyncEvent`. Batch limité à 50
+événements par requête.
+
+```json
+{
+  "terminal_id": "<uuid>",
+  "events": [
+    {
+      "event_id": "<uuid>",
+      "type": "SALE_COMPLETED",
+      "entity_id": "<uuid>",
+      "occurred_at": "2026-08-17T14:32:00Z",
+      "payload": {
+        "cash_session_id": "<uuid>",
+        "items": [
+          { "product_id": "<uuid>", "product_name": "Coca 50cl", "unit_price": "500.00", "quantity": 2 }
+        ],
+        "payment": { "method": "CASH", "received_amount": "2000.00" }
+      }
+    }
+  ]
+}
+```
+
+- `entity_id` est l'identité métier de la vente : il devient `Sale.id` côté
+  serveur (fourni par le client, pas généré serveur pour ce chemin).
+- `event_id` est l'identité du message de synchronisation, distincte de
+  `entity_id`. Le client ne doit **jamais** en régénérer un lors d'un retry.
+- `unit_price` est le prix figé localement au moment de la vente. Le serveur
+  ne recalcule jamais depuis le catalogue courant pour ce chemin — c'est le
+  prix local qui fait foi, contrairement à `/sales/` qui recalcule toujours
+  depuis `Product.selling_price`.
+- `payment.received_amount` seulement pour `CASH`.
+
+Réponse `200`, jamais tout-ou-rien — chaque événement du batch reçoit son
+propre résultat :
+
+```json
+{
+  "results": [
+    { "event_id": "...", "status": "SYNCED", "entity_id": "..." },
+    { "event_id": "...", "status": "ALREADY_PROCESSED", "entity_id": "..." },
+    { "event_id": "...", "status": "CONFLICT", "code": "CASH_SESSION_CLOSED", "message": "..." },
+    { "event_id": "...", "status": "REJECTED", "code": "PRODUCT_NOT_FOUND", "message": "..." }
+  ]
+}
+```
+
+Codes possibles : `CASH_SESSION_NOT_FOUND`, `CASH_SESSION_NOT_OWNED`,
+`CASH_SESSION_CLOSED` (conflict), `PRODUCT_NOT_FOUND`, `INVALID_SALE`,
+`UNKNOWN_EVENT_TYPE`. Aucun de ces codes n'est retryable automatiquement — le
+client doit garder l'événement visible pour intervention, jamais le renvoyer
+en boucle. Une erreur réseau/5xx, en revanche, reste retryable : l'événement
+doit rester en attente côté client (même `event_id` au prochain essai).
+
+**Idempotence — invariant central.** `ProcessedSyncEvent.event_id` est la clé
+primaire (donc `UNIQUE` en PostgreSQL), et son insertion se fait dans la même
+transaction que la création de la `Sale` : les deux commitent ou échouent
+ensemble, jamais l'un sans l'autre. Deux défenses complémentaires :
+
+1. Court-circuit : si `event_id` a déjà un `ProcessedSyncEvent`, retour
+   immédiat `ALREADY_PROCESSED` sans retoucher la base.
+2. Course concurrente (deux requêtes réseau simultanées pour le même
+   `event_id`, ou un même `sale_id` rejoué sous un `event_id` différent) :
+   la seconde transaction lève une `IntegrityError` sur la PK `event_id` ou
+   la PK `Sale.id` ; le code retombe alors sur `ALREADY_PROCESSED` au lieu de
+   propager l'erreur. Voir `apps/sync/services.py::process_sale_completed_event`
+   et les tests de concurrence réelle (deux connexions PostgreSQL) dans
+   `tests/test_sync_concurrency.py`.
+
+**Stock hors-ligne.** Une vente hors-ligne a déjà eu lieu physiquement : la
+refuser des heures plus tard serait pire qu'une divergence de stock. Le
+chemin sync (`complete_offline_sale()`) autorise donc le stock à devenir
+négatif (contrairement à `/sales/`, qui garde `InsufficientStock`), et
+marque `ProcessedSyncEvent.stock_discrepancy = true` quand c'est arrivé, pour
+audit dans l'admin Django.
+
+**Session de caisse et horloge terminal.** Un événement est accepté si la
+session est `OPEN`, ou si elle est `CLOSED` et que `occurred_at <=
+closed_at` (la vente a eu lieu avant la clôture, même reçue après). Sinon :
+`409`-équivalent `CONFLICT` / `CASH_SESSION_CLOSED`. Cette règle fait
+volontairement confiance à l'horloge du terminal pour l'ordre approximatif
+uniquement ; aucune décision de sécurité n'en dépend.
+
+**Produit désactivé vs supprimé.** Un produit désactivé depuis la vente
+reste accepté (il existait bien au moment de la vente réelle). Seul un
+produit qui n'existe plus du tout est rejeté (`PRODUCT_NOT_FOUND`).
+
+**Vente conserve sa session d'origine.** `Sale.cash_session` n'est jamais
+migré vers une session ouverte plus tard sur une autre caisse, même si la
+synchronisation arrive après l'ouverture de cette nouvelle session.
+
+#### Pull — `GET /api/v1/sync/pull/?cursor=<iso8601>`
+
+Delta catalogue minimal (prix, actif/inactif) pour rafraîchir le cache local
+d'un POS revenu en ligne. Pas de `cursor` → catalogue complet (premier
+chargement). `Product.updated_at` sert de curseur ; pas de change-log dédié
+pour ce MVP.
+
+```json
+{
+  "cursor": "2026-08-17T18:03:00.123456+00:00",
+  "changes": [
+    { "type": "PRODUCT_UPSERT", "id": "<uuid>", "data": { "name": "Coca 50cl", "barcode": "123456", "selling_price": "500.00", "is_active": true } }
+  ]
+}
+```
+
+Un produit désactivé est renvoyé comme un `PRODUCT_UPSERT` normal avec
+`is_active: false` (soft delete), pas de type d'événement séparé. Si plus de
+1000 changements existent depuis le curseur donné, la réponse est tronquée à
+1000 et `cursor` pointe sur le dernier élément renvoyé — le client doit
+rappeler l'endpoint immédiatement avec ce curseur pour continuer.
+
 ## Invariants transactionnels
 
 - une caisse possède au maximum une session `OPEN`, protégée par une contrainte
   d'unicité PostgreSQL conditionnelle ;
 - une seule ligne de stock existe par couple magasin/produit ;
-- un stock ne peut pas devenir négatif ;
+- un stock ne peut pas devenir négatif via `/sales/` (vente en ligne) ; cette
+  règle est appliquée en code, pas par une contrainte DB, car le chemin de
+  synchronisation offline (`/sync/push/`) doit au contraire pouvoir accepter
+  un stock négatif — voir la section Synchronisation offline ci-dessus ;
 - les lignes de stock sont verrouillées avec `select_for_update()` dans l'ordre
   des identifiants produit ;
 - vente, articles, paiement, stocks et mouvements sont écrits dans le même
@@ -370,15 +502,26 @@ La suite couvre :
 - une vente et une clôture concurrentes sur la même session, avec deux
   connexions PostgreSQL réelles : aucune vente `COMPLETED` n'est jamais
   absente du rapport de clôture, et aucune vente n'est jamais acceptée après
-  `CLOSED`.
+  `CLOSED` ;
+- la synchronisation offline (`tests/test_sync_services.py`,
+  `tests/test_sync_push_api.py`, `tests/test_sync_pull_api.py`) : événement
+  dupliqué, même `sale_id` rejoué sous un `event_id` différent, prix
+  hors-ligne respecté malgré un changement de prix catalogue entre-temps,
+  stock négatif accepté et marqué en divergence, session fermée avant/après
+  `occurred_at`, produit supprimé vs désactivé, batch mixte (succès + déjà
+  traité + rejeté), pull incrémental depuis un curseur ;
+- deux terminaux hors-ligne qui rejouent concurremment le même événement, et
+  deux caisses hors-ligne qui vendent concurremment le même produit, avec
+  deux connexions PostgreSQL réelles (`tests/test_sync_concurrency.py`) :
+  jamais de vente dupliquée, jamais de mouvement de stock dupliqué.
 
 ## Périmètre volontairement exclu
 
-Cette phase ne contient ni frontend, offline-first, synchronisation,
-multi-tenancy avancé, RLS, promotions, achats fournisseurs, remboursements,
-split payment, intégration API Wave/Orange Money, impression ESC/POS, Celery,
-Redis ou microservices. La génération du rapport Z (mise en page, impression)
-et la page de clôture du frontend appartiennent à la Phase D.
+Multi-tenancy avancé, RLS, promotions, achats fournisseurs, remboursements,
+split payment, intégration API Wave/Orange Money (paiement manuel
+uniquement), impression ESC/POS, WebSocket temps réel, Kafka/RabbitMQ,
+Celery, Redis ou microservices. La synchronisation offline (Phase F) reste
+volontairement HTTP classique — pas d'event sourcing ni de CRDT.
 
 ## Administration Django Unfold
 
