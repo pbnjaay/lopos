@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import "fake-indexeddb/auto"
 import "@testing-library/jest-dom/vitest"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
@@ -8,6 +9,7 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+import { db } from "../db/database"
 import { findLocalProductByBarcode, hasLocalProductCatalog } from "../db/products"
 import { createLocalSale } from "../db/sales"
 import type { LocalCashSession, LocalProduct, LocalSale } from "../db/types"
@@ -156,12 +158,13 @@ async function openCashPayment(userEvents: ReturnType<typeof userEvent.setup>) {
   await userEvents.click(screen.getByRole("button", { name: /Espèces/ }))
 }
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   vi.clearAllMocks()
   vi.restoreAllMocks()
   localStorage.clear()
   document.cookie = "csrftoken=; Max-Age=0; path=/"
+  await db.localSales.clear()
 })
 
 describe("POS sale workflow", () => {
@@ -268,6 +271,7 @@ describe("POS sale workflow offline", () => {
     const localSale: LocalSale = {
       id: "0f9e8d7c-1234-4a5b-9c6d-abcdef012345",
       serverId: null,
+      syncEventId: "sync-event-" + Math.random().toString(36).slice(2),
       cashSessionId: localSession.id,
       storeId: store.id,
       storeName: store.name,
@@ -277,6 +281,8 @@ describe("POS sale workflow offline", () => {
       cashierName: user.first_name,
       createdAt: "2026-08-17T20:00:00Z",
       status: "PENDING_SYNC",
+      conflictCode: null,
+      conflictMessage: null,
       items: [
         {
           productId: coca.id,
@@ -319,6 +325,7 @@ describe("POS sale workflow offline", () => {
     const localSale: LocalSale = {
       id: "1a2b3c4d-5678-4a5b-9c6d-abcdef012345",
       serverId: null,
+      syncEventId: "sync-event-" + Math.random().toString(36).slice(2),
       cashSessionId: localSession.id,
       storeId: store.id,
       storeName: store.name,
@@ -328,6 +335,8 @@ describe("POS sale workflow offline", () => {
       cashierName: user.first_name,
       createdAt: "2026-08-17T20:05:00Z",
       status: "PENDING_SYNC",
+      conflictCode: null,
+      conflictMessage: null,
       items: [
         {
           productId: coca.id,

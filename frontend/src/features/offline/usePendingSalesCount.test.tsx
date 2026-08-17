@@ -14,6 +14,7 @@ function pendingSale(id: string): LocalSale {
   return {
     id,
     serverId: null,
+    syncEventId: "sync-event-" + Math.random().toString(36).slice(2),
     cashSessionId: "session-id",
     storeId: "store-id",
     storeName: "Boutique",
@@ -23,6 +24,8 @@ function pendingSale(id: string): LocalSale {
     cashierName: "Awa",
     createdAt: "2026-08-17T20:00:00Z",
     status: "PENDING_SYNC",
+    conflictCode: null,
+    conflictMessage: null,
     items: [],
     payment: { method: "CASH", amount: 0, receivedAmount: 0, changeAmount: 0 },
     subtotal: 0,

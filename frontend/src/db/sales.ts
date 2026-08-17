@@ -108,6 +108,7 @@ export async function createLocalSale(
     const sale: LocalSale = {
       id: crypto.randomUUID(),
       serverId: null,
+      syncEventId: crypto.randomUUID(),
       cashSessionId: session.id,
       storeId: session.storeId,
       storeName: session.storeName ?? "",
@@ -117,6 +118,8 @@ export async function createLocalSale(
       cashierName: session.cashierName,
       createdAt: new Date().toISOString(),
       status: "PENDING_SYNC",
+      conflictCode: null,
+      conflictMessage: null,
       items: saleItems,
       payment: buildLocalPayment(payment, total),
       subtotal: total,
@@ -156,4 +159,53 @@ export async function listPendingLocalSales(
 
 export async function countPendingLocalSales(database: PosDatabase = db): Promise<number> {
   return database.localSales.where("status").equals("PENDING_SYNC").count()
+}
+
+export async function countPendingLocalSalesForSession(
+  cashSessionId: string,
+  database: PosDatabase = db,
+): Promise<number> {
+  return database.localSales
+    .where("cashSessionId")
+    .equals(cashSessionId)
+    .filter((sale) => sale.status === "PENDING_SYNC")
+    .count()
+}
+
+export async function listConflictLocalSales(database: PosDatabase = db): Promise<LocalSale[]> {
+  return database.localSales
+    .where("status")
+    .equals("CONFLICT")
+    .sortBy("createdAt")
+}
+
+export async function countConflictLocalSales(database: PosDatabase = db): Promise<number> {
+  return database.localSales.where("status").equals("CONFLICT").count()
+}
+
+/** A sync success is terminal: SYNCED (or an already-processed retry) never reverts. */
+export async function markLocalSaleSynced(
+  id: string,
+  serverId: string,
+  database: PosDatabase = db,
+): Promise<void> {
+  await database.localSales.update(id, {
+    status: "SYNCED",
+    serverId,
+    conflictCode: null,
+    conflictMessage: null,
+  })
+}
+
+/** CONFLICT covers the server's CONFLICT and REJECTED statuses — both non-retryable automatically. */
+export async function markLocalSaleConflict(
+  id: string,
+  reason: { code: string; message: string },
+  database: PosDatabase = db,
+): Promise<void> {
+  await database.localSales.update(id, {
+    status: "CONFLICT",
+    conflictCode: reason.code,
+    conflictMessage: reason.message,
+  })
 }

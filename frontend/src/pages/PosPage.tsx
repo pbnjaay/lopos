@@ -17,10 +17,11 @@ import { PaymentMethodModal } from "../features/checkout/PaymentMethodModal"
 import { SaleSuccessModal } from "../features/checkout/SaleSuccessModal"
 import { OfflineBanner } from "../features/offline/OfflineBanner"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
-import { pendingSalesCountQueryKey, usePendingSalesCount } from "../features/offline/usePendingSalesCount"
+import { pendingSalesCountQueryKey } from "../features/offline/usePendingSalesCount"
 import { ProductSearch } from "../features/products/ProductSearch"
 import { useProductCatalogCache } from "../features/products/queries"
 import { type ReceiptView, receiptViewFromApiSale, receiptViewFromLocalSale } from "../features/sales/receiptView"
+import { useSyncStatus } from "../features/sync/useSyncStatus"
 import type { PaymentMethod } from "../types/api"
 import { toBackendMoney } from "../utils/money"
 
@@ -33,7 +34,7 @@ export function PosPage() {
   const user = useCurrentUser().data!
   const { ownSession, selectedRegister, localSession } = usePosSession(user)
   const isOnline = useNetworkStatus()
-  const pendingSalesCount = usePendingSalesCount()
+  const { pendingCount, conflictCount, isSyncing, triggerSync } = useSyncStatus()
   const queryClient = useQueryClient()
   const cart = useCart(ownSession?.id ?? null)
   const [checkoutStep, setCheckoutStep] = useState<"METHODS" | PaymentMethod | null>(null)
@@ -94,6 +95,7 @@ export function PosPage() {
       setCompletedSale(sale)
       void queryClient.invalidateQueries({ queryKey: ["products"] })
       void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })
+      if (sale.isPendingSync) void triggerSync()
     },
     onError: (error) => {
       if (
@@ -159,8 +161,12 @@ export function PosPage() {
       </header>
 
       <div className="offline-status-row">
-        <OfflineBanner pendingSalesCount={pendingSalesCount} />
-        {pendingSalesCount > 0 ? (
+        <OfflineBanner
+          pendingSalesCount={pendingCount}
+          conflictSalesCount={conflictCount}
+          isSyncing={isSyncing}
+        />
+        {pendingCount > 0 || conflictCount > 0 ? (
           <Link className="text-button" to="/sales/pending">
             Voir les ventes en attente
           </Link>

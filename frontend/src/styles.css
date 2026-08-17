@@ -680,6 +680,11 @@ h1 {
   border-color: #176b4d;
 }
 
+.pending-sale-row-conflict {
+  border-color: #f5c2c7;
+  background: #fdf3f4;
+}
+
 .network-status {
   display: flex;
   flex-wrap: wrap;
@@ -719,6 +724,14 @@ h1 {
 .network-status-pending {
   font-weight: 500;
   opacity: 0.9;
+}
+
+.network-status-conflict {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #f8d7da;
+  color: #842029;
+  font-weight: 700;
 }
 
 .product-search {

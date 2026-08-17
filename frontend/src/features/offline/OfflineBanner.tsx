@@ -2,11 +2,16 @@ import { useNetworkStatus } from "./useNetworkStatus"
 
 type OfflineBannerProps = {
   pendingSalesCount?: number
+  conflictSalesCount?: number
+  isSyncing?: boolean
 }
 
-export function OfflineBanner({ pendingSalesCount = 0 }: OfflineBannerProps) {
+export function OfflineBanner({
+  pendingSalesCount = 0,
+  conflictSalesCount = 0,
+  isSyncing = false,
+}: OfflineBannerProps) {
   const isOnline = useNetworkStatus()
-  const showPending = pendingSalesCount > 0
 
   return (
     <div
@@ -18,9 +23,15 @@ export function OfflineBanner({ pendingSalesCount = 0 }: OfflineBannerProps) {
       {!isOnline ? (
         <span className="network-status-detail">Les ventes sont enregistrées localement.</span>
       ) : null}
-      {showPending ? (
+      {isSyncing ? <span className="network-status-pending">Synchronisation…</span> : null}
+      {!isSyncing && pendingSalesCount > 0 ? (
         <span className="network-status-pending">
           {pendingSalesCount} vente{pendingSalesCount > 1 ? "s" : ""} en attente de synchronisation
+        </span>
+      ) : null}
+      {conflictSalesCount > 0 ? (
+        <span className="network-status-conflict">
+          {conflictSalesCount} vente{conflictSalesCount > 1 ? "s" : ""} en conflit
         </span>
       ) : null}
     </div>

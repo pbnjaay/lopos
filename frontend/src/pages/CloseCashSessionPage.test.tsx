@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import "fake-indexeddb/auto"
 import "@testing-library/jest-dom/vitest"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
@@ -8,6 +9,7 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+import { db } from "../db/database"
 import { currentUserQueryKey } from "../features/auth/queries"
 import { SELECTED_CASH_REGISTER_KEY } from "../features/cash-session/queries"
 import type {
@@ -73,7 +75,7 @@ const summary: CashSessionSummary = {
   closed_at: null,
 }
 
-function renderPage() {
+function renderPage(pendingLocalSalesCount = 0) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
@@ -84,6 +86,10 @@ function renderPage() {
     session,
   )
   queryClient.setQueryData(["cash-sessions", session.id, "summary"], summary)
+  queryClient.setQueryData(
+    ["pending-local-sales-for-session", session.id],
+    pendingLocalSalesCount,
+  )
   localStorage.setItem(SELECTED_CASH_REGISTER_KEY, cashRegister.id)
 
   render(
@@ -97,11 +103,12 @@ function renderPage() {
   return queryClient
 }
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   vi.restoreAllMocks()
   localStorage.clear()
   document.cookie = "csrftoken=; Max-Age=0; path=/"
+  await db.localSales.clear()
 })
 
 describe("CloseCashSessionPage", () => {
@@ -216,5 +223,16 @@ describe("CloseCashSessionPage", () => {
       "Impossible de joindre le serveur. Vérifiez votre connexion Internet.",
     )
     expect(globalThis.fetch).toHaveBeenCalledOnce()
+  })
+
+  it("blocks closing while sales from this session are still unsynced", async () => {
+    renderPage(2)
+
+    expect(
+      await screen.findByText(
+        "2 ventes de cette session n'ont pas encore été synchronisées avec le serveur. Reconnectez-vous à Internet pour synchroniser avant de clôturer.",
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText("Montant compté")).not.toBeInTheDocument()
   })
 })

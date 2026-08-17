@@ -27,7 +27,7 @@ export type LocalCashSession = {
   cachedAt: string
 }
 
-export type LocalSaleStatus = "PENDING_SYNC" | "SYNCED" | "SYNC_FAILED"
+export type LocalSaleStatus = "PENDING_SYNC" | "SYNCED" | "CONFLICT"
 
 export type LocalSaleItem = {
   productId: string
@@ -47,6 +47,8 @@ export type LocalPayment = {
 export type LocalSale = {
   id: string
   serverId: string | null
+  /** Sync message identity, distinct from `id`; never regenerated on retry so server idempotency holds. */
+  syncEventId: string
   cashSessionId: string
   storeId: string
   storeName: string
@@ -57,6 +59,9 @@ export type LocalSale = {
   /** Horodatage produit par le terminal, pas une date de réception serveur. */
   createdAt: string
   status: LocalSaleStatus
+  /** Set only when status is CONFLICT, from the server's { code, message }. */
+  conflictCode: string | null
+  conflictMessage: string | null
   items: LocalSaleItem[]
   payment: LocalPayment
   subtotal: number

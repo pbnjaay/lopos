@@ -4,10 +4,13 @@ import { Link, useNavigate } from "react-router-dom"
 
 import { closeCashSession, getCashSessionSummary } from "../api/cashSessions"
 import { RouteState } from "../components/ui/RouteState"
+import { countPendingLocalSalesForSession } from "../db/sales"
 import { markLocalCashSessionClosed } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
 import { CashClosingResult } from "../features/cash-session/CashClosingResult"
 import { usePosSession } from "../features/cash-session/queries"
+import { useNetworkStatus } from "../features/offline/useNetworkStatus"
+import { useSyncStatus } from "../features/sync/useSyncStatus"
 import { formatDateTime } from "../utils/date"
 import {
   formatBackendMoney,
@@ -25,9 +28,17 @@ export function CloseCashSessionPage() {
   const [isConfirming, setIsConfirming] = useState(false)
   const parsedCountedCash = parseMoneyInput(countedCash)
   const hasCountedCash = countedCash.trim().length > 0
+  const isOnline = useNetworkStatus()
+  const { isSyncing, triggerSync } = useSyncStatus()
   const summaryQuery = useQuery({
     queryKey: ["cash-sessions", ownSession?.id, "summary"],
     queryFn: () => getCashSessionSummary(ownSession!.id),
+    enabled: ownSession !== null,
+  })
+  const pendingLocalSalesQueryKey = ["pending-local-sales-for-session", ownSession?.id] as const
+  const pendingLocalSalesQuery = useQuery({
+    queryKey: pendingLocalSalesQueryKey,
+    queryFn: () => countPendingLocalSalesForSession(ownSession!.id),
     enabled: ownSession !== null,
   })
   const closeMutation = useMutation({
@@ -87,6 +98,50 @@ export function CloseCashSessionPage() {
           navigate("/cash/open", { replace: true })
         }}
       />
+    )
+  }
+
+  if (pendingLocalSalesQuery.isLoading) {
+    return <RouteState message="Vérification des ventes en attente…" />
+  }
+
+  const pendingLocalSalesCount = pendingLocalSalesQuery.data ?? 0
+  if (pendingLocalSalesCount > 0) {
+    async function handleSyncClick() {
+      await triggerSync()
+      void queryClient.invalidateQueries({ queryKey: pendingLocalSalesQueryKey })
+    }
+
+    return (
+      <main className="closing-page">
+        <section className="closing-sheet" aria-labelledby="close-session-title">
+          <header className="closing-heading">
+            <div>
+              <p className="eyebrow">Fin de journée</p>
+              <h1 id="close-session-title">Clôturer la caisse</h1>
+            </div>
+            <Link className="text-button close-session-back-link" to="/pos">
+              Retour au point de vente
+            </Link>
+          </header>
+
+          <p className="form-error" role="alert">
+            {pendingLocalSalesCount} vente{pendingLocalSalesCount > 1 ? "s" : ""} de cette
+            session {pendingLocalSalesCount > 1 ? "n'ont" : "n'a"} pas encore été synchronisée
+            {pendingLocalSalesCount > 1 ? "s" : ""} avec le serveur. Reconnectez-vous à Internet
+            pour synchroniser avant de clôturer.
+          </p>
+
+          <button
+            className="button button-primary"
+            type="button"
+            disabled={!isOnline || isSyncing}
+            onClick={() => void handleSyncClick()}
+          >
+            {isSyncing ? "Synchronisation…" : "Synchroniser maintenant"}
+          </button>
+        </section>
+      </main>
     )
   }
 

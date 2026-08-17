@@ -110,6 +110,7 @@ describe("SaleReceiptPage", () => {
     const localSale: LocalSale = {
       id: "0f9e8d7c-1234-4a5b-9c6d-abcdef012345",
       serverId: null,
+      syncEventId: "sync-event-" + Math.random().toString(36).slice(2),
       cashSessionId: "session-id",
       storeId: "store-id",
       storeName: "Supérette Test",
@@ -119,6 +120,8 @@ describe("SaleReceiptPage", () => {
       cashierName: "cashier",
       createdAt: "2026-08-17T14:32:00Z",
       status: "PENDING_SYNC",
+      conflictCode: null,
+      conflictMessage: null,
       items: [
         {
           productId: "product-id",

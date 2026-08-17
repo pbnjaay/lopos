@@ -5,9 +5,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { PosDatabase } from "./database"
 import {
   InsufficientLocalStockError,
+  countConflictLocalSales,
   countPendingLocalSales,
+  countPendingLocalSalesForSession,
   createLocalSale,
+  listConflictLocalSales,
   listPendingLocalSales,
+  markLocalSaleConflict,
+  markLocalSaleSynced,
 } from "./sales"
 import type { LocalCashSession, LocalProduct } from "./types"
 
@@ -79,6 +84,8 @@ describe("createLocalSale", () => {
       changeAmount: 1_000,
     })
     expect(sale.total).toBe(1_000)
+    expect(sale.syncEventId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(sale.syncEventId).not.toBe(sale.id)
 
     await expect(database.localSales.get(sale.id)).resolves.toEqual(sale)
   })
@@ -172,5 +179,62 @@ describe("pending sale queue", () => {
     await expect(countPendingLocalSales(database)).resolves.toBe(2)
     const pending = await listPendingLocalSales(database)
     expect(pending.map((sale) => sale.id)).toEqual([first.id, second.id])
+  })
+
+  it("scopes the pending count to a single cash session", async () => {
+    const otherSession: LocalCashSession = { ...session, id: "other-session-id" }
+    await createLocalSale(
+      { session, items: [{ productId: coca.id, quantity: 1 }], payment: { method: "CASH", receivedAmount: 500 } },
+      database,
+    )
+    await createLocalSale(
+      { session: otherSession, items: [{ productId: coca.id, quantity: 1 }], payment: { method: "WAVE" } },
+      database,
+    )
+
+    await expect(countPendingLocalSalesForSession(session.id, database)).resolves.toBe(1)
+    await expect(countPendingLocalSalesForSession(otherSession.id, database)).resolves.toBe(1)
+    await expect(countPendingLocalSalesForSession("no-such-session", database)).resolves.toBe(0)
+  })
+})
+
+describe("sync status transitions", () => {
+  it("marks a sale SYNCED with its server id and clears any prior conflict", async () => {
+    const sale = await createLocalSale(
+      { session, items: [{ productId: coca.id, quantity: 1 }], payment: { method: "CASH", receivedAmount: 500 } },
+      database,
+    )
+    await markLocalSaleConflict(sale.id, { code: "X", message: "y" }, database)
+
+    await markLocalSaleSynced(sale.id, sale.id, database)
+
+    const updated = await database.localSales.get(sale.id)
+    expect(updated?.status).toBe("SYNCED")
+    expect(updated?.serverId).toBe(sale.id)
+    expect(updated?.conflictCode).toBeNull()
+    expect(updated?.conflictMessage).toBeNull()
+    await expect(countPendingLocalSales(database)).resolves.toBe(0)
+  })
+
+  it("marks a sale CONFLICT with the server's code and message, removing it from the pending queue", async () => {
+    const sale = await createLocalSale(
+      { session, items: [{ productId: coca.id, quantity: 1 }], payment: { method: "CASH", receivedAmount: 500 } },
+      database,
+    )
+
+    await markLocalSaleConflict(
+      sale.id,
+      { code: "CASH_SESSION_CLOSED", message: "La session de caisse est fermée." },
+      database,
+    )
+
+    const updated = await database.localSales.get(sale.id)
+    expect(updated?.status).toBe("CONFLICT")
+    expect(updated?.conflictCode).toBe("CASH_SESSION_CLOSED")
+    expect(updated?.conflictMessage).toBe("La session de caisse est fermée.")
+    await expect(countPendingLocalSales(database)).resolves.toBe(0)
+    await expect(countConflictLocalSales(database)).resolves.toBe(1)
+    const conflicts = await listConflictLocalSales(database)
+    expect(conflicts.map((item) => item.id)).toEqual([sale.id])
   })
 })
