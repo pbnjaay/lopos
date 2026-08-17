@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -106,5 +107,20 @@ describe("CloseCashSessionPage", () => {
     expect(screen.getByText("8 000 FCFA")).toBeInTheDocument()
     expect(screen.queryByText("30 000 FCFA")).not.toBeInTheDocument()
     expect(screen.queryByText(/Cash attendu/i)).not.toBeInTheDocument()
+  })
+
+  it("formats a valid counted amount and rejects a negative value", async () => {
+    const user = userEvent.setup()
+    renderPage()
+    const input = screen.getByLabelText("Montant compté")
+
+    await user.type(input, "29 500")
+    expect(screen.getByText("29 500 FCFA")).toBeInTheDocument()
+    expect(input).toHaveAttribute("aria-invalid", "false")
+
+    await user.clear(input)
+    await user.type(input, "-1")
+    expect(input).toHaveAttribute("aria-invalid", "true")
+    expect(screen.getByText("Saisissez un montant positif ou nul, sans décimales.")).toBeInTheDocument()
   })
 })

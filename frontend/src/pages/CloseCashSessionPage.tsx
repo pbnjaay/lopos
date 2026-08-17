@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
 
@@ -6,11 +7,14 @@ import { RouteState } from "../components/ui/RouteState"
 import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
 import { formatDateTime } from "../utils/date"
-import { formatBackendMoney } from "../utils/money"
+import { formatBackendMoney, formatMoney, parseMoneyInput } from "../utils/money"
 
 export function CloseCashSessionPage() {
   const user = useCurrentUser().data!
   const { ownSession } = usePosSession(user.id)
+  const [countedCash, setCountedCash] = useState("")
+  const parsedCountedCash = parseMoneyInput(countedCash)
+  const hasCountedCash = countedCash.trim().length > 0
   const summaryQuery = useQuery({
     queryKey: ["cash-sessions", ownSession?.id, "summary"],
     queryFn: () => getCashSessionSummary(ownSession!.id),
@@ -80,8 +84,35 @@ export function CloseCashSessionPage() {
         </dl>
 
         <p className="closing-instruction">
-          Comptez maintenant l’argent présent dans le tiroir-caisse.
+          Comptez l’argent présent dans le tiroir-caisse, puis saisissez le montant obtenu.
         </p>
+
+        <div className="counted-cash-field">
+          <label htmlFor="counted-cash">Montant compté</label>
+          <div className="money-input">
+            <input
+              id="counted-cash"
+              autoFocus
+              inputMode="numeric"
+              placeholder="29 500"
+              value={countedCash}
+              aria-describedby="counted-cash-help"
+              aria-invalid={hasCountedCash && parsedCountedCash === null}
+              onChange={(event) => setCountedCash(event.target.value)}
+            />
+            <span>FCFA</span>
+          </div>
+          <small
+            id="counted-cash-help"
+            className={hasCountedCash && parsedCountedCash === null ? "field-error" : undefined}
+          >
+            {parsedCountedCash !== null
+              ? formatMoney(parsedCountedCash)
+              : hasCountedCash
+                ? "Saisissez un montant positif ou nul, sans décimales."
+                : "Montant entier, sans décimales"}
+          </small>
+        </div>
       </section>
     </main>
   )
