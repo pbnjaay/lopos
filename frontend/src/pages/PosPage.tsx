@@ -5,6 +5,7 @@ import { Link } from "react-router-dom"
 import { completeSale } from "../api/sales"
 import { getStore } from "../api/stores"
 import { ApiError } from "../api/client"
+import { InsufficientLocalStockError, createLocalSale } from "../db/sales"
 import { updateLocalCashSessionStoreName } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
 import { Cart } from "../features/cart/Cart"
@@ -15,20 +16,26 @@ import { MobileMoneyConfirmation } from "../features/checkout/MobileMoneyConfirm
 import { PaymentMethodModal } from "../features/checkout/PaymentMethodModal"
 import { SaleSuccessModal } from "../features/checkout/SaleSuccessModal"
 import { OfflineBanner } from "../features/offline/OfflineBanner"
+import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { ProductSearch } from "../features/products/ProductSearch"
 import { useProductCatalogCache } from "../features/products/queries"
-import type { CompleteSaleInput, PaymentMethod } from "../types/api"
+import { type ReceiptView, receiptViewFromApiSale, receiptViewFromLocalSale } from "../features/sales/receiptView"
+import type { PaymentMethod } from "../types/api"
 import { toBackendMoney } from "../utils/money"
+
+type CheckoutPayment = {
+  method: PaymentMethod
+  receivedAmount?: number
+}
 
 export function PosPage() {
   const user = useCurrentUser().data!
   const { ownSession, selectedRegister, localSession } = usePosSession(user)
+  const isOnline = useNetworkStatus()
   const queryClient = useQueryClient()
   const cart = useCart()
   const [checkoutStep, setCheckoutStep] = useState<"METHODS" | PaymentMethod | null>(null)
-  const [completedSale, setCompletedSale] = useState<Awaited<ReturnType<typeof completeSale>> | null>(
-    null,
-  )
+  const [completedSale, setCompletedSale] = useState<ReceiptView | null>(null)
   useProductCatalogCache(selectedRegister?.store_id ?? null)
   const storeQuery = useQuery({
     queryKey: ["stores", selectedRegister?.store_id],
@@ -45,7 +52,40 @@ export function PosPage() {
   }, [ownSession, storeQuery.data])
 
   const saleMutation = useMutation({
-    mutationFn: completeSale,
+    mutationFn: async (payment: CheckoutPayment): Promise<ReceiptView> => {
+      if (isOnline) {
+        const sale = await completeSale({
+          cash_session_id: ownSession!.id,
+          items: cart.items.map((item) => ({
+            product_id: item.productId,
+            quantity: item.quantity,
+          })),
+          payment:
+            payment.method === "CASH"
+              ? { method: "CASH", received_amount: toBackendMoney(payment.receivedAmount!) }
+              : { method: payment.method },
+        })
+        return receiptViewFromApiSale(sale, {
+          storeName: storeQuery.data?.name ?? localSession?.storeName ?? "",
+          cashRegisterName: selectedRegister?.name ?? "",
+          cashierName: user.first_name || user.username,
+        })
+      }
+
+      if (!localSession) {
+        throw new Error("Aucune session de caisse locale disponible hors ligne.")
+      }
+
+      const sale = await createLocalSale({
+        session: localSession,
+        items: cart.items.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        })),
+        payment: { method: payment.method, receivedAmount: payment.receivedAmount ?? null },
+      })
+      return receiptViewFromLocalSale(sale)
+    },
     onSuccess: (sale) => {
       cart.clearCart()
       setCheckoutStep(null)
@@ -54,10 +94,11 @@ export function PosPage() {
     },
     onError: (error) => {
       if (
-        error instanceof ApiError &&
-        ["INSUFFICIENT_STOCK", "PRODUCT_INACTIVE", "PRODUCT_NOT_FOUND"].includes(
-          error.code ?? "",
-        )
+        (error instanceof ApiError &&
+          ["INSUFFICIENT_STOCK", "PRODUCT_INACTIVE", "PRODUCT_NOT_FOUND"].includes(
+            error.code ?? "",
+          )) ||
+        error instanceof InsufficientLocalStockError
       ) {
         void queryClient.invalidateQueries({ queryKey: ["products"] })
       }
@@ -73,24 +114,13 @@ export function PosPage() {
     cart.addItem(product)
   }
 
-  async function submitPayment(payment: CompleteSaleInput["payment"]) {
+  async function submitPayment(payment: CheckoutPayment) {
     if (!ownSession || cart.items.length === 0) return
-
-    await saleMutation.mutateAsync({
-      cash_session_id: ownSession.id,
-      items: cart.items.map((item) => ({
-        product_id: item.productId,
-        quantity: item.quantity,
-      })),
-      payment,
-    })
+    await saleMutation.mutateAsync(payment)
   }
 
   function handleCashPayment(receivedAmount: number) {
-    return submitPayment({
-      method: "CASH",
-      received_amount: toBackendMoney(receivedAmount),
-    })
+    return submitPayment({ method: "CASH", receivedAmount })
   }
 
   function handleMobilePayment(method: Exclude<PaymentMethod, "CASH">) {

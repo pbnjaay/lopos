@@ -8,6 +8,9 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+import { findLocalProductByBarcode, hasLocalProductCatalog } from "../db/products"
+import { createLocalSale } from "../db/sales"
+import type { LocalCashSession, LocalProduct, LocalSale } from "../db/types"
 import { currentUserQueryKey } from "../features/auth/queries"
 import { SELECTED_CASH_REGISTER_KEY } from "../features/cash-session/queries"
 import type {
@@ -19,6 +22,16 @@ import type {
   Store,
 } from "../types/api"
 import { PosPage } from "./PosPage"
+
+vi.mock("../db/products", () => ({
+  findLocalProductByBarcode: vi.fn(),
+  hasLocalProductCatalog: vi.fn(),
+  searchLocalProducts: vi.fn(),
+}))
+vi.mock("../db/sales", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../db/sales")>()
+  return { ...actual, createLocalSale: vi.fn() }
+})
 
 const user: CurrentUser = {
   id: 7,
@@ -103,7 +116,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
-function renderPos() {
+function renderPos(localSession?: LocalCashSession) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Infinity },
@@ -118,6 +131,9 @@ function renderPos() {
   )
   queryClient.setQueryData(["stores", store.id], store)
   localStorage.setItem(SELECTED_CASH_REGISTER_KEY, cashRegister.id)
+  if (localSession) {
+    queryClient.setQueryData(["local-cash-session", cashRegister.id], localSession)
+  }
 
   render(
     <QueryClientProvider client={queryClient}>
@@ -142,6 +158,7 @@ async function openCashPayment(userEvents: ReturnType<typeof userEvent.setup>) {
 
 afterEach(() => {
   cleanup()
+  vi.clearAllMocks()
   vi.restoreAllMocks()
   localStorage.clear()
   document.cookie = "csrftoken=; Max-Age=0; path=/"
@@ -207,6 +224,159 @@ describe("POS sale workflow", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Stock insuffisant pour Coca 50cl.",
+    )
+    expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveValue(1)
+    expect(screen.queryByRole("heading", { name: "Vente validée" })).not.toBeInTheDocument()
+  })
+})
+
+const localCoca: LocalProduct = {
+  id: coca.id,
+  storeId: store.id,
+  name: coca.name,
+  barcode: coca.barcode,
+  sellingPrice: 500,
+  serverKnownStock: 20,
+  pendingSoldQuantity: 0,
+  isActive: true,
+  cachedAt: "2026-08-17T00:00:00Z",
+}
+
+const localSession: LocalCashSession = {
+  id: cashSession.id,
+  cashRegisterId: cashRegister.id,
+  cashRegisterName: cashRegister.name,
+  storeId: store.id,
+  storeName: store.name,
+  cashierId: user.id,
+  cashierName: user.first_name,
+  openingBalance: 15_000,
+  openedAt: cashSession.opened_at,
+  status: "OPEN",
+  cachedAt: "2026-08-17T00:00:00Z",
+}
+
+function setOnline(value: boolean) {
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(value)
+}
+
+describe("POS sale workflow offline", () => {
+  it("completes a cash sale locally, marks it PENDING_SYNC and clears the cart", async () => {
+    setOnline(false)
+    vi.mocked(hasLocalProductCatalog).mockResolvedValue(true)
+    vi.mocked(findLocalProductByBarcode).mockResolvedValue(localCoca)
+    const localSale: LocalSale = {
+      id: "0f9e8d7c-1234-4a5b-9c6d-abcdef012345",
+      serverId: null,
+      cashSessionId: localSession.id,
+      storeId: store.id,
+      storeName: store.name,
+      cashRegisterId: cashRegister.id,
+      cashRegisterName: cashRegister.name,
+      cashierId: user.id,
+      cashierName: user.first_name,
+      createdAt: "2026-08-17T20:00:00Z",
+      status: "PENDING_SYNC",
+      items: [
+        {
+          productId: coca.id,
+          productName: coca.name,
+          unitPrice: 500,
+          quantity: 2,
+          lineTotal: 1_000,
+        },
+      ],
+      payment: { method: "CASH", amount: 1_000, receivedAmount: 2_000, changeAmount: 1_000 },
+      subtotal: 1_000,
+      discount: 0,
+      total: 1_000,
+    }
+    vi.mocked(createLocalSale).mockResolvedValue(localSale)
+
+    const userEvents = userEvent.setup()
+    renderPos(localSession)
+    const scanner = await scanCoca(userEvents)
+    await userEvents.type(scanner, `${coca.barcode}{Enter}`)
+    await waitFor(() => expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveValue(2))
+    await openCashPayment(userEvents)
+    await userEvents.type(screen.getByLabelText("Montant reçu"), "2000")
+    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+
+    expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
+    expect(screen.getByText(/Vente enregistrée hors ligne/)).toHaveTextContent("0F9E8D7C")
+    expect(screen.getByText("Panier vide")).toBeInTheDocument()
+    expect(createLocalSale).toHaveBeenCalledWith({
+      session: localSession,
+      items: [{ productId: coca.id, quantity: 2 }],
+      payment: { method: "CASH", receivedAmount: 2_000 },
+    })
+  })
+
+  it("completes a WAVE sale locally with a manually confirmed payment", async () => {
+    setOnline(false)
+    vi.mocked(hasLocalProductCatalog).mockResolvedValue(true)
+    vi.mocked(findLocalProductByBarcode).mockResolvedValue(localCoca)
+    const localSale: LocalSale = {
+      id: "1a2b3c4d-5678-4a5b-9c6d-abcdef012345",
+      serverId: null,
+      cashSessionId: localSession.id,
+      storeId: store.id,
+      storeName: store.name,
+      cashRegisterId: cashRegister.id,
+      cashRegisterName: cashRegister.name,
+      cashierId: user.id,
+      cashierName: user.first_name,
+      createdAt: "2026-08-17T20:05:00Z",
+      status: "PENDING_SYNC",
+      items: [
+        {
+          productId: coca.id,
+          productName: coca.name,
+          unitPrice: 500,
+          quantity: 1,
+          lineTotal: 500,
+        },
+      ],
+      payment: { method: "WAVE", amount: 500, receivedAmount: null, changeAmount: null },
+      subtotal: 500,
+      discount: 0,
+      total: 500,
+    }
+    vi.mocked(createLocalSale).mockResolvedValue(localSale)
+
+    const userEvents = userEvent.setup()
+    renderPos(localSession)
+    await scanCoca(userEvents)
+    await userEvents.click(screen.getByRole("button", { name: "Encaisser" }))
+    await userEvents.click(screen.getByRole("button", { name: /Wave/ }))
+    await userEvents.click(screen.getByRole("button", { name: "Paiement reçu" }))
+
+    expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
+    expect(screen.getByText(/Vente enregistrée hors ligne/)).toHaveTextContent("1A2B3C4D")
+    expect(createLocalSale).toHaveBeenCalledWith({
+      session: localSession,
+      items: [{ productId: coca.id, quantity: 1 }],
+      payment: { method: "WAVE", receivedAmount: null },
+    })
+  })
+
+  it("keeps the cart and shows an error when local persistence fails", async () => {
+    setOnline(false)
+    vi.mocked(hasLocalProductCatalog).mockResolvedValue(true)
+    vi.mocked(findLocalProductByBarcode).mockResolvedValue(localCoca)
+    vi.mocked(createLocalSale).mockRejectedValue(
+      new Error("Impossible d'enregistrer la vente localement."),
+    )
+
+    const userEvents = userEvent.setup()
+    renderPos(localSession)
+    await scanCoca(userEvents)
+    await openCashPayment(userEvents)
+    await userEvents.type(screen.getByLabelText("Montant reçu"), "1000")
+    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Impossible d'enregistrer la vente localement.",
     )
     expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveValue(1)
     expect(screen.queryByRole("heading", { name: "Vente validée" })).not.toBeInTheDocument()

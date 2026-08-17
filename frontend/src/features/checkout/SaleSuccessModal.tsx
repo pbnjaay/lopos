@@ -1,8 +1,8 @@
-import type { SaleResponse } from "../../types/api"
-import { formatBackendMoney } from "../../utils/money"
+import type { ReceiptView } from "../sales/receiptView"
+import { formatMoney } from "../../utils/money"
 
 type SaleSuccessModalProps = {
-  sale: SaleResponse
+  sale: ReceiptView
   onNewSale: () => void
 }
 
@@ -27,6 +27,13 @@ export function SaleSuccessModal({ sale, onNewSale }: SaleSuccessModalProps) {
         <p className="eyebrow">Vente terminée</p>
         <h2 id="sale-success-title">Vente validée</h2>
 
+        {sale.isPendingSync ? (
+          <p className="sale-pending-note">
+            Vente enregistrée hors ligne. Référence locale :{" "}
+            {sale.id.slice(0, 8).toUpperCase()}
+          </p>
+        ) : null}
+
         <dl className="sale-amounts">
           <div>
             <dt>Paiement</dt>
@@ -34,18 +41,18 @@ export function SaleSuccessModal({ sale, onNewSale }: SaleSuccessModalProps) {
           </div>
           <div>
             <dt>Total</dt>
-            <dd>{formatBackendMoney(sale.total)}</dd>
+            <dd>{formatMoney(sale.total)}</dd>
           </div>
-          {sale.payment.received_amount !== null ? (
+          {sale.payment.receivedAmount !== null ? (
             <div>
               <dt>Reçu</dt>
-              <dd>{formatBackendMoney(sale.payment.received_amount)}</dd>
+              <dd>{formatMoney(sale.payment.receivedAmount)}</dd>
             </div>
           ) : null}
-          {sale.payment.change_amount !== null ? (
+          {sale.payment.changeAmount !== null ? (
             <div className="sale-change">
               <dt>Monnaie</dt>
-              <dd>{formatBackendMoney(sale.payment.change_amount)}</dd>
+              <dd>{formatMoney(sale.payment.changeAmount)}</dd>
             </div>
           ) : null}
         </dl>

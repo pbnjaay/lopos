@@ -517,6 +517,12 @@ h1 {
   font-size: 0.85rem;
 }
 
+.receipt-pending-note {
+  margin-top: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .receipt-items {
   display: grid;
   gap: 1rem;
@@ -1179,6 +1185,16 @@ h1 {
   color: #fff;
   font-size: 2.5rem;
   font-weight: 800;
+}
+
+.sale-pending-note {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.65rem;
+  background: #fdf1de;
+  color: #8a4b0b;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .sale-amounts {

@@ -3,8 +3,10 @@ import { Link, useParams } from "react-router-dom"
 
 import { getSaleReceipt } from "../api/sales"
 import { RouteState } from "../components/ui/RouteState"
+import { getLocalSaleById } from "../db/sales"
+import { receiptViewFromApiReceipt, receiptViewFromLocalSale } from "../features/sales/receiptView"
 import { formatDateTime } from "../utils/date"
-import { formatBackendMoney } from "../utils/money"
+import { formatMoney } from "../utils/money"
 
 const paymentLabels = {
   CASH: "Espèces",
@@ -16,7 +18,11 @@ export function SaleReceiptPage() {
   const { saleId } = useParams<{ saleId: string }>()
   const receiptQuery = useQuery({
     queryKey: ["sales", saleId, "receipt"],
-    queryFn: () => getSaleReceipt(saleId!),
+    queryFn: async () => {
+      const localSale = await getLocalSaleById(saleId!)
+      if (localSale) return receiptViewFromLocalSale(localSale)
+      return receiptViewFromApiReceipt(await getSaleReceipt(saleId!))
+    },
     enabled: Boolean(saleId),
     retry: false,
   })
@@ -50,21 +56,26 @@ export function SaleReceiptPage() {
 
       <article className="receipt" aria-labelledby="receipt-title">
         <header className="receipt-heading">
-          <h1 id="receipt-title">{receipt.store.name}</h1>
-          <p>{formatDateTime(receipt.created_at)}</p>
-          <p>Caisse : {receipt.cash_register.name}</p>
-          <p>Caissier : {receipt.cashier.username}</p>
+          <h1 id="receipt-title">{receipt.storeName}</h1>
+          <p>{formatDateTime(receipt.createdAt)}</p>
+          <p>Caisse : {receipt.cashRegisterName}</p>
+          <p>Caissier : {receipt.cashierName}</p>
+          {receipt.isPendingSync ? (
+            <p className="receipt-pending-note">
+              Vente hors ligne — référence locale : {receipt.id.slice(0, 8).toUpperCase()}
+            </p>
+          ) : null}
         </header>
 
         <ul className="receipt-items" aria-label="Articles vendus">
           {receipt.items.map((item) => (
-            <li key={item.product_id}>
-              <strong>{item.product_name}</strong>
+            <li key={item.productId}>
+              <strong>{item.productName}</strong>
               <div>
                 <span>
-                  {item.quantity} × {formatBackendMoney(item.unit_price)}
+                  {item.quantity} × {formatMoney(item.unitPrice)}
                 </span>
-                <span>{formatBackendMoney(item.line_total)}</span>
+                <span>{formatMoney(item.lineTotal)}</span>
               </div>
             </li>
           ))}
@@ -73,22 +84,22 @@ export function SaleReceiptPage() {
         <dl className="receipt-totals">
           <div className="receipt-total">
             <dt>Total</dt>
-            <dd>{formatBackendMoney(receipt.total)}</dd>
+            <dd>{formatMoney(receipt.total)}</dd>
           </div>
           <div>
             <dt>Paiement</dt>
             <dd>{paymentLabels[receipt.payment.method]}</dd>
           </div>
-          {isCash && receipt.payment.received_amount !== null ? (
+          {isCash && receipt.payment.receivedAmount !== null ? (
             <div>
               <dt>Reçu</dt>
-              <dd>{formatBackendMoney(receipt.payment.received_amount)}</dd>
+              <dd>{formatMoney(receipt.payment.receivedAmount)}</dd>
             </div>
           ) : null}
-          {isCash && receipt.payment.change_amount !== null ? (
+          {isCash && receipt.payment.changeAmount !== null ? (
             <div>
               <dt>Monnaie</dt>
-              <dd>{formatBackendMoney(receipt.payment.change_amount)}</dd>
+              <dd>{formatMoney(receipt.payment.changeAmount)}</dd>
             </div>
           ) : null}
         </dl>
