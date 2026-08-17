@@ -1,0 +1,128 @@
+const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
+
+export const API_BASE_URL = (configuredBaseUrl || "/api/v1").replace(/\/+$/, "")
+
+export type ApiErrorBody = {
+  code?: string
+  message?: string
+  detail?: string
+  [field: string]: unknown
+}
+
+export class ApiError extends Error {
+  readonly status: number
+  readonly code?: string
+  readonly body: ApiErrorBody | null
+
+  constructor(status: number, body: ApiErrorBody | null) {
+    super(getErrorMessage(status, body))
+    this.name = "ApiError"
+    this.status = status
+    this.code = body?.code
+    this.body = body
+  }
+}
+
+export class NetworkError extends Error {
+  constructor() {
+    super("Impossible de joindre le serveur. Vérifiez votre connexion Internet.")
+    this.name = "NetworkError"
+  }
+}
+
+type ApiRequestOptions = Omit<RequestInit, "body"> & {
+  body?: unknown
+}
+
+function getCookie(name: string): string | undefined {
+  const cookie = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`))
+
+  return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : undefined
+}
+
+function isUnsafeMethod(method: string): boolean {
+  return !["GET", "HEAD", "OPTIONS", "TRACE"].includes(method.toUpperCase())
+}
+
+function getErrorMessage(status: number, body: ApiErrorBody | null): string {
+  if (body?.message) return body.message
+  if (body?.detail) return body.detail
+  if (status >= 500) return "Le serveur a rencontré une erreur."
+  return `La requête a échoué (${status}).`
+}
+
+async function readResponseBody(response: Response): Promise<unknown> {
+  if (response.status === 204) return null
+
+  const contentType = response.headers.get("content-type") ?? ""
+  if (contentType.includes("application/json")) return response.json()
+
+  const text = await response.text()
+  return text ? { detail: text } : null
+}
+
+function toApiErrorBody(value: unknown): ApiErrorBody | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null
+  }
+  return value as ApiErrorBody
+}
+
+export function buildApiUrl(
+  path: string,
+  query?: Record<string, string | number | undefined>,
+): string {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`
+  const url = `${API_BASE_URL}${normalizedPath}`
+  const searchParams = new URLSearchParams()
+
+  Object.entries(query ?? {}).forEach(([key, value]) => {
+    if (value !== undefined) searchParams.set(key, String(value))
+  })
+
+  const search = searchParams.toString()
+  return search ? `${url}?${search}` : url
+}
+
+export async function apiRequest<T>(
+  path: string,
+  options: ApiRequestOptions = {},
+): Promise<T> {
+  const method = options.method ?? "GET"
+  const headers = new Headers(options.headers)
+  headers.set("Accept", "application/json")
+
+  let body: BodyInit | undefined
+  if (options.body !== undefined) {
+    headers.set("Content-Type", "application/json")
+    body = JSON.stringify(options.body)
+  }
+
+  if (isUnsafeMethod(method)) {
+    const csrfToken = getCookie("csrftoken")
+    if (csrfToken) headers.set("X-CSRFToken", csrfToken)
+  }
+
+  let response: Response
+  try {
+    response = await fetch(buildApiUrl(path), {
+      ...options,
+      method,
+      headers,
+      body,
+      credentials: "include",
+    })
+  } catch {
+    throw new NetworkError()
+  }
+
+  const responseBody = await readResponseBody(response)
+  if (!response.ok) {
+    throw new ApiError(response.status, toApiErrorBody(responseBody))
+  }
+
+  return responseBody as T
+}

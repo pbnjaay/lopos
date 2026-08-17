@@ -20,3 +20,9 @@ media/
 .coverage
 htmlcov/
 .ruff_cache/
+
+# Frontend
+node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env.*.local
