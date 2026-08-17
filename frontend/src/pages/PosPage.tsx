@@ -17,6 +17,7 @@ import { PaymentMethodModal } from "../features/checkout/PaymentMethodModal"
 import { SaleSuccessModal } from "../features/checkout/SaleSuccessModal"
 import { OfflineBanner } from "../features/offline/OfflineBanner"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
+import { pendingSalesCountQueryKey, usePendingSalesCount } from "../features/offline/usePendingSalesCount"
 import { ProductSearch } from "../features/products/ProductSearch"
 import { useProductCatalogCache } from "../features/products/queries"
 import { type ReceiptView, receiptViewFromApiSale, receiptViewFromLocalSale } from "../features/sales/receiptView"
@@ -32,8 +33,9 @@ export function PosPage() {
   const user = useCurrentUser().data!
   const { ownSession, selectedRegister, localSession } = usePosSession(user)
   const isOnline = useNetworkStatus()
+  const pendingSalesCount = usePendingSalesCount()
   const queryClient = useQueryClient()
-  const cart = useCart()
+  const cart = useCart(ownSession?.id ?? null)
   const [checkoutStep, setCheckoutStep] = useState<"METHODS" | PaymentMethod | null>(null)
   const [completedSale, setCompletedSale] = useState<ReceiptView | null>(null)
   useProductCatalogCache(selectedRegister?.store_id ?? null)
@@ -91,6 +93,7 @@ export function PosPage() {
       setCheckoutStep(null)
       setCompletedSale(sale)
       void queryClient.invalidateQueries({ queryKey: ["products"] })
+      void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })
     },
     onError: (error) => {
       if (
@@ -155,7 +158,7 @@ export function PosPage() {
         </div>
       </header>
 
-      <OfflineBanner />
+      <OfflineBanner pendingSalesCount={pendingSalesCount} />
 
       {storeQuery.error && !localSession?.storeName ? (
         <p className="form-error" role="alert">

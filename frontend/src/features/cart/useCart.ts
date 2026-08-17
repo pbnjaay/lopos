@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import type { CatalogProduct } from "../products/types"
 import {
@@ -11,9 +11,21 @@ import {
   removeItem,
   setItemQuantity,
 } from "./cartState"
+import { loadCartForSession, saveCartForSession } from "./cartStorage"
 
-export function useCart() {
-  const [items, setItems] = useState<CartItem[]>([])
+export function useCart(cashSessionId: string | null = null) {
+  const [items, setItems] = useState<CartItem[]>(() => loadCartForSession(cashSessionId))
+  const restoredSessionId = useRef(cashSessionId)
+
+  useEffect(() => {
+    if (restoredSessionId.current === cashSessionId) return
+    restoredSessionId.current = cashSessionId
+    setItems(loadCartForSession(cashSessionId))
+  }, [cashSessionId])
+
+  useEffect(() => {
+    saveCartForSession(cashSessionId, items)
+  }, [cashSessionId, items])
 
   return {
     items,
