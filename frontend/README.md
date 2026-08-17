@@ -1,4 +1,4 @@
-# LoPOS frontend — étapes 1 à 5
+# LoPOS frontend — étapes 1 à 6
 
 Socle React, TypeScript et Vite du POS, avec authentification par session Django,
 restauration de l'utilisateur courant, guards de session et ouverture de caisse.
@@ -101,3 +101,11 @@ produit incrémente sa ligne. Les contrôles permettent d'incrémenter, décrém
 modifier directement la quantité, supprimer ou vider, sans jamais dépasser le
 stock connu ni descendre sous une quantité de 1. Le total affiché est calculé en
 entiers FCFA ; aucun prix ni total n'est encore envoyé au backend.
+
+## Écran POS — étape 6
+
+L'écran `/pos` assemble l'identité du magasin, la caisse, le caissier et l'état
+de session avec la recherche produit et le panier. Le total et le bouton
+`Encaisser` dominent le panneau droit ; ce bouton est désactivé lorsque le
+panier est vide. À cette étape il confirme seulement que le panier est prêt :
+le formulaire de paiement CASH appartient à l'étape 7.

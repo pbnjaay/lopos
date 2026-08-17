@@ -9,6 +9,7 @@ type CartProps = {
   onQuantityChange: (productId: string, quantity: number) => void
   onRemove: (productId: string) => void
   onClear: () => void
+  onCheckout: () => void
 }
 
 export function Cart({
@@ -19,6 +20,7 @@ export function Cart({
   onQuantityChange,
   onRemove,
   onClear,
+  onCheckout,
 }: CartProps) {
   return (
     <section className="cart-panel" aria-labelledby="cart-title">
@@ -99,8 +101,18 @@ export function Cart({
       )}
 
       <footer className="cart-summary">
-        <span>Total</span>
-        <strong>{formatMoney(total)}</strong>
+        <div>
+          <span>Total</span>
+          <strong>{formatMoney(total)}</strong>
+        </div>
+        <button
+          className="button button-primary checkout-button"
+          type="button"
+          disabled={items.length === 0}
+          onClick={onCheckout}
+        >
+          Encaisser
+        </button>
       </footer>
     </section>
   )
