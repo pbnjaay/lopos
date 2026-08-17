@@ -70,24 +70,30 @@ describe("SaleReceiptPage", () => {
     expect(screen.getByText("Coca 50cl")).toBeInTheDocument()
     expect(screen.getByText("2 × 500 FCFA")).toBeInTheDocument()
     expect(screen.getAllByText("1 000 FCFA")).toHaveLength(3)
+    expect(screen.getByText("Espèces")).toBeInTheDocument()
+    expect(screen.getByText("Reçu")).toBeInTheDocument()
     expect(screen.getByText("2 000 FCFA")).toBeInTheDocument()
+    expect(screen.getByText("Monnaie")).toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "Imprimer" }))
     expect(printMock).toHaveBeenCalledOnce()
   })
 
-  it("does not show received cash or change for mobile money", () => {
+  it.each([
+    ["WAVE", "Wave"],
+    ["ORANGE_MONEY", "Orange Money"],
+  ] as const)("shows %s without received cash or change", (method, label) => {
     renderReceipt({
       ...cashReceipt,
       payment: {
-        method: "WAVE",
+        method,
         amount: "1000.00",
         received_amount: null,
         change_amount: null,
       },
     })
 
-    expect(screen.getByText("Wave")).toBeInTheDocument()
+    expect(screen.getByText(label)).toBeInTheDocument()
     expect(screen.queryByText("Reçu")).not.toBeInTheDocument()
     expect(screen.queryByText("Monnaie")).not.toBeInTheDocument()
   })

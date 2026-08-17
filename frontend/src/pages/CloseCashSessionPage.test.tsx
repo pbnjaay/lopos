@@ -173,4 +173,44 @@ describe("CloseCashSessionPage", () => {
       queryClient.getQueryData(["cash-registers", cashRegister.id, "current-session"]),
     ).toBeNull()
   })
+
+  it("keeps the confirmation open and shows a closing business error", async () => {
+    const user = userEvent.setup()
+    document.cookie = "csrftoken=test-token; path=/"
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: "CASH_SESSION_ALREADY_CLOSED",
+          message: "Cette session de caisse est déjà clôturée.",
+        }),
+        { status: 409, headers: { "Content-Type": "application/json" } },
+      ),
+    )
+    renderPage()
+
+    await user.type(screen.getByLabelText("Montant compté"), "29 500")
+    await user.click(screen.getByRole("button", { name: "Continuer" }))
+    await user.click(screen.getByRole("button", { name: "Confirmer la clôture" }))
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Cette session de caisse est déjà clôturée.",
+    )
+    expect(screen.getByRole("dialog")).toHaveTextContent("Montant compté : 29 500 FCFA")
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it("shows the shared connection error without retrying the close automatically", async () => {
+    const user = userEvent.setup()
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"))
+    renderPage()
+
+    await user.type(screen.getByLabelText("Montant compté"), "29 500")
+    await user.click(screen.getByRole("button", { name: "Continuer" }))
+    await user.click(screen.getByRole("button", { name: "Confirmer la clôture" }))
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Impossible de joindre le serveur. Vérifiez votre connexion Internet.",
+    )
+    expect(globalThis.fetch).toHaveBeenCalledOnce()
+  })
 })
