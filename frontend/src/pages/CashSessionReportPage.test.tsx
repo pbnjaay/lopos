@@ -4,8 +4,9 @@ import "@testing-library/jest-dom/vitest"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import type { CashRegister, CashSessionSummary, Store } from "../types/api"
 import { CashSessionReportPage } from "./CashSessionReportPage"
@@ -44,7 +45,10 @@ const store: Store = {
   updated_at: "2026-08-17T00:00:00Z",
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 describe("CashSessionReportPage", () => {
   it("renders a closed session report directly from its URL", () => {
@@ -75,5 +79,33 @@ describe("CashSessionReportPage", () => {
     expect(screen.getByText("30 000 FCFA")).toBeInTheDocument()
     expect(screen.getByText("29 500 FCFA")).toBeInTheDocument()
     expect(screen.getByText("Manque : 500 FCFA")).toBeInTheDocument()
+  })
+
+  it("opens the browser print dialog without calling the API", async () => {
+    const user = userEvent.setup()
+    const printMock = vi.spyOn(window, "print").mockImplementation(() => undefined)
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    })
+    queryClient.setQueryData(["cash-sessions", summary.id, "summary"], summary)
+    queryClient.setQueryData(["cash-registers", cashRegister.id], cashRegister)
+    queryClient.setQueryData(["stores", store.id], store)
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/cash-sessions/${summary.id}/report`]}>
+          <Routes>
+            <Route
+              path="/cash-sessions/:sessionId/report"
+              element={<CashSessionReportPage />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    await user.click(screen.getByRole("button", { name: "Imprimer" }))
+
+    expect(printMock).toHaveBeenCalledOnce()
   })
 })

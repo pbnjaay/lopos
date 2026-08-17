@@ -8,6 +8,7 @@ import { CloseCashSessionPage } from "../pages/CloseCashSessionPage"
 import { LoginPage } from "../pages/LoginPage"
 import { OpenCashSessionPage } from "../pages/OpenCashSessionPage"
 import { PosPage } from "../pages/PosPage"
+import { SaleReceiptPage } from "../pages/SaleReceiptPage"
 
 export const router = createBrowserRouter([
   { path: "/", element: <AppEntryPage /> },
@@ -45,6 +46,10 @@ export const router = createBrowserRouter([
       {
         path: "/cash-sessions/:sessionId/report",
         element: <CashSessionReportPage />,
+      },
+      {
+        path: "/sales/:saleId/receipt",
+        element: <SaleReceiptPage />,
       },
     ],
   },

@@ -456,6 +456,12 @@ h1 {
   margin-bottom: 0;
 }
 
+.report-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .report-identity {
   display: grid;
   gap: 0.35rem;
@@ -470,6 +476,157 @@ h1 {
 
 .report-totals {
   margin-top: 2rem;
+}
+
+.receipt-page {
+  width: min(100%, 32rem);
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.receipt-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.receipt {
+  width: min(100%, 80mm);
+  margin: 0 auto;
+  padding: 8mm 6mm;
+  background: #fff;
+  box-shadow: 0 1rem 3rem rgb(18 55 42 / 10%);
+  color: #111;
+  font-family: "Courier New", Courier, monospace;
+}
+
+.receipt-heading {
+  text-align: center;
+}
+
+.receipt-heading h1 {
+  margin: 0 0 0.75rem;
+  font-size: 1.35rem;
+  text-transform: uppercase;
+}
+
+.receipt-heading p {
+  margin: 0.2rem 0;
+  font-size: 0.85rem;
+}
+
+.receipt-items {
+  display: grid;
+  gap: 1rem;
+  margin: 1.5rem 0 0;
+  padding: 1.25rem 0;
+  border-top: 1px dashed #555;
+  border-bottom: 1px dashed #555;
+  list-style: none;
+}
+
+.receipt-items li,
+.receipt-items li > div {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.receipt-items li > div {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  font-size: 0.85rem;
+}
+
+.receipt-totals {
+  display: grid;
+  gap: 0.55rem;
+  margin: 1.25rem 0 0;
+}
+
+.receipt-totals > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.receipt-totals dd {
+  margin: 0;
+  text-align: right;
+}
+
+.receipt-total {
+  margin-bottom: 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.receipt-footer {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px dashed #555;
+  font-weight: 700;
+  text-align: center;
+}
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  :root,
+  body {
+    background: #fff;
+  }
+
+  .app-header,
+  .global-error,
+  .no-print {
+    display: none !important;
+  }
+
+  .report-page {
+    width: auto;
+    margin: 0;
+    padding: 0;
+  }
+
+  .z-report {
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .report-heading {
+    display: block;
+  }
+
+  .report-identity,
+  .report-totals {
+    break-inside: avoid;
+  }
+
+  .receipt-page {
+    width: 80mm;
+    margin: 0;
+    padding: 0;
+  }
+
+  .receipt {
+    width: 80mm;
+    margin: 0;
+    padding: 5mm;
+    box-shadow: none;
+  }
+
+  .receipt-items li,
+  .receipt-totals,
+  .receipt-footer {
+    break-inside: avoid;
+  }
 }
 
 .pos-heading h1,

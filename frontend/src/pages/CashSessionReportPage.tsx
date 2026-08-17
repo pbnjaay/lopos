@@ -59,9 +59,14 @@ export function CashSessionReportPage() {
             <p className="eyebrow">Fin de journée</p>
             <h1 id="z-report-title">Rapport Z</h1>
           </div>
-          <Link className="text-button" to="/cash/open">
-            Retour
-          </Link>
+          <div className="report-actions no-print">
+            <Link className="text-button" to="/cash/open">
+              Retour
+            </Link>
+            <button className="button button-primary button-small" type="button" onClick={() => window.print()}>
+              Imprimer
+            </button>
+          </div>
         </header>
 
         <div className="report-identity">
