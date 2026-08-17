@@ -5,6 +5,10 @@ export function getCashRegisters(): Promise<CashRegister[]> {
   return apiRequest<CashRegister[]>("cash-registers/")
 }
 
+export function getCashRegister(id: string): Promise<CashRegister> {
+  return apiRequest<CashRegister>(`cash-registers/${encodeURIComponent(id)}/`)
+}
+
 export async function getCurrentCashSession(
   cashRegisterId: string,
 ): Promise<CashSession | null> {

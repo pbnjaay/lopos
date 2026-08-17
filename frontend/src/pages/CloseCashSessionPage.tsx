@@ -63,16 +63,22 @@ export function CloseCashSessionPage() {
 
   const summary = summaryQuery.data
   if (!summary) return <RouteState message="Chargement du résumé de caisse…" />
+  const cashRegisterId = ownSession.cash_register_id
+
+  function clearCurrentSessionCache() {
+    queryClient.setQueryData(
+      ["cash-registers", cashRegisterId, "current-session"],
+      null,
+    )
+  }
 
   if (closeMutation.data) {
     return (
       <CashClosingResult
         summary={closeMutation.data}
+        onViewReport={clearCurrentSessionCache}
         onFinish={() => {
-          queryClient.setQueryData(
-            ["cash-registers", ownSession.cash_register_id, "current-session"],
-            null,
-          )
+          clearCurrentSessionCache()
           navigate("/cash/open", { replace: true })
         }}
       />

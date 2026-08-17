@@ -419,9 +419,57 @@ h1 {
   color: #36594c;
 }
 
-.closing-finish-button {
-  width: 100%;
+.closing-result-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
   margin-top: 1.5rem;
+}
+
+.closing-result-actions .button {
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+}
+
+.report-page {
+  width: min(100%, 48rem);
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.z-report {
+  padding: 2.5rem;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 1rem 3rem rgb(18 55 42 / 8%);
+}
+
+.report-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.report-heading h1 {
+  margin-bottom: 0;
+}
+
+.report-identity {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 2rem;
+  color: #527064;
+}
+
+.report-identity strong {
+  color: #17211c;
+  font-size: 1.2rem;
+}
+
+.report-totals {
+  margin-top: 2rem;
 }
 
 .pos-heading h1,

@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom"
+
 import type { CashSessionSummary } from "../../types/api"
 import { formatDateTime } from "../../utils/date"
 import { describeCashDifference, formatBackendMoney } from "../../utils/money"
@@ -5,9 +7,10 @@ import { describeCashDifference, formatBackendMoney } from "../../utils/money"
 type CashClosingResultProps = {
   summary: CashSessionSummary
   onFinish: () => void
+  onViewReport: () => void
 }
 
-export function CashClosingResult({ summary, onFinish }: CashClosingResultProps) {
+export function CashClosingResult({ summary, onFinish, onViewReport }: CashClosingResultProps) {
   const difference = describeCashDifference(summary.cash_difference ?? "0.00")
 
   return (
@@ -63,9 +66,18 @@ export function CashClosingResult({ summary, onFinish }: CashClosingResultProps)
           </div>
         </dl>
 
-        <button className="button button-primary closing-finish-button" type="button" onClick={onFinish}>
-          Terminer
-        </button>
+        <div className="closing-result-actions">
+          <Link
+            className="button button-secondary"
+            to={`/cash-sessions/${encodeURIComponent(summary.id)}/report`}
+            onClick={onViewReport}
+          >
+            Voir le rapport Z
+          </Link>
+          <button className="button button-primary" type="button" onClick={onFinish}>
+            Terminer
+          </button>
+        </div>
       </section>
     </main>
   )

@@ -3,6 +3,7 @@ import { Navigate, createBrowserRouter } from "react-router-dom"
 import { RequireAuth } from "../features/auth/RequireAuth"
 import { SessionRoute } from "../features/cash-session/SessionRoute"
 import { AppEntryPage } from "../pages/AppEntryPage"
+import { CashSessionReportPage } from "../pages/CashSessionReportPage"
 import { CloseCashSessionPage } from "../pages/CloseCashSessionPage"
 import { LoginPage } from "../pages/LoginPage"
 import { OpenCashSessionPage } from "../pages/OpenCashSessionPage"
@@ -40,6 +41,10 @@ export const router = createBrowserRouter([
             <CloseCashSessionPage />
           </SessionRoute>
         ),
+      },
+      {
+        path: "/cash-sessions/:sessionId/report",
+        element: <CashSessionReportPage />,
       },
     ],
   },
