@@ -38,6 +38,32 @@ export type CashSession = {
   closed_at: string | null
 }
 
+export type CashSessionSummary = {
+  id: string
+  status: "OPEN" | "CLOSED"
+  cash_register: {
+    id: string
+    name: string
+  }
+  cashier: {
+    id: number
+    username: string
+  }
+  opened_at: string
+  sales_count: number
+  gross_sales: string
+  payments: {
+    cash: string
+    wave: string
+    orange_money: string
+  }
+  opening_balance: string
+  expected_cash: string
+  counted_cash: string | null
+  cash_difference: string | null
+  closed_at: string | null
+}
+
 export type Product = {
   id: string
   name: string
@@ -84,4 +110,19 @@ export type SaleResponse = {
     line_total: string
   }>
   created_at: string
+}
+
+export type SaleReceipt = SaleResponse & {
+  store: {
+    id: string
+    name: string
+  }
+  cash_register: {
+    id: string
+    name: string
+  }
+  cashier: {
+    id: number
+    username: string
+  }
 }
