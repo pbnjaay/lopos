@@ -30,6 +30,10 @@ def test_current_cash_session_route() -> None:
     ) == f"/api/v1/cash-registers/{register_id}/current-session/"
 
 
+def test_session_login_route() -> None:
+    assert reverse("rest_framework:login") == "/api/v1/auth/login/"
+
+
 @pytest.mark.django_db
 def test_api_requires_authentication() -> None:
     response = APIClient().get(reverse("product-list"))

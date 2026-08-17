@@ -15,6 +15,7 @@ router.register("products", ProductViewSet, basename="product")
 
 urlpatterns = [
     path("", include(router.urls)),
+    path("auth/", include("rest_framework.urls")),
     path("inventory/stock-in/", StockInView.as_view(), name="inventory-stock-in"),
     path(
         "cash-sessions/open/",
