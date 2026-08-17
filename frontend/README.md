@@ -1,4 +1,4 @@
-# LoPOS frontend — étapes 1 à 6
+# LoPOS frontend — étapes 1 à 7
 
 Socle React, TypeScript et Vite du POS, avec authentification par session Django,
 restauration de l'utilisateur courant, guards de session et ouverture de caisse.
@@ -107,5 +107,12 @@ entiers FCFA ; aucun prix ni total n'est encore envoyé au backend.
 L'écran `/pos` assemble l'identité du magasin, la caisse, le caissier et l'état
 de session avec la recherche produit et le panier. Le total et le bouton
 `Encaisser` dominent le panneau droit ; ce bouton est désactivé lorsque le
-panier est vide. À cette étape il confirme seulement que le panier est prêt :
-le formulaire de paiement CASH appartient à l'étape 7.
+panier est vide. Il ouvre désormais le formulaire CASH décrit ci-dessous.
+
+## Paiement CASH — étape 7
+
+Le bouton `Encaisser` ouvre une modal accessible avec le total, le montant reçu,
+des montants rapides et la monnaie calculée localement. La validation reste
+désactivée tant que le reçu est insuffisant et Échap ferme la modal. Cette étape
+ne crée volontairement aucune vente : le panier est conservé et le branchement
+de `POST /sales/` appartient à l'étape 8.

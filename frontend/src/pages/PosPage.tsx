@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 
 import { getStore } from "../api/stores"
@@ -6,13 +6,19 @@ import { useCurrentUser } from "../features/auth/queries"
 import { Cart } from "../features/cart/Cart"
 import { useCart } from "../features/cart/useCart"
 import { usePosSession } from "../features/cash-session/queries"
+import { CashPaymentModal } from "../features/checkout/CashPaymentModal"
 import { ProductSearch } from "../features/products/ProductSearch"
+import { formatMoney } from "../utils/money"
 
 export function PosPage() {
   const user = useCurrentUser().data!
   const { ownSession, selectedRegister } = usePosSession(user.id)
   const cart = useCart()
-  const [checkoutRequested, setCheckoutRequested] = useState(false)
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
+  const [preparedPayment, setPreparedPayment] = useState<{
+    receivedAmount: number
+    changeAmount: number
+  } | null>(null)
   const storeQuery = useQuery({
     queryKey: ["stores", selectedRegister?.store_id],
     queryFn: () => getStore(selectedRegister!.store_id),
@@ -20,8 +26,12 @@ export function PosPage() {
     staleTime: 60_000,
   })
 
+  useEffect(() => {
+    setPreparedPayment(null)
+  }, [cart.items])
+
   function handleAddProduct(product: Parameters<typeof cart.addItem>[0]) {
-    setCheckoutRequested(false)
+    setPreparedPayment(null)
     cart.addItem(product)
   }
 
@@ -59,7 +69,7 @@ export function PosPage() {
             onQuantityChange={cart.setItemQuantity}
             onRemove={cart.removeItem}
             onClear={cart.clearCart}
-            onCheckout={() => setCheckoutRequested(true)}
+            onCheckout={() => setIsCheckoutOpen(true)}
           />
         </div>
       ) : (
@@ -67,10 +77,24 @@ export function PosPage() {
           Impossible de déterminer le magasin de cette caisse.
         </p>
       )}
-      {checkoutRequested ? (
+      {preparedPayment ? (
         <p className="checkout-ready" role="status">
-          Panier prêt à encaisser. Le paiement CASH arrive à l’étape 7.
+          Paiement CASH préparé : reçu {formatMoney(preparedPayment.receivedAmount)}, monnaie {" "}
+          {formatMoney(preparedPayment.changeAmount)}. La vente n’est pas encore envoyée.
         </p>
+      ) : null}
+      {isCheckoutOpen ? (
+        <CashPaymentModal
+          total={cart.total}
+          onClose={() => setIsCheckoutOpen(false)}
+          onConfirm={(receivedAmount) => {
+            setPreparedPayment({
+              receivedAmount,
+              changeAmount: receivedAmount - cart.total,
+            })
+            setIsCheckoutOpen(false)
+          }}
+        />
       ) : null}
     </main>
   )
