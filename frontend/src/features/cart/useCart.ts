@@ -1,6 +1,6 @@
 import { useState } from "react"
 
-import type { Product } from "../../types/api"
+import type { CatalogProduct } from "../products/types"
 import {
   type CartItem,
   addItem,
@@ -18,7 +18,7 @@ export function useCart() {
   return {
     items,
     total: getCartTotal(items),
-    addItem: (product: Product) => setItems((current) => addItem(current, product)),
+    addItem: (product: CatalogProduct) => setItems((current) => addItem(current, product)),
     incrementItem: (productId: string) =>
       setItems((current) => incrementItem(current, productId)),
     decrementItem: (productId: string) =>

@@ -1,14 +1,14 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 
-import { getProducts } from "../../api/products"
 import { useDebouncedValue } from "../../hooks/useDebouncedValue"
 import { formatMoney } from "../../utils/money"
-import type { Product } from "../../types/api"
+import { getProductByBarcode, searchProducts } from "./productService"
+import type { CatalogProduct } from "./types"
 
 type ProductSearchProps = {
   storeId: string
-  onProductSelect: (product: Product) => void
+  onProductSelect: (product: CatalogProduct) => void
 }
 
 export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) {
@@ -20,10 +20,11 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
   const term = barcode ?? (input.trim() ? debouncedSearch : "")
   const productsQuery = useQuery({
     queryKey: ["products", storeId, mode, term],
-    queryFn: () =>
-      mode === "barcode"
-        ? getProducts({ storeId, barcode: term })
-        : getProducts({ storeId, search: term }),
+    queryFn: async () => {
+      if (mode === "search") return searchProducts(storeId, term)
+      const product = await getProductByBarcode(storeId, term)
+      return product ? [product] : []
+    },
     enabled: term.length > 0,
     retry: false,
   })
@@ -41,7 +42,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
   }
 
   const handleProductSelect = useCallback(
-    (product: Product) => {
+    (product: CatalogProduct) => {
       onProductSelect(product)
       setInput("")
       setBarcode(null)
@@ -131,7 +132,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
                     </span>
                   </div>
                   <div className="product-numbers">
-                    <strong>{formatMoney(Number(product.selling_price))}</strong>
+                    <strong>{formatMoney(product.sellingPrice)}</strong>
                     <span className={product.stock === 0 ? "stock-empty" : undefined}>
                       Stock : {product.stock}
                     </span>

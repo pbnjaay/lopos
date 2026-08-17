@@ -88,3 +88,49 @@ export async function saveProductCatalog(
     },
   )
 }
+
+export async function hasLocalProductCatalog(
+  storeId: string,
+  database: PosDatabase = db,
+): Promise<boolean> {
+  const metadata = await database.metadata.get(productCatalogMetadataKey(storeId))
+  return metadata !== undefined
+}
+
+export async function findLocalProductByBarcode(
+  storeId: string,
+  barcode: string,
+  database: PosDatabase = db,
+): Promise<LocalProduct | null> {
+  const product = await database.products
+    .where("[storeId+barcode]")
+    .equals([storeId, barcode])
+    .first()
+
+  return product?.isActive ? product : null
+}
+
+export async function searchLocalProducts(
+  storeId: string,
+  search: string,
+  limit = 8,
+  database: PosDatabase = db,
+): Promise<LocalProduct[]> {
+  const normalizedSearch = search.trim().toLocaleLowerCase("fr")
+  if (!normalizedSearch) return []
+
+  const products = await database.products
+    .where("storeId")
+    .equals(storeId)
+    .filter((product) => {
+      if (!product.isActive) return false
+      const nameMatches = product.name
+        .toLocaleLowerCase("fr")
+        .includes(normalizedSearch)
+      const barcodeMatches = product.barcode?.includes(normalizedSearch) ?? false
+      return nameMatches || barcodeMatches
+    })
+    .sortBy("name")
+
+  return products.slice(0, limit)
+}

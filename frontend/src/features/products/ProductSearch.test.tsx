@@ -53,7 +53,16 @@ describe("ProductSearch", () => {
     const input = screen.getByLabelText("Scanner un code-barres ou rechercher par nom")
     await user.type(input, "123456789{Enter}")
 
-    await waitFor(() => expect(onProductSelect).toHaveBeenCalledWith(coca))
+    await waitFor(() =>
+      expect(onProductSelect).toHaveBeenCalledWith({
+        id: coca.id,
+        name: coca.name,
+        barcode: coca.barcode,
+        sellingPrice: 500,
+        stock: coca.stock,
+        isActive: true,
+      }),
+    )
     expect(input).toHaveValue("")
     expect(input).toHaveFocus()
     expect(fetchMock.mock.calls.at(-1)?.[0]).toBe(
@@ -93,7 +102,14 @@ describe("ProductSearch", () => {
     )
     await user.click(await screen.findByRole("button", { name: "Ajouter Coca 50cl au panier" }))
 
-    expect(onProductSelect).toHaveBeenCalledWith(coca)
+    expect(onProductSelect).toHaveBeenCalledWith({
+      id: coca.id,
+      name: coca.name,
+      barcode: coca.barcode,
+      sellingPrice: 500,
+      stock: coca.stock,
+      isActive: true,
+    })
     expect(screen.getByLabelText("Scanner un code-barres ou rechercher par nom")).toHaveValue("")
     expect(screen.getByLabelText("Scanner un code-barres ou rechercher par nom")).toHaveFocus()
     expect(screen.queryByText("Coca 50cl")).not.toBeInTheDocument()

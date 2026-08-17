@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import type { Product } from "../../types/api"
+import type { CatalogProduct } from "../products/types"
 import {
   addItem,
   clearCart,
@@ -14,24 +14,21 @@ import {
 function product(
   id: string,
   name: string,
-  sellingPrice: string,
+  sellingPrice: number,
   stock: number,
-): Product {
+): CatalogProduct {
   return {
     id,
     name,
     barcode: null,
-    selling_price: sellingPrice,
-    purchase_price: null,
-    is_active: true,
+    sellingPrice,
+    isActive: true,
     stock,
-    created_at: "2026-08-17T00:00:00Z",
-    updated_at: "2026-08-17T00:00:00Z",
   }
 }
 
-const coca = product("coca", "Coca 50cl", "500.00", 2)
-const bread = product("bread", "Pain", "200.00", 10)
+const coca = product("coca", "Coca 50cl", 500, 2)
+const bread = product("bread", "Pain", 200, 10)
 
 describe("cart", () => {
   it("adds a product and increments an existing line", () => {
@@ -47,7 +44,7 @@ describe("cart", () => {
 
     expect(addItem(fullStock, coca)[0]?.quantity).toBe(2)
     expect(incrementItem(fullStock, "coca")[0]?.quantity).toBe(2)
-    expect(addItem([], product("empty", "Vide", "100.00", 0))).toEqual([])
+    expect(addItem([], product("empty", "Vide", 100, 0))).toEqual([])
   })
 
   it("decrements without allowing a zero quantity", () => {
@@ -59,7 +56,7 @@ describe("cart", () => {
   })
 
   it("sets a quantity directly and clamps it to known stock", () => {
-    const once = addItem([], product("bulk", "Produit en lot", "100.00", 20))
+    const once = addItem([], product("bulk", "Produit en lot", 100, 20))
 
     expect(setItemQuantity(once, "bulk", 20)[0]?.quantity).toBe(20)
     expect(setItemQuantity(once, "bulk", 30)[0]?.quantity).toBe(20)

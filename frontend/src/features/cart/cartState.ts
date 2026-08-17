@@ -1,4 +1,4 @@
-import type { Product } from "../../types/api"
+import type { CatalogProduct } from "../products/types"
 
 export type CartItem = {
   productId: string
@@ -8,7 +8,7 @@ export type CartItem = {
   stock: number
 }
 
-export function addItem(items: CartItem[], product: Product): CartItem[] {
+export function addItem(items: CartItem[], product: CatalogProduct): CartItem[] {
   if (product.stock <= 0) return items
 
   const existing = items.find((item) => item.productId === product.id)
@@ -18,7 +18,7 @@ export function addItem(items: CartItem[], product: Product): CartItem[] {
       {
         productId: product.id,
         name: product.name,
-        unitPrice: Math.round(Number(product.selling_price)),
+        unitPrice: product.sellingPrice,
         quantity: 1,
         stock: product.stock,
       },
