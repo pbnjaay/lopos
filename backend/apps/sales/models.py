@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.db import models
 from django.db.models import F, Q
+from django.utils import timezone
 
 from apps.cash.models import CashSession
 from apps.catalog.models import Product
@@ -34,6 +35,15 @@ class Sale(models.Model):
     total = models.DecimalField("total", max_digits=14, decimal_places=2)
     status = models.CharField("statut", max_length=10, choices=Status.choices)
     created_at = models.DateTimeField("créée le", auto_now_add=True)
+    occurred_at = models.DateTimeField(
+        "réalisée le",
+        default=timezone.now,
+        help_text=(
+            "Moment réel de la vente sur la caisse. Identique à created_at pour une "
+            "vente en ligne ; peut être antérieur pour une vente synchronisée depuis "
+            "le mode hors-ligne."
+        ),
+    )
 
     class Meta:
         ordering = ("-created_at",)

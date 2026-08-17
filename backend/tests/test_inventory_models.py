@@ -34,9 +34,14 @@ def test_stock_is_unique_per_store_and_product(store: Store, product: Product) -
         Stock.objects.create(store=store, product=product, quantity=20)
 
 
-def test_stock_cannot_be_negative(store: Store, product: Product) -> None:
-    with pytest.raises(IntegrityError), transaction.atomic():
-        Stock.objects.create(store=store, product=product, quantity=-1)
+def test_stock_can_be_negative_at_db_level(store: Store, product: Product) -> None:
+    # Phase F : le stock négatif n'est plus interdit en base. Une vente
+    # réalisée hors-ligne doit pouvoir être synchronisée même si elle fait
+    # passer le stock sous zéro (cf. apps.sales.services.complete_offline_sale).
+    # La non-négativité reste appliquée au niveau applicatif pour le chemin
+    # de vente en ligne (InsufficientStock), pas au niveau de la contrainte DB.
+    stock = Stock.objects.create(store=store, product=product, quantity=-1)
+    assert stock.quantity == -1
 
 
 def test_zero_quantity_movement_is_rejected(store: Store, product: Product) -> None:

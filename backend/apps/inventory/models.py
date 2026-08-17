@@ -33,10 +33,6 @@ class Stock(models.Model):
                 fields=("store", "product"),
                 name="inventory_unique_stock_per_store_product",
             ),
-            models.CheckConstraint(
-                condition=Q(quantity__gte=0),
-                name="inventory_stock_quantity_nonnegative",
-            ),
         ]
 
     def __str__(self) -> str:
