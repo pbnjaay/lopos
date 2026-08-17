@@ -8,3 +8,15 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Django
+*.sqlite3
+staticfiles/
+media/
+
+# Environment and tooling
+.env
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
