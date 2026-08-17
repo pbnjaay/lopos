@@ -1,4 +1,4 @@
-import type { CompleteSaleInput, SaleResponse } from "../types/api"
+import type { CompleteSaleInput, SaleReceipt, SaleResponse } from "../types/api"
 import { apiRequest } from "./client"
 
 export function completeSale(input: CompleteSaleInput): Promise<SaleResponse> {
@@ -6,4 +6,8 @@ export function completeSale(input: CompleteSaleInput): Promise<SaleResponse> {
     method: "POST",
     body: input,
   })
+}
+
+export function getSaleReceipt(id: string): Promise<SaleReceipt> {
+  return apiRequest<SaleReceipt>(`sales/${encodeURIComponent(id)}/`)
 }

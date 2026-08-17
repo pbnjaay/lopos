@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { completeSale } from "./sales"
+import { completeSale, getSaleReceipt } from "./sales"
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -79,5 +79,39 @@ describe("sales API", () => {
 
     const [, request] = fetchMock.mock.calls[0] ?? []
     expect(JSON.parse(String(request?.body)).payment).toEqual({ method: "WAVE" })
+  })
+
+  it("gets receipt data without sending a mutation", async () => {
+    const receipt = {
+      id: "sale/id",
+      created_at: "2026-08-17T14:32:00Z",
+      store: { id: "store-id", name: "Supérette Test" },
+      cash_register: { id: "register-id", name: "Caisse 01" },
+      cashier: { id: 2, username: "caissier" },
+      status: "COMPLETED",
+      subtotal: "1000.00",
+      discount: "0.00",
+      total: "1000.00",
+      payment: {
+        method: "CASH",
+        amount: "1000.00",
+        received_amount: "2000.00",
+        change_amount: "1000.00",
+      },
+      items: [],
+    }
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(receipt), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    )
+
+    await expect(getSaleReceipt("sale/id")).resolves.toEqual(receipt)
+
+    const [, request] = fetchMock.mock.calls[0] ?? []
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/sales/sale%2Fid/")
+    expect(request?.method).toBe("GET")
+    expect(request?.body).toBeUndefined()
   })
 })
