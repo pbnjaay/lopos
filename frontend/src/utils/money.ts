@@ -11,6 +11,22 @@ export function formatBackendMoney(amount: string): string {
   return formatMoney(Number(amount))
 }
 
+export type CashDifferenceDescription = {
+  label: string
+  kind: "shortage" | "surplus" | "balanced"
+}
+
+export function describeCashDifference(amount: string): CashDifferenceDescription {
+  const difference = Number(amount)
+  if (difference < 0) {
+    return { label: `Manque : ${formatMoney(Math.abs(difference))}`, kind: "shortage" }
+  }
+  if (difference > 0) {
+    return { label: `Surplus : ${formatMoney(difference)}`, kind: "surplus" }
+  }
+  return { label: "Aucun écart", kind: "balanced" }
+}
+
 export function parseMoneyInput(value: string): number | null {
   const normalized = value.replaceAll(/\s/g, "")
   if (!/^\d+$/.test(normalized)) return null

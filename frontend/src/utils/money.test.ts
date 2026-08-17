@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest"
 
-import { formatBackendMoney, formatMoney, parseMoneyInput, toBackendMoney } from "./money"
+import {
+  describeCashDifference,
+  formatBackendMoney,
+  formatMoney,
+  parseMoneyInput,
+  toBackendMoney,
+} from "./money"
 
 describe("money utilities", () => {
   it("formats integer FCFA amounts consistently", () => {
@@ -17,5 +23,20 @@ describe("money utilities", () => {
 
   it("serializes the integer amount for Django Decimal", () => {
     expect(toBackendMoney(15_000)).toBe("15000.00")
+  })
+
+  it("describes shortages, surpluses and balanced cash explicitly", () => {
+    expect(describeCashDifference("-500.00")).toEqual({
+      label: "Manque : 500 FCFA",
+      kind: "shortage",
+    })
+    expect(describeCashDifference("1000.00")).toEqual({
+      label: "Surplus : 1 000 FCFA",
+      kind: "surplus",
+    })
+    expect(describeCashDifference("0.00")).toEqual({
+      label: "Aucun écart",
+      kind: "balanced",
+    })
   })
 })

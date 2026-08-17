@@ -393,6 +393,37 @@ h1 {
   text-align: center;
 }
 
+.closing-result-state .closing-identity {
+  justify-items: center;
+}
+
+.closing-result-summary {
+  text-align: left;
+}
+
+.cash-difference {
+  margin-top: 0.75rem;
+  padding-top: 1.25rem !important;
+  border-top: 1px solid #dce4df;
+}
+
+.cash-difference-shortage dd {
+  color: #9a241c;
+}
+
+.cash-difference-surplus dd {
+  color: #176b4d;
+}
+
+.cash-difference-balanced dd {
+  color: #36594c;
+}
+
+.closing-finish-button {
+  width: 100%;
+  margin-top: 1.5rem;
+}
+
 .pos-heading h1,
 .product-search h2 {
   margin: 0.35rem 0 0;

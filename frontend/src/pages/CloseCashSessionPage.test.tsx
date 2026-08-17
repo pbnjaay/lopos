@@ -89,6 +89,8 @@ function renderPage() {
       </MemoryRouter>
     </QueryClientProvider>,
   )
+
+  return queryClient
 }
 
 afterEach(() => {
@@ -143,7 +145,7 @@ describe("CloseCashSessionPage", () => {
         headers: { "Content-Type": "application/json" },
       }),
     )
-    renderPage()
+    const queryClient = renderPage()
 
     await user.type(screen.getByLabelText("Montant compté"), "29 500")
     await user.click(screen.getByRole("button", { name: "Continuer" }))
@@ -154,11 +156,21 @@ describe("CloseCashSessionPage", () => {
     await user.dblClick(screen.getByRole("button", { name: "Confirmer la clôture" }))
 
     expect(await screen.findByRole("heading", { name: "Caisse clôturée" })).toBeInTheDocument()
+    expect(screen.getByText("Cash attendu")).toBeInTheDocument()
+    expect(screen.getByText("30 000 FCFA")).toBeInTheDocument()
+    expect(screen.getByText("Cash compté")).toBeInTheDocument()
+    expect(screen.getByText("29 500 FCFA")).toBeInTheDocument()
+    expect(screen.getByText("Manque : 500 FCFA")).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [, request] = fetchMock.mock.calls[0] ?? []
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       "/api/v1/cash-sessions/session-id/close/",
     )
     expect(JSON.parse(String(request?.body))).toEqual({ counted_cash: "29500.00" })
+
+    await user.click(screen.getByRole("button", { name: "Terminer" }))
+    expect(
+      queryClient.getQueryData(["cash-registers", cashRegister.id, "current-session"]),
+    ).toBeNull()
   })
 })

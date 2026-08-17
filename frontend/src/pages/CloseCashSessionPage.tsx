@@ -1,10 +1,11 @@
 import { type FormEvent, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 
 import { closeCashSession, getCashSessionSummary } from "../api/cashSessions"
 import { RouteState } from "../components/ui/RouteState"
 import { useCurrentUser } from "../features/auth/queries"
+import { CashClosingResult } from "../features/cash-session/CashClosingResult"
 import { usePosSession } from "../features/cash-session/queries"
 import { formatDateTime } from "../utils/date"
 import {
@@ -17,6 +18,7 @@ import {
 export function CloseCashSessionPage() {
   const user = useCurrentUser().data!
   const { ownSession } = usePosSession(user.id)
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [countedCash, setCountedCash] = useState("")
   const [isConfirming, setIsConfirming] = useState(false)
@@ -64,16 +66,16 @@ export function CloseCashSessionPage() {
 
   if (closeMutation.data) {
     return (
-      <main className="closing-page">
-        <section className="closing-sheet closing-result-state" aria-live="polite">
-          <div className="success-mark" aria-hidden="true">
-            ✓
-          </div>
-          <p className="eyebrow">Fin de journée</p>
-          <h1>Caisse clôturée</h1>
-          <p className="muted">La clôture a bien été enregistrée par le serveur.</p>
-        </section>
-      </main>
+      <CashClosingResult
+        summary={closeMutation.data}
+        onFinish={() => {
+          queryClient.setQueryData(
+            ["cash-registers", ownSession.cash_register_id, "current-session"],
+            null,
+          )
+          navigate("/cash/open", { replace: true })
+        }}
+      />
     )
   }
 
