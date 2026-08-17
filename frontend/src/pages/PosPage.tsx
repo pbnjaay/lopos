@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { Link } from "react-router-dom"
 
 import { completeSale } from "../api/sales"
 import { getStore } from "../api/stores"
@@ -107,6 +108,9 @@ export function PosPage() {
         <div className="session-summary">
           <span className="session-badge">Session {ownSession?.status}</span>
           <span>Caissier : {user.first_name || user.username}</span>
+          <Link className="close-session-link" to="/cash/close">
+            Clôturer la caisse
+          </Link>
         </div>
       </header>
 

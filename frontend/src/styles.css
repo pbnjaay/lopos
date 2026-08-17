@@ -229,6 +229,28 @@ h1 {
   font-size: 0.9rem;
 }
 
+.close-session-link,
+.close-session-back-link {
+  color: #176b4d;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.close-session-link {
+  padding: 0.25rem 0;
+  font-size: 0.85rem;
+}
+
+.close-session-link:hover,
+.close-session-back-link:hover {
+  text-decoration: underline;
+}
+
+.close-session-back-link {
+  display: inline-block;
+  margin-top: 1.25rem;
+}
+
 .pos-heading h1,
 .product-search h2 {
   margin: 0.35rem 0 0;
