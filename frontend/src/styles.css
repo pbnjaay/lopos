@@ -611,6 +611,66 @@ h1 {
   margin-top: 0.5rem;
 }
 
+.sale-success-modal {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.sale-success-modal h2 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.success-mark {
+  width: 4.5rem;
+  height: 4.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #176b4d;
+  color: #fff;
+  font-size: 2.5rem;
+  font-weight: 800;
+}
+
+.sale-amounts {
+  width: 100%;
+  display: grid;
+  gap: 0;
+  margin: 1rem 0;
+}
+
+.sale-amounts > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid #e1e8e4;
+}
+
+.sale-amounts dt {
+  color: #527064;
+}
+
+.sale-amounts dd {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.sale-amounts .sale-change {
+  color: #12563f;
+  font-size: 1.15rem;
+}
+
+.new-sale-button {
+  width: 100%;
+}
+
 @media (max-width: 960px) {
   .pos-grid {
     grid-template-columns: 1fr;

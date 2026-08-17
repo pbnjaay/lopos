@@ -1,24 +1,27 @@
-import { useEffect, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
+import { completeSale } from "../api/sales"
 import { getStore } from "../api/stores"
+import { ApiError } from "../api/client"
 import { useCurrentUser } from "../features/auth/queries"
 import { Cart } from "../features/cart/Cart"
 import { useCart } from "../features/cart/useCart"
 import { usePosSession } from "../features/cash-session/queries"
 import { CashPaymentModal } from "../features/checkout/CashPaymentModal"
+import { SaleSuccessModal } from "../features/checkout/SaleSuccessModal"
 import { ProductSearch } from "../features/products/ProductSearch"
-import { formatMoney } from "../utils/money"
+import { toBackendMoney } from "../utils/money"
 
 export function PosPage() {
   const user = useCurrentUser().data!
   const { ownSession, selectedRegister } = usePosSession(user.id)
+  const queryClient = useQueryClient()
   const cart = useCart()
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
-  const [preparedPayment, setPreparedPayment] = useState<{
-    receivedAmount: number
-    changeAmount: number
-  } | null>(null)
+  const [completedSale, setCompletedSale] = useState<Awaited<ReturnType<typeof completeSale>> | null>(
+    null,
+  )
   const storeQuery = useQuery({
     queryKey: ["stores", selectedRegister?.store_id],
     queryFn: () => getStore(selectedRegister!.store_id),
@@ -26,13 +29,49 @@ export function PosPage() {
     staleTime: 60_000,
   })
 
-  useEffect(() => {
-    setPreparedPayment(null)
-  }, [cart.items])
+  const saleMutation = useMutation({
+    mutationFn: completeSale,
+    onSuccess: (sale) => {
+      cart.clearCart()
+      setIsCheckoutOpen(false)
+      setCompletedSale(sale)
+      void queryClient.invalidateQueries({ queryKey: ["products"] })
+    },
+    onError: (error) => {
+      if (
+        error instanceof ApiError &&
+        ["INSUFFICIENT_STOCK", "PRODUCT_INACTIVE", "PRODUCT_NOT_FOUND"].includes(
+          error.code ?? "",
+        )
+      ) {
+        void queryClient.invalidateQueries({ queryKey: ["products"] })
+      }
+      if (error instanceof ApiError && error.code === "CASH_SESSION_CLOSED") {
+        void queryClient.invalidateQueries({
+          queryKey: ["cash-registers", selectedRegister?.id, "current-session"],
+        })
+      }
+    },
+  })
 
   function handleAddProduct(product: Parameters<typeof cart.addItem>[0]) {
-    setPreparedPayment(null)
     cart.addItem(product)
+  }
+
+  async function handleCashPayment(receivedAmount: number) {
+    if (!ownSession || cart.items.length === 0) return
+
+    await saleMutation.mutateAsync({
+      cash_session_id: ownSession.id,
+      items: cart.items.map((item) => ({
+        product_id: item.productId,
+        quantity: item.quantity,
+      })),
+      payment: {
+        method: "CASH",
+        received_amount: toBackendMoney(receivedAmount),
+      },
+    })
   }
 
   return (
@@ -69,7 +108,10 @@ export function PosPage() {
             onQuantityChange={cart.setItemQuantity}
             onRemove={cart.removeItem}
             onClear={cart.clearCart}
-            onCheckout={() => setIsCheckoutOpen(true)}
+            onCheckout={() => {
+              saleMutation.reset()
+              setIsCheckoutOpen(true)
+            }}
           />
         </div>
       ) : (
@@ -77,22 +119,25 @@ export function PosPage() {
           Impossible de déterminer le magasin de cette caisse.
         </p>
       )}
-      {preparedPayment ? (
-        <p className="checkout-ready" role="status">
-          Paiement CASH préparé : reçu {formatMoney(preparedPayment.receivedAmount)}, monnaie {" "}
-          {formatMoney(preparedPayment.changeAmount)}. La vente n’est pas encore envoyée.
-        </p>
-      ) : null}
       {isCheckoutOpen ? (
         <CashPaymentModal
           total={cart.total}
-          onClose={() => setIsCheckoutOpen(false)}
-          onConfirm={(receivedAmount) => {
-            setPreparedPayment({
-              receivedAmount,
-              changeAmount: receivedAmount - cart.total,
+          isSubmitting={saleMutation.isPending}
+          errorMessage={saleMutation.error?.message}
+          onClose={() => {
+            if (!saleMutation.isPending) setIsCheckoutOpen(false)
+          }}
+          onConfirm={handleCashPayment}
+        />
+      ) : null}
+      {completedSale ? (
+        <SaleSuccessModal
+          sale={completedSale}
+          onNewSale={() => {
+            setCompletedSale(null)
+            window.requestAnimationFrame(() => {
+              document.getElementById("product-search-input")?.focus()
             })
-            setIsCheckoutOpen(false)
           }}
         />
       ) : null}

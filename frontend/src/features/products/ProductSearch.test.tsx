@@ -93,5 +93,8 @@ describe("ProductSearch", () => {
     await user.click(await screen.findByRole("button", { name: "Ajouter Coca 50cl au panier" }))
 
     expect(onProductSelect).toHaveBeenCalledWith(coca)
+    expect(screen.getByLabelText("Scanner un code-barres ou rechercher par nom")).toHaveValue("")
+    expect(screen.getByLabelText("Scanner un code-barres ou rechercher par nom")).toHaveFocus()
+    expect(screen.queryByText("Coca 50cl")).not.toBeInTheDocument()
   })
 })

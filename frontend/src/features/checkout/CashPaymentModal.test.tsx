@@ -44,4 +44,21 @@ describe("CashPaymentModal", () => {
     fireEvent.keyDown(window, { key: "Escape" })
     expect(onClose).toHaveBeenCalledOnce()
   })
+
+  it("prevents two submissions while the first confirmation is pending", async () => {
+    const user = userEvent.setup()
+    let resolveConfirmation: (() => void) | undefined
+    const confirmation = new Promise<void>((resolve) => {
+      resolveConfirmation = resolve
+    })
+    const onConfirm = vi.fn(() => confirmation)
+    render(<CashPaymentModal total={1_000} onClose={vi.fn()} onConfirm={onConfirm} />)
+    await user.type(screen.getByLabelText("Montant reçu"), "2000")
+    const confirmButton = screen.getByRole("button", { name: "Valider" })
+
+    await user.dblClick(confirmButton)
+    expect(onConfirm).toHaveBeenCalledOnce()
+    resolveConfirmation?.()
+    await confirmation
+  })
 })

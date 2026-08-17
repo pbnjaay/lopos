@@ -49,3 +49,39 @@ export type Product = {
   created_at: string
   updated_at: string
 }
+
+export type PaymentMethod = "CASH" | "WAVE" | "ORANGE_MONEY"
+
+export type CompleteSaleInput = {
+  cash_session_id: string
+  items: Array<{
+    product_id: string
+    quantity: number
+  }>
+  payment: {
+    method: PaymentMethod
+    received_amount?: string
+  }
+}
+
+export type SaleResponse = {
+  id: string
+  status: "COMPLETED"
+  subtotal: string
+  discount: string
+  total: string
+  payment: {
+    method: PaymentMethod
+    amount: string
+    received_amount: string | null
+    change_amount: string | null
+  }
+  items: Array<{
+    product_id: string
+    product_name: string
+    unit_price: string
+    quantity: number
+    line_total: string
+  }>
+  created_at: string
+}

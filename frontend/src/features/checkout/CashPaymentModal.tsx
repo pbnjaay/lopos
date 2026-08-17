@@ -1,16 +1,25 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react"
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react"
 
 import { formatMoney, parseMoneyInput } from "../../utils/money"
 
 type CashPaymentModalProps = {
   total: number
   onClose: () => void
-  onConfirm: (receivedAmount: number) => void
+  onConfirm: (receivedAmount: number) => void | Promise<void>
+  isSubmitting?: boolean
+  errorMessage?: string | null
 }
 
 const FIXED_QUICK_AMOUNTS = [1_000, 2_000, 5_000, 10_000, 20_000]
 
-export function CashPaymentModal({ total, onClose, onConfirm }: CashPaymentModalProps) {
+export function CashPaymentModal({
+  total,
+  onClose,
+  onConfirm,
+  isSubmitting = false,
+  errorMessage = null,
+}: CashPaymentModalProps) {
+  const submissionLock = useRef(false)
   const [receivedInput, setReceivedInput] = useState("")
   const receivedAmount = parseMoneyInput(receivedInput)
   const isSufficient = receivedAmount !== null && receivedAmount >= total
@@ -26,21 +35,33 @@ export function CashPaymentModal({ total, onClose, onConfirm }: CashPaymentModal
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose()
+      if (event.key === "Escape" && !isSubmitting) onClose()
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [onClose])
+  }, [isSubmitting, onClose])
 
   function handleInput(value: string) {
     if (/^[\d\s]*$/.test(value)) setReceivedInput(value)
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (receivedAmount !== null && receivedAmount >= total) {
-      onConfirm(receivedAmount)
+    if (
+      submissionLock.current ||
+      isSubmitting ||
+      receivedAmount === null ||
+      receivedAmount < total
+    ) return
+
+    submissionLock.current = true
+    try {
+      await onConfirm(receivedAmount)
+    } catch {
+      // The parent mutation exposes the backend error through errorMessage.
+    } finally {
+      submissionLock.current = false
     }
   }
 
@@ -57,7 +78,13 @@ export function CashPaymentModal({ total, onClose, onConfirm }: CashPaymentModal
             <p className="eyebrow">Encaissement</p>
             <h2 id="cash-payment-title">Paiement en espèces</h2>
           </div>
-          <button className="modal-close" type="button" aria-label="Fermer" onClick={onClose}>
+          <button
+            className="modal-close"
+            type="button"
+            aria-label="Fermer"
+            disabled={isSubmitting}
+            onClick={onClose}
+          >
             ×
           </button>
         </header>
@@ -77,6 +104,7 @@ export function CashPaymentModal({ total, onClose, onConfirm }: CashPaymentModal
                 inputMode="numeric"
                 placeholder="2 000"
                 value={receivedInput}
+                disabled={isSubmitting}
                 onChange={(event) => handleInput(event.target.value)}
               />
               <span>FCFA</span>
@@ -89,6 +117,7 @@ export function CashPaymentModal({ total, onClose, onConfirm }: CashPaymentModal
                 key={amount}
                 className="button button-secondary quick-amount"
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setReceivedInput(String(amount))}
               >
                 {amount === total ? "Montant exact" : formatMoney(amount)}
@@ -106,13 +135,27 @@ export function CashPaymentModal({ total, onClose, onConfirm }: CashPaymentModal
               Montant insuffisant : il manque {formatMoney(missingAmount)}.
             </p>
           ) : null}
+          {errorMessage ? (
+            <p className="form-error" role="alert">
+              {errorMessage}
+            </p>
+          ) : null}
 
           <div className="modal-actions">
-            <button className="button button-secondary" type="button" onClick={onClose}>
+            <button
+              className="button button-secondary"
+              type="button"
+              disabled={isSubmitting}
+              onClick={onClose}
+            >
               Annuler
             </button>
-            <button className="button button-primary" type="submit" disabled={!isSufficient}>
-              Valider
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={!isSufficient || isSubmitting}
+            >
+              {isSubmitting ? "Validation…" : "Valider"}
             </button>
           </div>
         </form>

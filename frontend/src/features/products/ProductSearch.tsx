@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react"
+import { type FormEvent, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 
 import { getProducts } from "../../api/products"
@@ -12,11 +12,12 @@ type ProductSearchProps = {
 }
 
 export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) {
+  const inputRef = useRef<HTMLInputElement>(null)
   const [input, setInput] = useState("")
   const [barcode, setBarcode] = useState<string | null>(null)
   const debouncedSearch = useDebouncedValue(input.trim(), 250)
   const mode = barcode === null ? "search" : "barcode"
-  const term = barcode ?? debouncedSearch
+  const term = barcode ?? (input.trim() ? debouncedSearch : "")
   const productsQuery = useQuery({
     queryKey: ["products", storeId, mode, term],
     queryFn: () =>
@@ -39,6 +40,13 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
     if (scannedBarcode) setBarcode(scannedBarcode)
   }
 
+  function handleProductSelect(product: Product) {
+    onProductSelect(product)
+    setInput("")
+    setBarcode(null)
+    inputRef.current?.focus()
+  }
+
   return (
     <section className="product-search" aria-labelledby="product-search-title">
       <div>
@@ -51,6 +59,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
           Scanner un code-barres ou rechercher par nom
         </label>
         <input
+          ref={inputRef}
           id="product-search-input"
           autoComplete="off"
           autoFocus
@@ -97,7 +106,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
                       ? `Ajouter ${product.name} au panier`
                       : `${product.name} en rupture de stock`
                   }
-                  onClick={() => onProductSelect(product)}
+                  onClick={() => handleProductSelect(product)}
                 >
                   <div>
                     <strong>{product.name}</strong>

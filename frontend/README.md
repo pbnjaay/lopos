@@ -1,4 +1,4 @@
-# LoPOS frontend — étapes 1 à 7
+# LoPOS frontend — étapes 1 à 8
 
 Socle React, TypeScript et Vite du POS, avec authentification par session Django,
 restauration de l'utilisateur courant, guards de session et ouverture de caisse.
@@ -116,3 +116,12 @@ des montants rapides et la monnaie calculée localement. La validation reste
 désactivée tant que le reçu est insuffisant et Échap ferme la modal. Cette étape
 ne crée volontairement aucune vente : le panier est conservé et le branchement
 de `POST /sales/` appartient à l'étape 8.
+
+## Vente CASH — étape 8
+
+La validation CASH appelle maintenant `POST /api/v1/sales/` avec uniquement la
+session, les identifiants produit, les quantités et le paiement. Le bouton est
+verrouillé pendant la requête. Une erreur backend reste affichée dans la modal
+et conserve le panier. Après un succès, les montants affichés viennent de la
+réponse Django, le panier est vidé, les recherches produit sont invalidées et
+`Nouvelle vente` redonne le focus au champ scanner.
