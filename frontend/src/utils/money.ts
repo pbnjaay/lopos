@@ -7,6 +7,10 @@ export function formatMoney(amount: number): string {
   return `${formatted} FCFA`
 }
 
+export function formatBackendMoney(amount: string): string {
+  return formatMoney(Number(amount))
+}
+
 export function parseMoneyInput(value: string): number | null {
   const normalized = value.replaceAll(/\s/g, "")
   if (!/^\d+$/.test(normalized)) return null

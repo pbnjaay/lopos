@@ -251,6 +251,85 @@ h1 {
   margin-top: 1.25rem;
 }
 
+.closing-page {
+  width: min(100%, 48rem);
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.closing-sheet {
+  padding: 2.5rem;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 1rem 3rem rgb(18 55 42 / 8%);
+}
+
+.closing-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.closing-heading .close-session-back-link {
+  flex: 0 0 auto;
+  margin-top: 0;
+}
+
+.closing-identity {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 1.5rem;
+  color: #527064;
+}
+
+.closing-identity strong {
+  color: #17211c;
+  font-size: 1.15rem;
+}
+
+.closing-summary {
+  display: grid;
+  gap: 0;
+  margin: 2rem 0 0;
+}
+
+.closing-summary > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 0.65rem 0;
+}
+
+.closing-summary dt {
+  color: #527064;
+}
+
+.closing-summary dd {
+  margin: 0;
+  font-weight: 800;
+}
+
+.closing-summary-total dd {
+  font-size: 1.2rem;
+}
+
+.closing-summary-opening {
+  margin-top: 0.75rem;
+  padding-top: 1.25rem !important;
+  border-top: 1px solid #dce4df;
+}
+
+.closing-instruction {
+  margin: 2rem 0 0;
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  background: #edf8f2;
+  color: #12563f;
+  font-weight: 700;
+}
+
 .pos-heading h1,
 .product-search h2 {
   margin: 0.35rem 0 0;

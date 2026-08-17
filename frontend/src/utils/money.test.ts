@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { formatMoney, parseMoneyInput, toBackendMoney } from "./money"
+import { formatBackendMoney, formatMoney, parseMoneyInput, toBackendMoney } from "./money"
 
 describe("money utilities", () => {
   it("formats integer FCFA amounts consistently", () => {
     expect(formatMoney(15_000)).toBe("15 000 FCFA")
+    expect(formatBackendMoney("43000.00")).toBe("43 000 FCFA")
   })
 
   it("parses spaces but rejects decimals and negative amounts", () => {
