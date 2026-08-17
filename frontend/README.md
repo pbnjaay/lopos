@@ -224,3 +224,92 @@ PDF, prix courant du catalogue ou périphérique ESC/POS n'intervient.
 La vérification automatisée se lance avec `npm test` et couvre également le
 double clic, les erreurs métier/réseau, les trois moyens de paiement et les
 montants historiques du ticket.
+
+## Phase E — Offline-first local
+
+Le POS continue de fonctionner sans Internet une fois la caisse ouverte et le
+catalogue chargé. Aucune synchronisation serveur n'est implémentée dans cette
+phase : les ventes hors ligne restent en file locale jusqu'à la Phase F.
+
+Base locale (`src/db/`, Dexie/IndexedDB, `db.version(1)`) :
+
+- `products` — catalogue mis en cache, avec `serverKnownStock` (dernier stock
+  connu du serveur) et `pendingSoldQuantity` (unités vendues localement depuis
+  ce cache). Le stock affiché est toujours `serverKnownStock -
+  pendingSoldQuantity`, jamais négatif.
+- `cashSessions` — session courante mise en cache pour survivre à une coupure ;
+  ouvrir une nouvelle session reste strictement en ligne (§19 du cahier des
+  charges).
+- `localSales` — ventes locales, chacune avec un `id` en `crypto.randomUUID()`
+  généré avant tout appel réseau, un statut `PENDING_SYNC` | `SYNCED` |
+  `SYNC_FAILED` (ce dernier réservé à la Phase F), un snapshot figé des
+  articles (nom/prix au moment de la vente) et son paiement.
+- `metadata` — horodatage et taille du dernier cache catalogue par magasin.
+
+Comportements clés :
+
+- `createLocalSale()` (`src/db/sales.ts`) insère la vente et décrémente le
+  stock local dans une seule transaction Dexie : jamais l'un sans l'autre.
+  Une demande qui dépasse le stock local connu est refusée avant toute
+  écriture.
+- Le checkout (`PosPage`) bascule entre l'API Django et `createLocalSale()`
+  selon `useNetworkStatus()` (écoute `online`/`offline`). CASH, Wave et
+  Orange Money fonctionnent tous les trois hors ligne, Wave/Orange Money
+  restant une confirmation manuelle du caissier.
+- Une panne d'écriture locale (IndexedDB indisponible, transaction refusée)
+  n'affiche jamais de succès et ne vide jamais le panier — l'erreur est
+  montrée telle quelle et la vente reste à refaire.
+- Le ticket (`SaleSuccessModal`, `/sales/:id/receipt`) fonctionne pour une
+  vente locale sans aucun appel réseau : la page cherche d'abord la vente
+  dans IndexedDB avant d'interroger l'API. Une vente `PENDING_SYNC` affiche
+  une référence locale (les 8 premiers caractères de l'UUID en majuscules),
+  jamais un faux numéro serveur.
+- `/sales/pending` liste les ventes en attente (heure, montant, moyen de
+  paiement) et permet de rouvrir chacun de leurs tickets.
+- Le panier est persisté dans `localStorage`, scindé par `cashSessionId`
+  (`src/features/cart/cartStorage.ts`), pour survivre à un rafraîchissement
+  accidentel sans jamais restaurer le panier d'une session différente.
+- La bannière `OfflineBanner` (état réseau centralisé, `useNetworkStatus()`)
+  affiche « En ligne »/« Hors ligne » et le nombre de ventes en attente,
+  sans jamais bloquer la vente.
+- Une écriture de **cache** de session (ouverture/clôture) qui échoue
+  localement n'efface jamais un succès déjà confirmé par Django — c'est un
+  cache non bloquant. Cette tolérance ne s'applique volontairement pas aux
+  ventes : leur persistance locale reste strictement obligatoire (§26, §47).
+
+### Hors scope de la Phase E (sujets Phase F)
+
+Ces problèmes sont identifiés mais délibérément non résolus ici :
+
+- **Concurrence multi-caisse** : deux caisses hors ligne peuvent vendre le
+  même dernier article ; `availableLocalStock` ne protège que contre la
+  survente sur une seule caisse, pas contre le stock serveur réel après
+  reconnexion.
+- **Dérive catalogue** : si le backend modifie un prix pendant la coupure, la
+  vente locale garde le prix du cache au moment de la vente (comportement
+  voulu, cohérent avec le ticket), mais rien ne réconcilie ce prix avec le
+  serveur après coup.
+- **Session fermée ailleurs** : une session ouverte hors ligne peut avoir été
+  close côté serveur entre-temps ; aucune détection locale de ce cas.
+- **Horloge terminal** : `createdAt` est l'heure locale de l'appareil
+  (`occurred_at`), pas une heure serveur ; la Phase F pourra distinguer
+  `occurred_at` de `received_at`.
+- La synchronisation elle-même (push/pull, retry, idempotence réseau,
+  résolution de conflits, Background Sync) est entièrement hors scope ici.
+
+### Scénario manuel hors ligne
+
+1. ouvrir une session en ligne et laisser le catalogue se mettre en cache
+   (`GET /products/` réussi) ;
+2. couper le réseau (mode avion, ou throttling « Offline » des DevTools) ;
+3. scanner un produit connu deux fois, vérifier l'ajout au panier ;
+4. encaisser en CASH avec un montant reçu suffisant, vérifier la monnaie, la
+   référence locale et le vidage du panier ;
+5. encaisser une deuxième vente en Wave, vérifier le compteur « 2 ventes en
+   attente » dans la bannière ;
+6. rafraîchir le navigateur toujours hors ligne : catalogue, session et les
+   deux ventes `PENDING_SYNC` doivent être retrouvés à l'identique ;
+7. ouvrir `/sales/pending`, rouvrir le ticket de la première vente et
+   vérifier son contenu sans requête réseau ;
+8. reconnecter Internet : la bannière repasse à « En ligne » sans déclencher
+   de synchronisation (attendue en Phase F).
