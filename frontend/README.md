@@ -1,4 +1,4 @@
-# LoPOS frontend — étapes 1 à 10
+# LoPOS frontend — étapes 1 à 11
 
 Socle React, TypeScript et Vite du POS, avec authentification par session Django,
 restauration de l'utilisateur courant, guards de session et ouverture de caisse.
@@ -143,3 +143,11 @@ disponible au panier. Le champ est ensuite vidé et refocalisé, y compris lorsq
 le même produit est scanné plusieurs fois. Une recherche sans résultat reste
 visible pour permettre une correction. Fermer l'encaissement avec Échap ou
 terminer une vente redonne également le focus au scanner.
+
+## Tests frontend — étape 11
+
+La suite Vitest couvre les opérations du panier, les totaux, les paiements CASH
+insuffisants ou valides, les modes mobiles et le scanner. Deux tests intégrés du
+POS mockent maintenant le réseau complet : une réponse `201` vérifie la monnaie
+serveur, le vidage du panier et le retour du focus ; une erreur
+`INSUFFICIENT_STOCK` vérifie le message Django et la conservation du panier.

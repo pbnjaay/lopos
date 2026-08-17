@@ -54,7 +54,11 @@ export function Cart({
               </div>
 
               <div className="cart-item-actions">
-                <div className="quantity-control" aria-label={`Quantité de ${item.name}`}>
+                <div
+                  className="quantity-control"
+                  role="group"
+                  aria-label={`Contrôles de quantité pour ${item.name}`}
+                >
                   <button
                     type="button"
                     aria-label={`Diminuer ${item.name}`}
