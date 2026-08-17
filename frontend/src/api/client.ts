@@ -50,8 +50,28 @@ function isUnsafeMethod(method: string): boolean {
 function getErrorMessage(status: number, body: ApiErrorBody | null): string {
   if (body?.message) return body.message
   if (body?.detail) return body.detail
+  const validationMessage = getValidationMessage(body)
+  if (validationMessage) return validationMessage
   if (status >= 500) return "Le serveur a rencontré une erreur."
   return `La requête a échoué (${status}).`
+}
+
+function getValidationMessage(value: unknown): string | null {
+  if (typeof value === "string") return value
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const message = getValidationMessage(item)
+      if (message) return message
+    }
+  }
+  if (typeof value === "object" && value !== null) {
+    for (const [key, item] of Object.entries(value)) {
+      if (key === "code") continue
+      const message = getValidationMessage(item)
+      if (message) return message
+    }
+  }
+  return null
 }
 
 async function readResponseBody(response: Response): Promise<unknown> {
@@ -87,6 +107,10 @@ export function buildApiUrl(
   return search ? `${url}?${search}` : url
 }
 
+function isAbsoluteApiPath(path: string): boolean {
+  return path === API_BASE_URL || path.startsWith(`${API_BASE_URL}/`)
+}
+
 export async function apiRequest<T>(
   path: string,
   options: ApiRequestOptions = {},
@@ -108,7 +132,7 @@ export async function apiRequest<T>(
 
   let response: Response
   try {
-    response = await fetch(buildApiUrl(path), {
+    response = await fetch(isAbsoluteApiPath(path) ? path : buildApiUrl(path), {
       ...options,
       method,
       headers,

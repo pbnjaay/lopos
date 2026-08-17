@@ -57,6 +57,22 @@ describe("apiRequest", () => {
     } satisfies Partial<ApiError>)
   })
 
+  it("shows the first DRF field validation message", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ opening_balance: ["Ensure this value is greater than or equal to 0."] }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      ),
+    )
+
+    await expect(
+      apiRequest("cash-sessions/open/", { method: "POST", body: {} }),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: "Ensure this value is greater than or equal to 0.",
+    } satisfies Partial<ApiError>)
+  })
+
   it("turns fetch failures into a user-facing network error", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"))
 

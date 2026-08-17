@@ -1,25 +1,38 @@
 import { Navigate, createBrowserRouter } from "react-router-dom"
 
-import { SetupPage } from "../pages/SetupPage"
+import { RequireAuth } from "../features/auth/RequireAuth"
+import { SessionRoute } from "../features/cash-session/SessionRoute"
+import { AppEntryPage } from "../pages/AppEntryPage"
+import { LoginPage } from "../pages/LoginPage"
+import { OpenCashSessionPage } from "../pages/OpenCashSessionPage"
+import { PosPage } from "../pages/PosPage"
 
 export const router = createBrowserRouter([
-  { path: "/", element: <Navigate to="/login" replace /> },
+  { path: "/", element: <AppEntryPage /> },
   {
     path: "/login",
-    element: <SetupPage title="Connexion" nextStep="L’authentification arrive à l’étape 2." />,
+    element: <LoginPage />,
   },
   {
-    path: "/cash/open",
-    element: (
-      <SetupPage
-        title="Ouverture de caisse"
-        nextStep="L’ouverture de caisse arrive à l’étape 3."
-      />
-    ),
+    element: <RequireAuth />,
+    children: [
+      {
+        path: "/cash/open",
+        element: (
+          <SessionRoute requireOpen={false}>
+            <OpenCashSessionPage />
+          </SessionRoute>
+        ),
+      },
+      {
+        path: "/pos",
+        element: (
+          <SessionRoute requireOpen>
+            <PosPage />
+          </SessionRoute>
+        ),
+      },
+    ],
   },
-  {
-    path: "/pos",
-    element: <SetupPage title="Point de vente" nextStep="L’écran POS sera assemblé à l’étape 6." />,
-  },
-  { path: "*", element: <Navigate to="/login" replace /> },
+  { path: "*", element: <Navigate to="/" replace /> },
 ])

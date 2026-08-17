@@ -1,8 +1,8 @@
-# LoPOS frontend — étape 1
+# LoPOS frontend — étapes 1 à 4
 
-Socle React, TypeScript et Vite du POS. Cette étape fournit uniquement le
-routing, TanStack Query et le client HTTP partagé. Les pages sont volontairement
-des coquilles : l'authentification et la session POS appartiennent à l'étape 2.
+Socle React, TypeScript et Vite du POS, avec authentification par session Django,
+restauration de l'utilisateur courant, guards de session et ouverture de caisse.
+La page POS reste volontairement une coquille jusqu'à l'étape 6.
 
 ## Démarrage
 
@@ -63,3 +63,33 @@ npm run build
 
 Le proxy Vite garde les échanges en même origine ; aucune autorisation CORS
 globale n'est ajoutée au backend.
+
+## Navigation de l'étape 2
+
+- un utilisateur anonyme est redirigé vers `/login` ;
+- après connexion, le frontend liste les caisses actives ;
+- l'identifiant précédemment sélectionné est lu dans
+  `lopos.selectedCashRegisterId` ;
+- si une seule caisse active existe, elle est retrouvée automatiquement ;
+- la session ouverte de cette caisse est demandée au backend ;
+- une session appartenant au caissier dirige vers `/pos`, sinon vers
+  `/cash/open` ;
+- aucune caisse n'est choisie arbitrairement lorsque plusieurs sont actives.
+
+## Ouverture de caisse — étape 3
+
+La page `/cash/open` permet de sélectionner une caisse active, de saisir un fond
+initial entier en FCFA et appelle `POST /api/v1/cash-sessions/open/`. Après un
+succès, la réponse backend est placée dans le cache, la caisse est mémorisée et
+le caissier est redirigé vers `/pos`. Le bouton reste désactivé pendant la
+requête et les erreurs métier ou de validation sont conservées telles que le
+backend les expose.
+
+## Recherche produit — étape 4
+
+La page `/pos` recherche les produits du magasin de la caisse courante. Une
+saisie ordinaire déclenche après un court délai une recherche `search`, tandis
+qu'Entrée déclenche une recherche exacte `barcode`. Les deux appels transmettent
+toujours `store_id`, afin que le backend inclue le stock du magasin. Les huit
+premiers résultats affichent nom, code-barres, prix et stock. L'ajout au panier
+reste réservé à l'étape 5.
