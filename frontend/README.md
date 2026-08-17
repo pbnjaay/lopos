@@ -1,4 +1,4 @@
-# LoPOS frontend — étapes 1 à 12
+# LoPOS frontend — POS online
 
 Socle React, TypeScript et Vite du POS, avec authentification par session Django,
 restauration de l'utilisateur courant, guards de session et ouverture de caisse.
@@ -183,3 +183,44 @@ Dans Django Unfold, contrôler que la vente est `COMPLETED`, que le paiement est
 `CASH`, que la ligne contient deux Coca à `500 FCFA` et qu'un mouvement de stock
 `SALE -2` a été créé. Répéter séparément avec Wave et Orange Money en confirmant
 manuellement `Paiement reçu` ; aucune confirmation opérateur n'est simulée.
+
+## Clôture, rapport Z et ticket — Phase D
+
+Depuis `/pos`, l'action secondaire `Clôturer la caisse` ouvre `/cash/close`. Le
+résumé n'affiche jamais le cash attendu avant le comptage. Après saisie du
+montant compté et confirmation explicite, le backend clôture la session et le
+frontend affiche le cash attendu, le cash compté et l'écart interprété.
+
+Le rapport Z reste accessible après clôture et après actualisation à l'adresse :
+
+```text
+/cash-sessions/{sessionId}/report
+```
+
+Un ticket historique peut être ouvert ou réimprimé indépendamment à l'adresse :
+
+```text
+/sales/{saleId}/receipt
+```
+
+Les deux documents utilisent `window.print()`. Le rapport masque la navigation
+à l'impression et le ticket possède une mise en page thermique de 80 mm. Aucun
+PDF, prix courant du catalogue ou périphérique ESC/POS n'intervient.
+
+### Scénario manuel de clôture
+
+1. ouvrir une session et enregistrer au moins une vente CASH, une Wave et une
+   Orange Money ;
+2. depuis le POS, ouvrir `Clôturer la caisse` et vérifier les totaux sans voir le
+   cash attendu ;
+3. compter le tiroir, saisir le montant et vérifier la confirmation finale ;
+4. confirmer puis contrôler le résultat attendu/compté/écart ;
+5. ouvrir et imprimer le rapport Z ;
+6. vérifier que `/pos` redirige désormais vers `/cash/open` ;
+7. recharger directement le rapport Z et un ancien ticket ;
+8. dans Django Unfold, contrôler la session `CLOSED`, les totaux persistés et
+   l'absence de vente créée après la clôture.
+
+La vérification automatisée se lance avec `npm test` et couvre également le
+double clic, les erreurs métier/réseau, les trois moyens de paiement et les
+montants historiques du ticket.

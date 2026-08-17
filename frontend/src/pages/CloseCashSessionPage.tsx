@@ -76,7 +76,6 @@ export function CloseCashSessionPage() {
     return (
       <CashClosingResult
         summary={closeMutation.data}
-        onViewReport={clearCurrentSessionCache}
         onFinish={() => {
           clearCurrentSessionCache()
           navigate("/cash/open", { replace: true })

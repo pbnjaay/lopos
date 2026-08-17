@@ -3,7 +3,7 @@
 import "@testing-library/jest-dom/vitest"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -51,12 +51,16 @@ afterEach(() => {
 })
 
 describe("CashSessionReportPage", () => {
-  it("renders a closed session report directly from its URL", () => {
+  it("renders a closed session report directly from its URL", async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } },
     })
     queryClient.setQueryData(["cash-sessions", summary.id, "summary"], summary)
     queryClient.setQueryData(["cash-registers", cashRegister.id], cashRegister)
+    queryClient.setQueryData(
+      ["cash-registers", cashRegister.id, "current-session"],
+      { id: summary.id, status: "OPEN" },
+    )
     queryClient.setQueryData(["stores", store.id], store)
 
     render(
@@ -79,6 +83,15 @@ describe("CashSessionReportPage", () => {
     expect(screen.getByText("30 000 FCFA")).toBeInTheDocument()
     expect(screen.getByText("29 500 FCFA")).toBeInTheDocument()
     expect(screen.getByText("Manque : 500 FCFA")).toBeInTheDocument()
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData([
+          "cash-registers",
+          cashRegister.id,
+          "current-session",
+        ]),
+      ).toBeNull(),
+    )
   })
 
   it("opens the browser print dialog without calling the API", async () => {

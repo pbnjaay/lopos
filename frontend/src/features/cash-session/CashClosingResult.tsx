@@ -7,10 +7,9 @@ import { describeCashDifference, formatBackendMoney } from "../../utils/money"
 type CashClosingResultProps = {
   summary: CashSessionSummary
   onFinish: () => void
-  onViewReport: () => void
 }
 
-export function CashClosingResult({ summary, onFinish, onViewReport }: CashClosingResultProps) {
+export function CashClosingResult({ summary, onFinish }: CashClosingResultProps) {
   const difference = describeCashDifference(summary.cash_difference ?? "0.00")
 
   return (
@@ -70,7 +69,6 @@ export function CashClosingResult({ summary, onFinish, onViewReport }: CashClosi
           <Link
             className="button button-secondary"
             to={`/cash-sessions/${encodeURIComponent(summary.id)}/report`}
-            onClick={onViewReport}
           >
             Voir le rapport Z
           </Link>

@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query"
+import { useEffect } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useParams } from "react-router-dom"
 
 import { getCashRegister } from "../api/cashRegisters"
@@ -10,6 +11,7 @@ import { describeCashDifference, formatBackendMoney } from "../utils/money"
 
 export function CashSessionReportPage() {
   const { sessionId } = useParams<{ sessionId: string }>()
+  const queryClient = useQueryClient()
   const summaryQuery = useQuery({
     queryKey: ["cash-sessions", sessionId, "summary"],
     queryFn: () => getCashSessionSummary(sessionId!),
@@ -26,6 +28,16 @@ export function CashSessionReportPage() {
     queryFn: () => getStore(registerQuery.data!.store_id),
     enabled: Boolean(registerQuery.data),
   })
+
+  useEffect(() => {
+    const summary = summaryQuery.data
+    if (summary?.status !== "CLOSED") return
+
+    queryClient.setQueryData(
+      ["cash-registers", summary.cash_register.id, "current-session"],
+      null,
+    )
+  }, [queryClient, summaryQuery.data])
 
   if (!sessionId) return <RouteState message="Rapport de caisse introuvable." />
   if (summaryQuery.isLoading || registerQuery.isLoading || storeQuery.isLoading) {
