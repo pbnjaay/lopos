@@ -359,6 +359,40 @@ h1 {
   font-weight: 700;
 }
 
+.counted-cash-form {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.closing-confirmation {
+  padding: 1.75rem;
+}
+
+.closing-confirmation h2 {
+  margin: 0.5rem 0 1.25rem;
+}
+
+.confirmation-warning {
+  color: #6b332e;
+  font-weight: 700;
+}
+
+.confirmation-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.button-close-session {
+  background: #8b2d26;
+  color: #fff;
+}
+
+.closing-result-state {
+  text-align: center;
+}
+
 .pos-heading h1,
 .product-search h2 {
   margin: 0.35rem 0 0;

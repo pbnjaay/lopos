@@ -3,7 +3,7 @@
 import "@testing-library/jest-dom/vitest"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -92,8 +92,10 @@ function renderPage() {
 }
 
 afterEach(() => {
+  cleanup()
   vi.restoreAllMocks()
   localStorage.clear()
+  document.cookie = "csrftoken=; Max-Age=0; path=/"
 })
 
 describe("CloseCashSessionPage", () => {
@@ -122,5 +124,41 @@ describe("CloseCashSessionPage", () => {
     await user.type(input, "-1")
     expect(input).toHaveAttribute("aria-invalid", "true")
     expect(screen.getByText("Saisissez un montant positif ou nul, sans décimales.")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Continuer" })).toBeDisabled()
+  })
+
+  it("asks for confirmation and submits the close request only once", async () => {
+    const user = userEvent.setup()
+    document.cookie = "csrftoken=test-token; path=/"
+    const closedSummary: CashSessionSummary = {
+      ...summary,
+      status: "CLOSED",
+      counted_cash: "29500.00",
+      cash_difference: "-500.00",
+      closed_at: "2026-08-17T18:00:00Z",
+    }
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(closedSummary), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    )
+    renderPage()
+
+    await user.type(screen.getByLabelText("Montant compté"), "29 500")
+    await user.click(screen.getByRole("button", { name: "Continuer" }))
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "Après cette opération, aucune nouvelle vente ne pourra être enregistrée",
+    )
+
+    await user.dblClick(screen.getByRole("button", { name: "Confirmer la clôture" }))
+
+    expect(await screen.findByRole("heading", { name: "Caisse clôturée" })).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [, request] = fetchMock.mock.calls[0] ?? []
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/v1/cash-sessions/session-id/close/",
+    )
+    expect(JSON.parse(String(request?.body))).toEqual({ counted_cash: "29500.00" })
   })
 })
