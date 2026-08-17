@@ -14,3 +14,11 @@ export function getProducts(lookup: ProductLookup): Promise<Product[]> {
     }),
   )
 }
+
+export function getProductCatalog(storeId: string): Promise<Product[]> {
+  return apiRequest<Product[]>(
+    buildApiUrl("products/", {
+      store_id: storeId,
+    }),
+  )
+}

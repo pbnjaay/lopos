@@ -14,6 +14,7 @@ import { MobileMoneyConfirmation } from "../features/checkout/MobileMoneyConfirm
 import { PaymentMethodModal } from "../features/checkout/PaymentMethodModal"
 import { SaleSuccessModal } from "../features/checkout/SaleSuccessModal"
 import { ProductSearch } from "../features/products/ProductSearch"
+import { useProductCatalogCache } from "../features/products/queries"
 import type { CompleteSaleInput, PaymentMethod } from "../types/api"
 import { toBackendMoney } from "../utils/money"
 
@@ -26,6 +27,7 @@ export function PosPage() {
   const [completedSale, setCompletedSale] = useState<Awaited<ReturnType<typeof completeSale>> | null>(
     null,
   )
+  useProductCatalogCache(selectedRegister?.store_id ?? null)
   const storeQuery = useQuery({
     queryKey: ["stores", selectedRegister?.store_id],
     queryFn: () => getStore(selectedRegister!.store_id),

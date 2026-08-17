@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { getProducts } from "./products"
+import { getProductCatalog, getProducts } from "./products"
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -30,6 +30,18 @@ describe("products API", () => {
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       "/api/v1/products/?store_id=store-id&barcode=123456789",
+    )
+  })
+
+  it("loads the complete store catalog without a search filter", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("[]", { status: 200, headers: { "Content-Type": "application/json" } }),
+    )
+
+    await getProductCatalog("store-id")
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/v1/products/?store_id=store-id",
     )
   })
 })
