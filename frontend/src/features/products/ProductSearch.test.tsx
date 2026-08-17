@@ -3,7 +3,7 @@
 import "@testing-library/jest-dom/vitest"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -39,8 +39,9 @@ afterEach(() => {
 })
 
 describe("ProductSearch", () => {
-  it("looks up an entered barcode and displays backend stock", async () => {
+  it("looks up an entered barcode and adds the exact product", async () => {
     const user = userEvent.setup()
+    const onProductSelect = vi.fn()
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify([coca]), {
         status: 200,
@@ -48,13 +49,13 @@ describe("ProductSearch", () => {
       }),
     )
 
-    renderSearch()
+    renderSearch(onProductSelect)
     const input = screen.getByLabelText("Scanner un code-barres ou rechercher par nom")
     await user.type(input, "123456789{Enter}")
 
-    expect(await screen.findByText("Coca 50cl")).toBeInTheDocument()
-    expect(screen.getByText("500 FCFA")).toBeInTheDocument()
-    expect(screen.getByText("Stock : 18")).toBeInTheDocument()
+    await waitFor(() => expect(onProductSelect).toHaveBeenCalledWith(coca))
+    expect(input).toHaveValue("")
+    expect(input).toHaveFocus()
     expect(fetchMock.mock.calls.at(-1)?.[0]).toBe(
       "/api/v1/products/?store_id=store-id&barcode=123456789",
     )
@@ -88,7 +89,7 @@ describe("ProductSearch", () => {
     renderSearch(onProductSelect)
     await user.type(
       screen.getByLabelText("Scanner un code-barres ou rechercher par nom"),
-      "123456789{Enter}",
+      "coca",
     )
     await user.click(await screen.findByRole("button", { name: "Ajouter Coca 50cl au panier" }))
 
@@ -96,5 +97,26 @@ describe("ProductSearch", () => {
     expect(screen.getByLabelText("Scanner un code-barres ou rechercher par nom")).toHaveValue("")
     expect(screen.getByLabelText("Scanner un code-barres ou rechercher par nom")).toHaveFocus()
     expect(screen.queryByText("Coca 50cl")).not.toBeInTheDocument()
+  })
+
+  it("adds the same product again on a repeated scan", async () => {
+    const user = userEvent.setup()
+    const onProductSelect = vi.fn()
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify([coca]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    )
+
+    renderSearch(onProductSelect)
+    const input = screen.getByLabelText("Scanner un code-barres ou rechercher par nom")
+    await user.type(input, "123456789{Enter}")
+    await waitFor(() => expect(onProductSelect).toHaveBeenCalledTimes(1))
+    await user.type(input, "123456789{Enter}")
+    await waitFor(() => expect(onProductSelect).toHaveBeenCalledTimes(2))
+
+    expect(input).toHaveValue("")
+    expect(input).toHaveFocus()
   })
 })

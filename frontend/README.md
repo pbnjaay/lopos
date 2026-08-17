@@ -1,4 +1,4 @@
-# LoPOS frontend — étapes 1 à 9
+# LoPOS frontend — étapes 1 à 10
 
 Socle React, TypeScript et Vite du POS, avec authentification par session Django,
 restauration de l'utilisateur courant, guards de session et ouverture de caisse.
@@ -135,3 +135,11 @@ uniquement `{ method: "WAVE" }` ou `{ method: "ORANGE_MONEY" }`, sans montant
 reçu et sans intégration opérateur simulée. Depuis chaque formulaire, le
 caissier peut revenir directement au choix du moyen de paiement sans fermer
 l'encaissement ni perdre le panier.
+
+## UX scanner — étape 10
+
+Entrée sur une recherche exacte par code-barres ajoute immédiatement le produit
+disponible au panier. Le champ est ensuite vidé et refocalisé, y compris lorsque
+le même produit est scanné plusieurs fois. Une recherche sans résultat reste
+visible pour permettre une correction. Fermer l'encaissement avec Échap ou
+terminer une vente redonne également le focus au scanner.

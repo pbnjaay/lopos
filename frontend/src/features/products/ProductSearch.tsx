@@ -1,4 +1,4 @@
-import { type FormEvent, useRef, useState } from "react"
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 
 import { getProducts } from "../../api/products"
@@ -40,12 +40,27 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
     if (scannedBarcode) setBarcode(scannedBarcode)
   }
 
-  function handleProductSelect(product: Product) {
-    onProductSelect(product)
-    setInput("")
-    setBarcode(null)
-    inputRef.current?.focus()
-  }
+  const handleProductSelect = useCallback(
+    (product: Product) => {
+      onProductSelect(product)
+      setInput("")
+      setBarcode(null)
+      inputRef.current?.focus()
+    },
+    [onProductSelect],
+  )
+
+  useEffect(() => {
+    if (barcode === null || productsQuery.isFetching) return
+    const exactProduct = productsQuery.data?.[0]
+    if (
+      productsQuery.data?.length === 1 &&
+      exactProduct?.barcode === barcode &&
+      exactProduct.stock > 0
+    ) {
+      handleProductSelect(exactProduct)
+    }
+  }, [barcode, handleProductSelect, productsQuery.data, productsQuery.isFetching])
 
   return (
     <section className="product-search" aria-labelledby="product-search-title">
@@ -63,6 +78,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
           id="product-search-input"
           autoComplete="off"
           autoFocus
+          enterKeyHint="done"
           placeholder="Scanner ou rechercher un produit"
           value={input}
           onChange={(event) => handleChange(event.target.value)}

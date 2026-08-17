@@ -85,6 +85,17 @@ export function PosPage() {
     return submitPayment({ method })
   }
 
+  function focusProductSearch() {
+    window.requestAnimationFrame(() => {
+      document.getElementById("product-search-input")?.focus()
+    })
+  }
+
+  function closeCheckout() {
+    setCheckoutStep(null)
+    focusProductSearch()
+  }
+
   return (
     <main className="pos-page">
       <header className="pos-heading">
@@ -133,7 +144,7 @@ export function PosPage() {
       {checkoutStep === "METHODS" ? (
         <PaymentMethodModal
           total={cart.total}
-          onClose={() => setCheckoutStep(null)}
+          onClose={closeCheckout}
           onSelect={(method) => {
             saleMutation.reset()
             setCheckoutStep(method)
@@ -150,7 +161,7 @@ export function PosPage() {
             setCheckoutStep("METHODS")
           }}
           onClose={() => {
-            if (!saleMutation.isPending) setCheckoutStep(null)
+            if (!saleMutation.isPending) closeCheckout()
           }}
           onConfirm={handleCashPayment}
         />
@@ -166,7 +177,7 @@ export function PosPage() {
             setCheckoutStep("METHODS")
           }}
           onClose={() => {
-            if (!saleMutation.isPending) setCheckoutStep(null)
+            if (!saleMutation.isPending) closeCheckout()
           }}
           onConfirm={() => handleMobilePayment(checkoutStep)}
         />
@@ -176,9 +187,7 @@ export function PosPage() {
           sale={completedSale}
           onNewSale={() => {
             setCompletedSale(null)
-            window.requestAnimationFrame(() => {
-              document.getElementById("product-search-input")?.focus()
-            })
+            focusProductSearch()
           }}
         />
       ) : null}
