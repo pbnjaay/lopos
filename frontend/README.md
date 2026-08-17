@@ -1,4 +1,4 @@
-# LoPOS frontend — étapes 1 à 4
+# LoPOS frontend — étapes 1 à 5
 
 Socle React, TypeScript et Vite du POS, avec authentification par session Django,
 restauration de l'utilisateur courant, guards de session et ouverture de caisse.
@@ -92,4 +92,12 @@ saisie ordinaire déclenche après un court délai une recherche `search`, tandi
 qu'Entrée déclenche une recherche exacte `barcode`. Les deux appels transmettent
 toujours `store_id`, afin que le backend inclue le stock du magasin. Les huit
 premiers résultats affichent nom, code-barres, prix et stock. L'ajout au panier
-reste réservé à l'étape 5.
+alimente désormais le panier local.
+
+## Panier — étape 5
+
+Le panier est conservé uniquement dans l'état React. Un second ajout du même
+produit incrémente sa ligne. Les contrôles permettent d'incrémenter, décrémenter,
+modifier directement la quantité, supprimer ou vider, sans jamais dépasser le
+stock connu ni descendre sous une quantité de 1. Le total affiché est calculé en
+entiers FCFA ; aucun prix ni total n'est encore envoyé au backend.

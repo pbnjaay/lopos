@@ -3,7 +3,7 @@
 import "@testing-library/jest-dom/vitest"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -22,18 +22,19 @@ const coca: Product = {
   updated_at: "2026-08-17T00:00:00Z",
 }
 
-function renderSearch() {
+function renderSearch(onProductSelect = vi.fn()) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   render(
     <QueryClientProvider client={queryClient}>
-      <ProductSearch storeId="store-id" />
+      <ProductSearch storeId="store-id" onProductSelect={onProductSelect} />
     </QueryClientProvider>,
   )
 }
 
 afterEach(() => {
+  cleanup()
   vi.restoreAllMocks()
 })
 
@@ -72,5 +73,25 @@ describe("ProductSearch", () => {
     )
 
     expect(await screen.findByText("Aucun produit trouvé.")).toBeInTheDocument()
+  })
+
+  it("passes an available selected product to the cart", async () => {
+    const user = userEvent.setup()
+    const onProductSelect = vi.fn()
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify([coca]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    )
+
+    renderSearch(onProductSelect)
+    await user.type(
+      screen.getByLabelText("Scanner un code-barres ou rechercher par nom"),
+      "123456789{Enter}",
+    )
+    await user.click(await screen.findByRole("button", { name: "Ajouter Coca 50cl au panier" }))
+
+    expect(onProductSelect).toHaveBeenCalledWith(coca)
   })
 })

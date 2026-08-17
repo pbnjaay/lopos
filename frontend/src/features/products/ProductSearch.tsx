@@ -4,12 +4,14 @@ import { useQuery } from "@tanstack/react-query"
 import { getProducts } from "../../api/products"
 import { useDebouncedValue } from "../../hooks/useDebouncedValue"
 import { formatMoney } from "../../utils/money"
+import type { Product } from "../../types/api"
 
 type ProductSearchProps = {
   storeId: string
+  onProductSelect: (product: Product) => void
 }
 
-export function ProductSearch({ storeId }: ProductSearchProps) {
+export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) {
   const [input, setInput] = useState("")
   const [barcode, setBarcode] = useState<string | null>(null)
   const debouncedSearch = useDebouncedValue(input.trim(), 250)
@@ -85,17 +87,31 @@ export function ProductSearch({ storeId }: ProductSearchProps) {
         {!productsQuery.isFetching && !productsQuery.error && products.length > 0 ? (
           <ul className="product-list">
             {products.map((product) => (
-              <li key={product.id} className="product-result">
-                <div>
-                  <strong>{product.name}</strong>
-                  <span>{product.barcode ? `Code : ${product.barcode}` : "Sans code-barres"}</span>
-                </div>
-                <div className="product-numbers">
-                  <strong>{formatMoney(Number(product.selling_price))}</strong>
-                  <span className={product.stock === 0 ? "stock-empty" : undefined}>
-                    Stock : {product.stock}
-                  </span>
-                </div>
+              <li key={product.id}>
+                <button
+                  className="product-result"
+                  type="button"
+                  disabled={product.stock <= 0}
+                  aria-label={
+                    product.stock > 0
+                      ? `Ajouter ${product.name} au panier`
+                      : `${product.name} en rupture de stock`
+                  }
+                  onClick={() => onProductSelect(product)}
+                >
+                  <div>
+                    <strong>{product.name}</strong>
+                    <span>
+                      {product.barcode ? `Code : ${product.barcode}` : "Sans code-barres"}
+                    </span>
+                  </div>
+                  <div className="product-numbers">
+                    <strong>{formatMoney(Number(product.selling_price))}</strong>
+                    <span className={product.stock === 0 ? "stock-empty" : undefined}>
+                      Stock : {product.stock}
+                    </span>
+                  </div>
+                </button>
               </li>
             ))}
           </ul>
