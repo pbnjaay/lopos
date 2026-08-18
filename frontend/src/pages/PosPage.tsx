@@ -4,7 +4,7 @@ import { Link } from "react-router-dom"
 
 import { completeSale } from "../api/sales"
 import { getStore } from "../api/stores"
-import { ApiError } from "../api/client"
+import { ApiError, isApiUnavailable } from "../api/client"
 import { InsufficientLocalStockError, createLocalSale } from "../db/sales"
 import { updateLocalCashSessionStoreName } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
@@ -57,22 +57,31 @@ export function PosPage() {
   const saleMutation = useMutation({
     mutationFn: async (payment: CheckoutPayment): Promise<ReceiptView> => {
       if (isOnline) {
-        const sale = await completeSale({
-          cash_session_id: ownSession!.id,
-          items: cart.items.map((item) => ({
-            product_id: item.productId,
-            quantity: item.quantity,
-          })),
-          payment:
-            payment.method === "CASH"
-              ? { method: "CASH", received_amount: toBackendMoney(payment.receivedAmount!) }
-              : { method: payment.method },
-        })
-        return receiptViewFromApiSale(sale, {
-          storeName: storeQuery.data?.name ?? localSession?.storeName ?? "",
-          cashRegisterName: selectedRegister?.name ?? "",
-          cashierName: user.first_name || user.username,
-        })
+        try {
+          const sale = await completeSale({
+            cash_session_id: ownSession!.id,
+            items: cart.items.map((item) => ({
+              product_id: item.productId,
+              quantity: item.quantity,
+            })),
+            payment:
+              payment.method === "CASH"
+                ? { method: "CASH", received_amount: toBackendMoney(payment.receivedAmount!) }
+                : { method: payment.method },
+          })
+          return receiptViewFromApiSale(sale, {
+            storeName: storeQuery.data?.name ?? localSession?.storeName ?? "",
+            cashRegisterName: selectedRegister?.name ?? "",
+            cashierName: user.first_name || user.username,
+          })
+        } catch (error) {
+          // navigator.onLine can report "online" while the server is
+          // actually unreachable (dropped packets, VPN gone stale...). Rather
+          // than leave the cashier stuck on a failed payment, treat this
+          // submission as offline: the sale still gets recorded locally and
+          // will sync once connectivity is genuinely restored.
+          if (!isApiUnavailable(error)) throw error
+        }
       }
 
       if (!localSession) {

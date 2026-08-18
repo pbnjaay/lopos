@@ -11,6 +11,7 @@ import { CashClosingResult } from "../features/cash-session/CashClosingResult"
 import { usePosSession } from "../features/cash-session/queries"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
+import type { SyncOutcome } from "../sync/syncEngine"
 import { formatDateTime } from "../utils/date"
 import {
   formatBackendMoney,
@@ -19,6 +20,14 @@ import {
   toBackendMoney,
 } from "../utils/money"
 
+function describeSyncOutcome(outcome: SyncOutcome): string {
+  if (outcome.attempted === 0) return "Aucune vente à synchroniser."
+  if (outcome.conflicts > 0) {
+    return `${outcome.synced} vente${outcome.synced > 1 ? "s" : ""} synchronisée${outcome.synced > 1 ? "s" : ""}, ${outcome.conflicts} en conflit.`
+  }
+  return `${outcome.synced} vente${outcome.synced > 1 ? "s" : ""} synchronisée${outcome.synced > 1 ? "s" : ""}.`
+}
+
 export function CloseCashSessionPage() {
   const user = useCurrentUser().data!
   const { ownSession } = usePosSession(user)
@@ -26,6 +35,7 @@ export function CloseCashSessionPage() {
   const queryClient = useQueryClient()
   const [countedCash, setCountedCash] = useState("")
   const [isConfirming, setIsConfirming] = useState(false)
+  const [syncResultMessage, setSyncResultMessage] = useState<string | null>(null)
   const parsedCountedCash = parseMoneyInput(countedCash)
   const hasCountedCash = countedCash.trim().length > 0
   const isOnline = useNetworkStatus()
@@ -108,8 +118,10 @@ export function CloseCashSessionPage() {
   const pendingLocalSalesCount = pendingLocalSalesQuery.data ?? 0
   if (pendingLocalSalesCount > 0) {
     async function handleSyncClick() {
-      await triggerSync()
+      setSyncResultMessage(null)
+      const outcome = await triggerSync()
       void queryClient.invalidateQueries({ queryKey: pendingLocalSalesQueryKey })
+      setSyncResultMessage(describeSyncOutcome(outcome))
     }
 
     return (
@@ -140,6 +152,11 @@ export function CloseCashSessionPage() {
           >
             {isSyncing ? "Synchronisation…" : "Synchroniser maintenant"}
           </button>
+          {syncResultMessage ? (
+            <p className="form-success" role="status">
+              {syncResultMessage}
+            </p>
+          ) : null}
         </section>
       </main>
     )

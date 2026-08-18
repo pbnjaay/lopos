@@ -2,6 +2,18 @@ const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
 
 export const API_BASE_URL = (configuredBaseUrl || "/api/v1").replace(/\/+$/, "")
 
+/**
+ * `navigator.onLine` only reflects whether a network interface is up, not
+ * whether the server is actually reachable — a request can hang far longer
+ * than any reasonable UI should wait (dropped packets, a captive portal, a
+ * VPN gone stale, or a browser devtools "offline" throttle, which does not
+ * update navigator.onLine and can leave a request pending instead of
+ * failing it outright). Bound every request so a "looks online but isn't"
+ * state fails into a NetworkError within a few seconds instead of leaving
+ * the cashier staring at a frozen payment screen.
+ */
+const REQUEST_TIMEOUT_MS = 5_000
+
 export type ApiErrorBody = {
   code?: string
   message?: string
@@ -134,6 +146,9 @@ export async function apiRequest<T>(
     if (csrfToken) headers.set("X-CSRFToken", csrfToken)
   }
 
+  const timeoutController = new AbortController()
+  const timeoutId = setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS)
+
   let response: Response
   try {
     response = await fetch(isAbsoluteApiPath(path) ? path : buildApiUrl(path), {
@@ -142,9 +157,12 @@ export async function apiRequest<T>(
       headers,
       body,
       credentials: "include",
+      signal: options.signal ?? timeoutController.signal,
     })
   } catch {
     throw new NetworkError()
+  } finally {
+    clearTimeout(timeoutId)
   }
 
   const responseBody = await readResponseBody(response)

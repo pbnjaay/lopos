@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react"
 
 import { formatMoney, parseMoneyInput } from "../../utils/money"
+import { useSlowSubmitHint } from "./useSlowSubmitHint"
 
 type CashPaymentModalProps = {
   total: number
@@ -22,6 +23,7 @@ export function CashPaymentModal({
   onBack,
 }: CashPaymentModalProps) {
   const submissionLock = useRef(false)
+  const isSlow = useSlowSubmitHint(isSubmitting)
   const [receivedInput, setReceivedInput] = useState("")
   const receivedAmount = parseMoneyInput(receivedInput)
   const isSufficient = receivedAmount !== null && receivedAmount >= total
@@ -150,6 +152,11 @@ export function CashPaymentModal({
           {errorMessage ? (
             <p className="form-error" role="alert">
               {errorMessage}
+            </p>
+          ) : null}
+          {isSubmitting && isSlow ? (
+            <p className="muted" role="status">
+              Ça prend plus de temps que prévu, patientez encore un instant…
             </p>
           ) : null}
 

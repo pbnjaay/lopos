@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react"
 
 import type { PaymentMethod } from "../../types/api"
 import { formatMoney } from "../../utils/money"
+import { useSlowSubmitHint } from "./useSlowSubmitHint"
 
 type MobileMoneyConfirmationProps = {
   method: Exclude<PaymentMethod, "CASH">
@@ -28,6 +29,7 @@ export function MobileMoneyConfirmation({
   onConfirm,
 }: MobileMoneyConfirmationProps) {
   const submissionLock = useRef(false)
+  const isSlow = useSlowSubmitHint(isSubmitting)
   const label = labels[method]
 
   useEffect(() => {
@@ -94,6 +96,11 @@ export function MobileMoneyConfirmation({
           {errorMessage ? (
             <p className="form-error" role="alert">
               {errorMessage}
+            </p>
+          ) : null}
+          {isSubmitting && isSlow ? (
+            <p className="muted" role="status">
+              Ça prend plus de temps que prévu, patientez encore un instant…
             </p>
           ) : null}
           <div className="modal-actions">

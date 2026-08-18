@@ -1,9 +1,11 @@
+import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
 
 import { listConflictLocalSales, listPendingLocalSales } from "../db/sales"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
+import type { SyncOutcome } from "../sync/syncEngine"
 import { formatDateTime } from "../utils/date"
 import { formatMoney } from "../utils/money"
 
@@ -15,6 +17,14 @@ const paymentLabels = {
 
 const pendingSalesQueryKey = ["pending-local-sales"] as const
 const conflictSalesQueryKey = ["conflict-local-sales"] as const
+
+function describeSyncOutcome(outcome: SyncOutcome): string {
+  if (outcome.attempted === 0) return "Aucune vente à synchroniser."
+  if (outcome.conflicts > 0) {
+    return `${outcome.synced} vente${outcome.synced > 1 ? "s" : ""} synchronisée${outcome.synced > 1 ? "s" : ""}, ${outcome.conflicts} en conflit.`
+  }
+  return `${outcome.synced} vente${outcome.synced > 1 ? "s" : ""} synchronisée${outcome.synced > 1 ? "s" : ""}.`
+}
 
 export function PendingSalesPage() {
   const isOnline = useNetworkStatus()
@@ -31,11 +41,14 @@ export function PendingSalesPage() {
   const sales = pendingSalesQuery.data ?? []
   const conflicts = conflictSalesQuery.data ?? []
   const isLoading = pendingSalesQuery.isLoading || conflictSalesQuery.isLoading
+  const [syncResultMessage, setSyncResultMessage] = useState<string | null>(null)
 
   async function handleSyncClick() {
-    await triggerSync()
+    setSyncResultMessage(null)
+    const outcome = await triggerSync()
     void queryClient.invalidateQueries({ queryKey: pendingSalesQueryKey })
     void queryClient.invalidateQueries({ queryKey: conflictSalesQueryKey })
+    setSyncResultMessage(describeSyncOutcome(outcome))
   }
 
   return (
@@ -58,6 +71,11 @@ export function PendingSalesPage() {
         </button>
         {!isOnline ? (
           <p className="muted">Reconnectez-vous pour synchroniser.</p>
+        ) : null}
+        {syncResultMessage ? (
+          <p className="form-success" role="status">
+            {syncResultMessage}
+          </p>
         ) : null}
 
         {isLoading ? <p className="muted">Chargement…</p> : null}
