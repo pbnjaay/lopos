@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
+import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 
 import { useDebouncedValue } from "../../hooks/useDebouncedValue"
@@ -15,6 +15,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
   const inputRef = useRef<HTMLInputElement>(null)
   const [input, setInput] = useState("")
   const [barcode, setBarcode] = useState<string | null>(null)
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
   const debouncedSearch = useDebouncedValue(input.trim(), 250)
   const mode = barcode === null ? "search" : "barcode"
   const term = barcode ?? (input.trim() ? debouncedSearch : "")
@@ -29,6 +30,10 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
     retry: false,
   })
   const products = (productsQuery.data ?? []).slice(0, 8)
+
+  useEffect(() => {
+    setHighlightedIndex(0)
+  }, [productsQuery.data])
 
   function handleChange(value: string) {
     setInput(value)
@@ -50,6 +55,26 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
     },
     [onProductSelect],
   )
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    // Only take over Enter/arrows once name-search results are showing.
+    // Otherwise let the form submit as before (barcode scan/lookup) — a
+    // real barcode scanner types faster than the search debounce, so
+    // `products` is still empty when its Enter arrives.
+    if (mode !== "search" || products.length === 0) return
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault()
+      setHighlightedIndex((index) => Math.min(index + 1, products.length - 1))
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault()
+      setHighlightedIndex((index) => Math.max(index - 1, 0))
+    } else if (event.key === "Enter") {
+      event.preventDefault()
+      const product = products[highlightedIndex] ?? products[0]
+      if (product && product.stock > 0) handleProductSelect(product)
+    }
+  }
 
   useEffect(() => {
     if (barcode === null || productsQuery.isFetching) return
@@ -83,6 +108,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
           placeholder="Scanner ou rechercher un produit"
           value={input}
           onChange={(event) => handleChange(event.target.value)}
+          onKeyDown={handleKeyDown}
         />
         <button className="button button-secondary" type="submit" disabled={!input.trim()}>
           Code-barres
@@ -90,7 +116,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
       </form>
 
       <p className="search-hint">
-        Saisissez un nom, ou scannez un code-barres puis appuyez sur Entrée.
+        Saisissez un nom (flèches + Entrée pour valider), ou scannez un code-barres.
       </p>
 
       <div className="search-results" aria-live="polite">
@@ -112,17 +138,23 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
         ) : null}
         {!productsQuery.isFetching && !productsQuery.error && products.length > 0 ? (
           <ul className="product-list">
-            {products.map((product) => (
+            {products.map((product, index) => (
               <li key={product.id}>
                 <button
-                  className="product-result"
+                  className={
+                    mode === "search" && index === highlightedIndex
+                      ? "product-result product-result-highlighted"
+                      : "product-result"
+                  }
                   type="button"
+                  aria-current={mode === "search" && index === highlightedIndex}
                   disabled={product.stock <= 0}
                   aria-label={
                     product.stock > 0
                       ? `Ajouter ${product.name} au panier`
                       : `${product.name} en rupture de stock`
                   }
+                  onMouseEnter={() => setHighlightedIndex(index)}
                   onClick={() => handleProductSelect(product)}
                 >
                   <div>

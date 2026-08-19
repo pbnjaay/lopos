@@ -818,6 +818,12 @@ h1 {
   background: #f1f8f4;
 }
 
+.product-result-highlighted:not(:disabled) {
+  border-color: #1f9d63;
+  background: #f1f8f4;
+  box-shadow: 0 0 0 2px rgba(31, 157, 99, 0.25);
+}
+
 .product-result:disabled {
   cursor: not-allowed;
   opacity: 0.65;
