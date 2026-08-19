@@ -1,0 +1,73 @@
+{% extends "admin/base_site.html" %}
+{% load i18n unfold %}
+
+{% block content %}
+<div id="content-main">
+    <div class="flex flex-col gap-6">
+        <div class="flex items-center gap-3">
+            <a href="{{ back_url }}" class="block h-[24px]" title="{% trans 'Retour à la fiche produit' %}">
+                <span class="material-symbols-outlined">arrow_back</span>
+            </a>
+            <div>
+                <h1 class="font-semibold text-important text-xl">{{ breadcrumb_label }}</h1>
+                <p class="text-subtle text-sm">{% trans 'Produit' %} : <strong>{{ product.name }}</strong></p>
+            </div>
+        </div>
+
+        <fieldset class="module relative">
+            {% include "unfold/helpers/inline_heading.html" with title="Stock actuel" %}
+
+            <div class="border border-base-200 overflow-hidden rounded-default shadow-xs dark:border-base-800">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-base-50 dark:bg-white/[.02]">
+                            <th class="font-semibold px-3 py-2 text-left text-important">{% trans 'Magasin' %}</th>
+                            <th class="font-semibold px-3 py-2 text-left text-important">{% trans 'Stock actuel' %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stock in stocks %}
+                        <tr class="border-t border-base-200 dark:border-base-800">
+                            <td class="px-3 py-2">{{ stock.store.name }}</td>
+                            <td class="px-3 py-2">{{ stock.quantity }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr class="border-t border-base-200 dark:border-base-800">
+                            <td class="px-3 py-2 text-subtle" colspan="2">{% trans 'Aucun stock enregistré pour ce produit.' %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </fieldset>
+
+        <form method="post" class="flex flex-col gap-6">
+            {% csrf_token %}
+
+            <fieldset class="module relative">
+                {% include "unfold/helpers/inline_heading.html" with title=fieldset_title %}
+
+                {% if form.non_field_errors %}
+                    {% include "unfold/helpers/messages/error.html" with errors=form.non_field_errors %}
+                {% endif %}
+
+                <div class="border border-base-200 overflow-hidden rounded-default shadow-xs dark:border-base-800 p-4">
+                    {% for field in form %}
+                        {% include "unfold/helpers/field.html" %}
+                    {% endfor %}
+                </div>
+            </fieldset>
+
+            <div class="flex gap-3">
+                {% component "unfold/components/button.html" with submit=1 variant="primary" %}
+                    {{ submit_label }}
+                {% endcomponent %}
+
+                {% component "unfold/components/button.html" with href=back_url variant="default" %}
+                    {% trans 'Annuler' %}
+                {% endcomponent %}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

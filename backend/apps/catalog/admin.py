@@ -10,7 +10,7 @@ from unfold.widgets import UnfoldAdminIntegerFieldWidget, UnfoldAdminSelectWidge
 
 from apps.inventory.exceptions import InvalidStockQuantity
 from apps.inventory.models import Stock
-from apps.inventory.services import receive_stock
+from apps.inventory.services import adjust_stock, receive_stock
 from apps.stores.models import Store
 
 from .models import Product
@@ -64,6 +64,20 @@ class ReceiveStockForm(forms.Form):
     )
 
 
+class AdjustStockForm(forms.Form):
+    store = forms.ModelChoiceField(
+        queryset=Store.objects.filter(is_active=True),
+        label="Magasin",
+        widget=UnfoldAdminSelectWidget(),
+    )
+    counted_quantity = forms.IntegerField(
+        min_value=0,
+        label="Stock physique réel",
+        help_text="Quantité réellement comptée en magasin.",
+        widget=UnfoldAdminIntegerFieldWidget(),
+    )
+
+
 @admin.register(Product)
 class ProductAdmin(ModelAdmin):
     form = ProductAdminForm
@@ -75,7 +89,7 @@ class ProductAdmin(ModelAdmin):
         "created_at",
         "updated_at",
         "stocks_overview",
-        "receive_stock_action",
+        "stock_actions",
     )
 
     def get_fieldsets(self, request, obj=None):
@@ -89,7 +103,7 @@ class ProductAdmin(ModelAdmin):
             )
         else:
             fieldsets.append(
-                ("Stocks", {"fields": ("stocks_overview", "receive_stock_action")})
+                ("Stocks", {"fields": ("stocks_overview", "stock_actions")})
             )
         fieldsets.append(
             (
@@ -148,13 +162,42 @@ class ProductAdmin(ModelAdmin):
         )
         return format_html("<table>{}</table>", rows)
 
-    @admin.display(description="Réapprovisionnement")
-    def receive_stock_action(self, obj):
+    @admin.display(description="Actions de stock")
+    def stock_actions(self, obj):
         if obj is None or not obj.pk:
             return "-"
 
-        url = reverse("admin:catalog_product_receive_stock", args=[obj.pk])
-        return format_html('<a href="{}" class="button">+ Ajouter du stock</a>', url)
+        receive_url = reverse("admin:catalog_product_receive_stock", args=[obj.pk])
+        adjust_url = reverse("admin:catalog_product_adjust_stock", args=[obj.pk])
+
+        button_base = (
+            "font-medium inline-flex items-center gap-2 rounded-default "
+            "justify-center whitespace-nowrap cursor-pointer px-3 py-2 text-sm"
+        )
+        button_primary = (
+            f"{button_base} border border-transparent bg-primary-600 text-white "
+            "hover:bg-primary-600/80"
+        )
+        button_default = (
+            f"{button_base} border border-base-200 bg-white shadow-xs text-important "
+            "hover:bg-base-100/80 dark:border-base-700 dark:bg-transparent "
+            "dark:hover:bg-base-800/80"
+        )
+
+        return format_html(
+            '<div class="flex gap-2">'
+            '<a href="{}" class="{}">'
+            '<span class="material-symbols-outlined text-base">add</span>'
+            "Ajouter du stock</a>"
+            '<a href="{}" class="{}">'
+            '<span class="material-symbols-outlined text-base">tune</span>'
+            "Ajuster le stock</a>"
+            "</div>",
+            receive_url,
+            button_primary,
+            adjust_url,
+            button_default,
+        )
 
     def get_urls(self):
         custom_urls = [
@@ -163,20 +206,59 @@ class ProductAdmin(ModelAdmin):
                 self.admin_site.admin_view(self.receive_stock_view),
                 name="catalog_product_receive_stock",
             ),
+            path(
+                "<uuid:object_id>/adjust-stock/",
+                self.admin_site.admin_view(self.adjust_stock_view),
+                name="catalog_product_adjust_stock",
+            ),
         ]
         return custom_urls + super().get_urls()
 
-    def receive_stock_view(self, request, object_id):
+    def _get_product_for_stock_action(self, request, object_id):
         product = get_object_or_404(Product, pk=object_id)
-
         if not self.has_change_permission(request, product):
             raise PermissionDenied
+        return product
 
-        stocks = (
+    def _current_stocks(self, product):
+        return (
             Stock.objects.filter(product=product)
             .select_related("store")
             .order_by("store__name")
         )
+
+    def _render_stock_action_page(
+        self,
+        request,
+        *,
+        product,
+        form,
+        title,
+        breadcrumb_label,
+        fieldset_title,
+        submit_label,
+        template_name,
+    ):
+        context = self.admin_site.each_context(request)
+        context.update(
+            {
+                "title": title,
+                "breadcrumb_label": breadcrumb_label,
+                "fieldset_title": fieldset_title,
+                "submit_label": submit_label,
+                "product": product,
+                "stocks": self._current_stocks(product),
+                "form": form,
+                "opts": Product._meta,
+                "back_url": reverse(
+                    "admin:catalog_product_change", args=[product.pk]
+                ),
+            }
+        )
+        return render(request, template_name, context)
+
+    def receive_stock_view(self, request, object_id):
+        product = self._get_product_for_stock_action(request, object_id)
 
         if request.method == "POST":
             form = ReceiveStockForm(request.POST)
@@ -202,17 +284,59 @@ class ProductAdmin(ModelAdmin):
         else:
             form = ReceiveStockForm()
 
-        context = self.admin_site.each_context(request)
-        context.update(
-            {
-                "title": f"Ajouter du stock — {product.name}",
-                "product": product,
-                "stocks": stocks,
-                "form": form,
-                "opts": Product._meta,
-                "back_url": reverse(
-                    "admin:catalog_product_change", args=[product.pk]
-                ),
-            }
+        return self._render_stock_action_page(
+            request,
+            product=product,
+            form=form,
+            title=f"Ajouter du stock — {product.name}",
+            breadcrumb_label="Ajouter du stock",
+            fieldset_title="Quantité reçue",
+            submit_label="Ajouter",
+            template_name="admin/catalog/receive_stock.html",
         )
-        return render(request, "admin/catalog/receive_stock.html", context)
+
+    def adjust_stock_view(self, request, object_id):
+        product = self._get_product_for_stock_action(request, object_id)
+
+        if request.method == "POST":
+            form = AdjustStockForm(request.POST)
+            if form.is_valid():
+                store = form.cleaned_data["store"]
+                counted_quantity = form.cleaned_data["counted_quantity"]
+                try:
+                    result = adjust_stock(
+                        store=store,
+                        product=product,
+                        counted_quantity=counted_quantity,
+                    )
+                except InvalidStockQuantity as exc:
+                    form.add_error("counted_quantity", str(exc))
+                else:
+                    if result.delta == 0:
+                        message = (
+                            f"Stock de {product.name} ({store.name}) déjà à jour : "
+                            f"{counted_quantity}."
+                        )
+                    else:
+                        message = (
+                            f"Stock de {product.name} ({store.name}) ajusté : "
+                            f"{result.previous_quantity} → {counted_quantity} "
+                            f"({result.delta:+d})."
+                        )
+                    self.message_user(request, message, level=messages.SUCCESS)
+                    return redirect(
+                        reverse("admin:catalog_product_change", args=[product.pk])
+                    )
+        else:
+            form = AdjustStockForm()
+
+        return self._render_stock_action_page(
+            request,
+            product=product,
+            form=form,
+            title=f"Ajuster le stock — {product.name}",
+            breadcrumb_label="Ajuster le stock",
+            fieldset_title="Stock physique réel",
+            submit_label="Ajuster",
+            template_name="admin/catalog/adjust_stock.html",
+        )

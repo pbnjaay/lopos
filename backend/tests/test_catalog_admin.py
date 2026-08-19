@@ -135,7 +135,8 @@ def test_product_change_page_shows_stocks_overview(admin_client, product: Produc
     assert response.status_code == 200
     content = response.content.decode()
     assert "Supérette Louga" in content
-    assert "+ Ajouter du stock" in content
+    assert "Ajouter du stock" in content
+    assert "Ajuster le stock" in content
 
 
 def test_receive_stock_view_adds_stock(admin_client, product: Product, store: Store) -> None:
@@ -179,6 +180,71 @@ def test_receive_stock_view_requires_change_permission(client, product: Product,
     response = client.post(
         reverse("admin:catalog_product_receive_stock", args=[product.pk]),
         {"store": str(store.pk), "quantity": "12"},
+    )
+
+    assert response.status_code == 403
+    stock = Stock.objects.get(product=product, store=store)
+    assert stock.quantity == 24
+
+
+def test_adjust_stock_view_decreases_quantity(admin_client, product: Product, store: Store) -> None:
+    response = admin_client.post(
+        reverse("admin:catalog_product_adjust_stock", args=[product.pk]),
+        {"store": str(store.pk), "counted_quantity": "22"},
+        follow=True,
+    )
+
+    assert response.status_code == 200
+
+    stock = Stock.objects.get(product=product, store=store)
+    assert stock.quantity == 22
+
+    movement = InventoryMovement.objects.get(
+        product=product, store=store, movement_type=InventoryMovement.Type.ADJUSTMENT
+    )
+    assert movement.quantity == -2
+
+
+def test_adjust_stock_view_with_same_quantity_creates_no_movement(
+    admin_client, product: Product, store: Store
+) -> None:
+    response = admin_client.post(
+        reverse("admin:catalog_product_adjust_stock", args=[product.pk]),
+        {"store": str(store.pk), "counted_quantity": "24"},
+        follow=True,
+    )
+
+    assert response.status_code == 200
+    stock = Stock.objects.get(product=product, store=store)
+    assert stock.quantity == 24
+    assert not InventoryMovement.objects.filter(
+        product=product, movement_type=InventoryMovement.Type.ADJUSTMENT
+    ).exists()
+
+
+def test_adjust_stock_view_rejects_negative_quantity(
+    admin_client, product: Product, store: Store
+) -> None:
+    response = admin_client.post(
+        reverse("admin:catalog_product_adjust_stock", args=[product.pk]),
+        {"store": str(store.pk), "counted_quantity": "-1"},
+    )
+
+    assert response.status_code == 200
+    stock = Stock.objects.get(product=product, store=store)
+    assert stock.quantity == 24
+    assert not InventoryMovement.objects.filter(
+        product=product, movement_type=InventoryMovement.Type.ADJUSTMENT
+    ).exists()
+
+
+def test_adjust_stock_view_requires_change_permission(client, product: Product, store: Store) -> None:
+    User.objects.create_user(username="cashier", password="pass1234", is_staff=True)
+    client.login(username="cashier", password="pass1234")
+
+    response = client.post(
+        reverse("admin:catalog_product_adjust_stock", args=[product.pk]),
+        {"store": str(store.pk), "counted_quantity": "22"},
     )
 
     assert response.status_code == 403
