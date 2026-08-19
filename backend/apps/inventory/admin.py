@@ -9,8 +9,17 @@ class StockAdmin(ModelAdmin):
     list_display = ("store", "product", "quantity", "updated_at")
     list_filter = ("store",)
     search_fields = ("product__name", "product__barcode", "store__name")
-    readonly_fields = ("id", "updated_at")
+    readonly_fields = ("id", "store", "product", "quantity", "updated_at")
     autocomplete_fields = ("store", "product")
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        return False
 
 
 @admin.register(InventoryMovement)

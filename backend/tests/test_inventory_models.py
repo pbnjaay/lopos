@@ -6,7 +6,7 @@ from django.db import IntegrityError, transaction
 from django.test import RequestFactory
 
 from apps.catalog.models import Product
-from apps.inventory.admin import InventoryMovementAdmin
+from apps.inventory.admin import InventoryMovementAdmin, StockAdmin
 from apps.inventory.models import InventoryMovement, Stock
 from apps.stores.models import Store
 
@@ -66,3 +66,21 @@ def test_inventory_movement_admin_is_read_only() -> None:
     assert model_admin.has_add_permission(request) is False
     assert model_admin.has_change_permission(request) is False
     assert model_admin.has_delete_permission(request) is False
+
+
+def test_stock_admin_is_read_only() -> None:
+    model_admin = StockAdmin(Stock, admin.site)
+    request = RequestFactory().get("/admin/")
+
+    assert model_admin.has_add_permission(request) is False
+    assert model_admin.has_change_permission(request) is False
+    assert model_admin.has_delete_permission(request) is False
+
+
+def test_stock_admin_cannot_edit_quantity_directly(store: Store, product: Product) -> None:
+    stock = Stock.objects.create(store=store, product=product, quantity=24)
+    model_admin = StockAdmin(Stock, admin.site)
+    request = RequestFactory().get("/admin/")
+
+    assert model_admin.has_change_permission(request, obj=stock) is False
+    assert stock.quantity == 24
