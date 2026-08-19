@@ -113,7 +113,7 @@ class ProductAdmin(ModelAdmin):
 
     def get_fieldsets(self, request, obj=None):
         fieldsets = [
-            ("Informations générales", {"fields": ("name", "barcode", "is_active")}),
+            ("Informations générales", {"fields": ("name", "is_active")}),
             ("Prix", {"fields": ("purchase_price", "selling_price")}),
         ]
         if obj is None:
@@ -124,6 +124,18 @@ class ProductAdmin(ModelAdmin):
             fieldsets.append(
                 ("Stocks", {"fields": ("stocks_overview", "stock_actions")})
             )
+        fieldsets.append(
+            (
+                "Code-barres",
+                {
+                    "fields": ("barcode",),
+                    "description": (
+                        "Scannez le code-barres en dernier : le scanner valide "
+                        "automatiquement le formulaire."
+                    ),
+                },
+            )
+        )
         fieldsets.append(
             (
                 "Métadonnées",
