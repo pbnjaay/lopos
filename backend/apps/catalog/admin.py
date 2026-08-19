@@ -6,7 +6,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
 from django.utils.html import format_html, format_html_join
 from unfold.admin import ModelAdmin
-from unfold.widgets import UnfoldAdminIntegerFieldWidget, UnfoldAdminSelectWidget
+from unfold.decorators import action
+from unfold.widgets import (
+    UnfoldAdminFileFieldWidget,
+    UnfoldAdminIntegerFieldWidget,
+    UnfoldAdminSelectWidget,
+)
 
 from apps.inventory.exceptions import InvalidStockQuantity
 from apps.inventory.models import Stock
@@ -14,6 +19,7 @@ from apps.inventory.services import adjust_stock, receive_stock
 from apps.stores.models import Store
 
 from .models import Product
+from .services import import_products_from_csv
 
 
 class ProductAdminForm(forms.ModelForm):
@@ -78,9 +84,22 @@ class AdjustStockForm(forms.Form):
     )
 
 
+class ImportProductsForm(forms.Form):
+    csv_file = forms.FileField(
+        label="Fichier CSV",
+        help_text=(
+            "Colonnes attendues : barcode, name, purchase_price, selling_price, "
+            "store, initial_stock. barcode, purchase_price, store et "
+            "initial_stock sont optionnels."
+        ),
+        widget=UnfoldAdminFileFieldWidget(),
+    )
+
+
 @admin.register(Product)
 class ProductAdmin(ModelAdmin):
     form = ProductAdminForm
+    actions_list = ["import_products_view"]
     list_display = ("name", "barcode", "selling_price", "is_active", "updated_at")
     list_filter = ("is_active",)
     search_fields = ("name", "barcode")
@@ -340,3 +359,38 @@ class ProductAdmin(ModelAdmin):
             submit_label="Ajuster",
             template_name="admin/catalog/adjust_stock.html",
         )
+
+    @action(
+        description="Importer des produits",
+        icon="upload",
+        url_path="import-products",
+        permissions=["add"],
+    )
+    def import_products_view(self, request):
+        if request.method == "POST":
+            form = ImportProductsForm(request.POST, request.FILES)
+            if form.is_valid():
+                result = import_products_from_csv(form.cleaned_data["csv_file"])
+                if result.errors:
+                    for error in result.errors:
+                        form.add_error(None, f"Ligne {error.line} : {error.message}")
+                else:
+                    self.message_user(
+                        request,
+                        f"{result.created_count} produits importés avec succès.",
+                        level=messages.SUCCESS,
+                    )
+                    return redirect(reverse("admin:catalog_product_changelist"))
+        else:
+            form = ImportProductsForm()
+
+        context = self.admin_site.each_context(request)
+        context.update(
+            {
+                "title": "Importer des produits",
+                "form": form,
+                "opts": Product._meta,
+                "back_url": reverse("admin:catalog_product_changelist"),
+            }
+        )
+        return render(request, "admin/catalog/import_products.html", context)

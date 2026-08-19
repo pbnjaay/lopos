@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import pytest
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from apps.catalog.models import Product
@@ -250,3 +251,68 @@ def test_adjust_stock_view_requires_change_permission(client, product: Product, 
     assert response.status_code == 403
     stock = Stock.objects.get(product=product, store=store)
     assert stock.quantity == 24
+
+
+def _csv_upload(content: str) -> SimpleUploadedFile:
+    return SimpleUploadedFile(
+        "products.csv", content.encode("utf-8"), content_type="text/csv"
+    )
+
+
+def test_import_products_view_creates_products(admin_client, store: Store) -> None:
+    content = (
+        "barcode,name,purchase_price,selling_price,store,initial_stock\n"
+        f"1234567890123,Pain,100,150,{store.name},40\n"
+    )
+
+    response = admin_client.post(
+        reverse("admin:catalog_product_import_products_view"),
+        {"csv_file": _csv_upload(content)},
+        follow=True,
+    )
+
+    assert response.status_code == 200
+    product = Product.objects.get(barcode="1234567890123")
+    stock = Stock.objects.get(product=product, store=store)
+    assert stock.quantity == 40
+    assert InventoryMovement.objects.get(product=product).movement_type == (
+        InventoryMovement.Type.STOCK_IN
+    )
+
+
+def test_import_products_view_reports_errors_and_imports_nothing(admin_client) -> None:
+    content = "barcode,name,purchase_price,selling_price,store,initial_stock\n,,,,,\n"
+
+    response = admin_client.post(
+        reverse("admin:catalog_product_import_products_view"),
+        {"csv_file": _csv_upload(content)},
+    )
+
+    assert response.status_code == 200
+    assert "Ligne 2" in response.content.decode()
+    assert not Product.objects.exists()
+
+
+def test_import_products_button_visible_on_changelist(admin_client) -> None:
+    response = admin_client.get(reverse("admin:catalog_product_changelist"))
+
+    assert response.status_code == 200
+    assert "Importer des produits" in response.content.decode()
+
+
+def test_import_products_view_requires_add_permission(client, store: Store) -> None:
+    User.objects.create_user(username="cashier", password="pass1234", is_staff=True)
+    client.login(username="cashier", password="pass1234")
+
+    content = (
+        "barcode,name,purchase_price,selling_price,store,initial_stock\n"
+        f"1234567890123,Pain,100,150,{store.name},40\n"
+    )
+
+    response = client.post(
+        reverse("admin:catalog_product_import_products_view"),
+        {"csv_file": _csv_upload(content)},
+    )
+
+    assert response.status_code == 403
+    assert not Product.objects.exists()
