@@ -2,7 +2,7 @@
 
 import "@testing-library/jest-dom/vitest"
 
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -63,5 +63,76 @@ describe("MobileMoneyConfirmation", () => {
 
     await user.click(screen.getByRole("button", { name: /Changer de moyen de paiement/ }))
     expect(onBack).toHaveBeenCalledOnce()
+  })
+
+  it("confirms the payment with Enter, exactly once", () => {
+    const onConfirm = vi.fn()
+    render(
+      <MobileMoneyConfirmation
+        method="WAVE"
+        total={1_000}
+        isSubmitting={false}
+        onClose={vi.fn()}
+        onBack={vi.fn()}
+        onConfirm={onConfirm}
+      />,
+    )
+
+    fireEvent.keyDown(window, { key: "Enter" })
+    fireEvent.keyDown(window, { key: "Enter" })
+
+    expect(onConfirm).toHaveBeenCalledOnce()
+  })
+
+  it("does not confirm just from selecting the method (no Enter/click yet)", () => {
+    const onConfirm = vi.fn()
+    render(
+      <MobileMoneyConfirmation
+        method="ORANGE_MONEY"
+        total={1_000}
+        isSubmitting={false}
+        onClose={vi.fn()}
+        onBack={vi.fn()}
+        onConfirm={onConfirm}
+      />,
+    )
+
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
+  it("returns to payment methods on Escape rather than closing outright", () => {
+    const onClose = vi.fn()
+    const onBack = vi.fn()
+    render(
+      <MobileMoneyConfirmation
+        method="WAVE"
+        total={1_000}
+        isSubmitting={false}
+        onClose={onClose}
+        onBack={onBack}
+        onConfirm={vi.fn()}
+      />,
+    )
+
+    fireEvent.keyDown(window, { key: "Escape" })
+    expect(onBack).toHaveBeenCalledOnce()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it("ignores a held-down Enter key repeat", () => {
+    const onConfirm = vi.fn()
+    render(
+      <MobileMoneyConfirmation
+        method="WAVE"
+        total={1_000}
+        isSubmitting={false}
+        onClose={vi.fn()}
+        onBack={vi.fn()}
+        onConfirm={onConfirm}
+      />,
+    )
+
+    fireEvent.keyDown(window, { key: "Enter", repeat: true })
+    expect(onConfirm).not.toHaveBeenCalled()
   })
 })

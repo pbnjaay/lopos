@@ -2,7 +2,7 @@
 
 import "@testing-library/jest-dom/vitest"
 
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -57,5 +57,21 @@ describe("SaleSuccessModal", () => {
     )
 
     expect(screen.getByText(/Vente enregistrée hors ligne/)).toHaveTextContent("0F9E8D7C")
+  })
+
+  it("starts a new sale with Enter", () => {
+    const onNewSale = vi.fn()
+    render(<SaleSuccessModal sale={sale} onNewSale={onNewSale} />)
+
+    fireEvent.keyDown(window, { key: "Enter" })
+    expect(onNewSale).toHaveBeenCalledOnce()
+  })
+
+  it("ignores a held-down Enter key repeat", () => {
+    const onNewSale = vi.fn()
+    render(<SaleSuccessModal sale={sale} onNewSale={onNewSale} />)
+
+    fireEvent.keyDown(window, { key: "Enter", repeat: true })
+    expect(onNewSale).not.toHaveBeenCalled()
   })
 })

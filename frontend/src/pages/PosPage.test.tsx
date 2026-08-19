@@ -4,7 +4,7 @@ import "fake-indexeddb/auto"
 import "@testing-library/jest-dom/vitest"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -106,6 +106,30 @@ const completedSale: SaleResponse = {
       unit_price: "500.00",
       quantity: 2,
       line_total: "1000.00",
+    },
+  ],
+  created_at: "2026-08-17T00:00:00Z",
+}
+
+const completedWaveSale: SaleResponse = {
+  id: "wave-sale-id",
+  status: "COMPLETED",
+  subtotal: "500.00",
+  discount: "0.00",
+  total: "500.00",
+  payment: {
+    method: "WAVE",
+    amount: "500.00",
+    received_amount: null,
+    change_amount: null,
+  },
+  items: [
+    {
+      product_id: coca.id,
+      product_name: coca.name,
+      unit_price: "500.00",
+      quantity: 1,
+      line_total: "500.00",
     },
   ],
   created_at: "2026-08-17T00:00:00Z",
@@ -389,5 +413,134 @@ describe("POS sale workflow offline", () => {
     )
     expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveValue(1)
     expect(screen.queryByRole("heading", { name: "Vente validée" })).not.toBeInTheDocument()
+  })
+})
+
+describe("POS keyboard shortcuts", () => {
+  it("completes a cash sale with scanner + keyboard only: F1, digits, Enter", async () => {
+    const userEvents = userEvent.setup()
+    document.cookie = "csrftoken=test-token; path=/"
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      if (url.endsWith("/sales/")) return jsonResponse(completedSale, 201)
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderPos()
+    const scanner = await scanCoca(userEvents)
+    await userEvents.type(scanner, `${coca.barcode}{Enter}`)
+    await waitFor(() => expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveValue(2))
+
+    await userEvents.keyboard("{F1}")
+    await waitFor(() => expect(screen.getByLabelText("Montant reçu")).toHaveFocus())
+    await userEvents.keyboard("2000{Enter}")
+
+    expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
+    const changeRow = screen.getByText("Monnaie").parentElement!
+    expect(within(changeRow).getByText("1 000 FCFA")).toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/sales/")),
+    ).toHaveLength(1)
+
+    await userEvents.keyboard("{Enter}")
+    await waitFor(() => expect(scanner).toHaveFocus())
+    expect(screen.getByText("Panier vide")).toBeInTheDocument()
+  })
+
+  it("completes a Wave sale with scanner + keyboard only: F2, Enter", async () => {
+    const userEvents = userEvent.setup()
+    document.cookie = "csrftoken=test-token; path=/"
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      if (url.endsWith("/sales/")) return jsonResponse(completedWaveSale, 201)
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderPos()
+    const scanner = await scanCoca(userEvents)
+
+    await userEvents.keyboard("{F2}")
+    expect(await screen.findByRole("heading", { name: "Paiement Wave" })).toBeInTheDocument()
+
+    await userEvents.keyboard("{Enter}")
+    expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/sales/")),
+    ).toHaveLength(1)
+
+    await userEvents.keyboard("{Enter}")
+    await waitFor(() => expect(scanner).toHaveFocus())
+  })
+
+  it("never opens checkout or submits a sale from a barcode scan alone", async () => {
+    document.cookie = "csrftoken=test-token; path=/"
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      throw new Error(`Unexpected request during a scan-only flow: ${url}`)
+    })
+    const userEvents = userEvent.setup()
+
+    renderPos()
+    await scanCoca(userEvents)
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/sales/"))).toBe(false)
+  })
+
+  it("does not open checkout on F1 with an empty cart", async () => {
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      throw new Error(`Unexpected request: ${url}`)
+    })
+    renderPos()
+    await waitFor(() => expect(screen.getByRole("button", { name: "Encaisser" })).toBeDisabled())
+
+    fireEvent.keyDown(window, { key: "F1" })
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+
+  it("ignores a held-down F1 key repeat", async () => {
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      throw new Error(`Unexpected request: ${url}`)
+    })
+    const userEvents = userEvent.setup()
+    renderPos()
+    await scanCoca(userEvents)
+
+    fireEvent.keyDown(window, { key: "F1", repeat: true })
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+
+  it("backs out of checkout one Escape at a time, ending with scanner focus", async () => {
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      throw new Error(`Unexpected request during an Escape-only flow: ${url}`)
+    })
+    const userEvents = userEvent.setup()
+
+    renderPos()
+    const scanner = await scanCoca(userEvents)
+    await userEvents.click(screen.getByRole("button", { name: "Encaisser" }))
+    await userEvents.click(screen.getByRole("button", { name: /Espèces/ }))
+    expect(screen.getByRole("heading", { name: "Paiement en espèces" })).toBeInTheDocument()
+
+    await userEvents.keyboard("{Escape}")
+    expect(await screen.findByRole("heading", { name: "Mode de paiement" })).toBeInTheDocument()
+
+    await userEvents.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    await waitFor(() => expect(scanner).toHaveFocus())
   })
 })

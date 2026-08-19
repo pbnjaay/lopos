@@ -22,19 +22,28 @@ describe("PaymentMethodModal", () => {
     expect(onSelect).toHaveBeenCalledWith("WAVE")
   })
 
-  it("selects a method with its number shortcut", async () => {
+  it("selects a method with its function-key shortcut", async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
     render(<PaymentMethodModal total={1_000} onClose={vi.fn()} onSelect={onSelect} />)
 
-    await user.keyboard("2")
+    await user.keyboard("{F2}")
     expect(onSelect).toHaveBeenCalledWith("WAVE")
 
-    await user.keyboard("3")
+    await user.keyboard("{F3}")
     expect(onSelect).toHaveBeenCalledWith("ORANGE_MONEY")
 
-    await user.keyboard("1")
+    await user.keyboard("{F1}")
     expect(onSelect).toHaveBeenCalledWith("CASH")
+  })
+
+  it("leaves digits alone, since they belong to the cash keypad once CASH opens", async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    render(<PaymentMethodModal total={1_000} onClose={vi.fn()} onSelect={onSelect} />)
+
+    await user.keyboard("123")
+    expect(onSelect).not.toHaveBeenCalled()
   })
 
   it("highlights and focuses the last used method", () => {

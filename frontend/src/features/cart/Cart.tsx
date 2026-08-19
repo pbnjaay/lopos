@@ -109,14 +109,19 @@ export function Cart({
           <span>Total</span>
           <strong>{formatMoney(total)}</strong>
         </div>
-        <button
-          className="button button-primary checkout-button"
-          type="button"
-          disabled={items.length === 0}
-          onClick={onCheckout}
-        >
-          Encaisser
-        </button>
+        <div className="checkout-button-group">
+          <button
+            className="button button-primary checkout-button"
+            type="button"
+            disabled={items.length === 0}
+            onClick={onCheckout}
+          >
+            Encaisser
+          </button>
+          {items.length > 0 ? (
+            <p className="checkout-shortcuts-hint">F1 Espèces · F2 Wave · F3 Orange Money</p>
+          ) : null}
+        </div>
       </footer>
     </section>
   )

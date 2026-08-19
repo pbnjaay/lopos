@@ -31,6 +31,12 @@ type CheckoutPayment = {
   receivedAmount?: number
 }
 
+const checkoutFKeyToMethod: Record<string, PaymentMethod> = {
+  F1: "CASH",
+  F2: "WAVE",
+  F3: "ORANGE_MONEY",
+}
+
 export function PosPage() {
   const user = useCurrentUser().data!
   const { ownSession, selectedRegister, localSession } = usePosSession(user)
@@ -157,6 +163,27 @@ export function PosPage() {
     setCheckoutStep(null)
     focusProductSearch()
   }
+
+  // F1/F2/F3 open a payment screen directly from the POS, bypassing the
+  // method-selection modal entirely. Safe to intercept unconditionally
+  // (unlike digits or Enter) because function keys never collide with
+  // typing in the barcode/search field — a real scanner never emits them.
+  // Only active while checkout is fully closed, so it can't hijack a flow
+  // already in progress.
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.repeat) return
+      const method = checkoutFKeyToMethod[event.key]
+      if (!method) return
+      event.preventDefault()
+      if (checkoutStep !== null || completedSale !== null) return
+      if (!ownSession || cart.items.length === 0) return
+      saleMutation.reset()
+      setCheckoutStep(method)
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [checkoutStep, completedSale, ownSession, cart.items.length, saleMutation])
 
   return (
     <main className="pos-page">

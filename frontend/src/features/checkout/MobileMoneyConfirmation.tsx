@@ -32,14 +32,6 @@ export function MobileMoneyConfirmation({
   const isSlow = useSlowSubmitHint(isSubmitting)
   const label = labels[method]
 
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !isSubmitting) onClose()
-    }
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isSubmitting, onClose])
-
   async function handleConfirm() {
     if (submissionLock.current || isSubmitting) return
     submissionLock.current = true
@@ -51,6 +43,25 @@ export function MobileMoneyConfirmation({
       submissionLock.current = false
     }
   }
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.repeat || isSubmitting) return
+      if (event.key === "Escape") {
+        onBack()
+        return
+      }
+      if (event.key === "Enter") {
+        // Never auto-submit just from selecting Wave/OM (F2/F3): a mobile
+        // money sale still requires this explicit confirmation, same as a
+        // click on "Paiement reçu".
+        event.preventDefault()
+        void handleConfirm()
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isSubmitting, onBack, onConfirm])
 
   return (
     <div className="modal-backdrop">

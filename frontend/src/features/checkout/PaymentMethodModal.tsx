@@ -12,34 +12,37 @@ type PaymentMethodModalProps = {
 
 const methods: Array<{
   method: PaymentMethod
-  shortcut: "1" | "2" | "3"
+  shortcut: "F1" | "F2" | "F3"
   label: string
   description: string
 }> = [
   {
     method: "CASH",
-    shortcut: "1",
+    shortcut: "F1",
     label: "Espèces",
     description: "Saisir le montant reçu et calculer la monnaie",
   },
   {
     method: "WAVE",
-    shortcut: "2",
+    shortcut: "F2",
     label: "Wave",
     description: "Confirmer manuellement la réception du paiement",
   },
   {
     method: "ORANGE_MONEY",
-    shortcut: "3",
+    shortcut: "F3",
     label: "Orange Money",
     description: "Confirmer manuellement la réception du paiement",
   },
 ]
 
+// F1/F2/F3 rather than 1/2/3: digits must stay free for the cash amount
+// keypad once the CASH screen is open, so the payment-method shortcuts
+// can't live on the number row.
 const shortcutToMethod: Record<string, PaymentMethod> = {
-  "1": "CASH",
-  "2": "WAVE",
-  "3": "ORANGE_MONEY",
+  F1: "CASH",
+  F2: "WAVE",
+  F3: "ORANGE_MONEY",
 }
 
 export function PaymentMethodModal({
@@ -56,12 +59,16 @@ export function PaymentMethodModal({
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (event.repeat) return
       if (event.key === "Escape") {
         onClose()
         return
       }
       const method = shortcutToMethod[event.key]
-      if (method) onSelect(method)
+      if (!method) return
+      // Suppress the browser's own F1 (help) / F3 (find) behaviour.
+      event.preventDefault()
+      onSelect(method)
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)

@@ -1,3 +1,5 @@
+import { useEffect } from "react"
+
 import type { ReceiptView } from "../sales/receiptView"
 import { formatMoney } from "../../utils/money"
 
@@ -12,6 +14,15 @@ export function SaleSuccessModal({ sale, onNewSale }: SaleSuccessModalProps) {
     WAVE: "Wave",
     ORANGE_MONEY: "Orange Money",
   }[sale.payment.method]
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.repeat) return
+      if (event.key === "Enter") onNewSale()
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [onNewSale])
 
   return (
     <div className="modal-backdrop">

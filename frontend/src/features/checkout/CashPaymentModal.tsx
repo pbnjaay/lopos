@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react"
 
 import { formatMoney, parseMoneyInput } from "../../utils/money"
+import { getSuggestedCashAmounts } from "./cashSuggestions"
 import { useSlowSubmitHint } from "./useSlowSubmitHint"
 
 type CashPaymentModalProps = {
@@ -12,8 +13,6 @@ type CashPaymentModalProps = {
   onBack?: () => void
 }
 
-const FIXED_QUICK_AMOUNTS = [1_000, 2_000, 5_000, 10_000, 20_000]
-
 export function CashPaymentModal({
   total,
   onClose,
@@ -23,31 +22,64 @@ export function CashPaymentModal({
   onBack,
 }: CashPaymentModalProps) {
   const submissionLock = useRef(false)
+  const receivedInputRef = useRef<HTMLInputElement>(null)
   const isSlow = useSlowSubmitHint(isSubmitting)
   const [receivedInput, setReceivedInput] = useState("")
   const receivedAmount = parseMoneyInput(receivedInput)
   const isSufficient = receivedAmount !== null && receivedAmount >= total
   const changeAmount = isSufficient ? receivedAmount - total : 0
-  const missingAmount = receivedAmount === null ? 0 : Math.max(total - receivedAmount, 0)
+  const missingAmount = Math.max(total - (receivedAmount ?? 0), 0)
   const quickAmounts = useMemo(
     () =>
-      [...new Set([total, ...FIXED_QUICK_AMOUNTS])]
-        .filter((amount) => amount >= total)
-        .sort((left, right) => left - right),
+      [...new Set([total, ...getSuggestedCashAmounts(total)])].sort(
+        (left, right) => left - right,
+      ),
     [total],
   )
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !isSubmitting) onClose()
+      if (event.repeat || isSubmitting) return
+      if (event.key !== "Escape") return
+      // A CASH screen reached from payment-method selection backs out one
+      // step at a time; only a bare modal (no onBack) closes outright.
+      if (onBack) onBack()
+      else onClose()
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isSubmitting, onClose])
+  }, [isSubmitting, onBack, onClose])
+
+  // Keep focus on the amount field after every keypad/quick-amount tap, so
+  // a physical Enter always submits the form instead of re-activating
+  // whichever on-screen button last had focus.
+  function refocusReceivedInput() {
+    receivedInputRef.current?.focus()
+  }
 
   function handleInput(value: string) {
     if (/^[\d\s]*$/.test(value)) setReceivedInput(value)
+  }
+
+  function handleKeypadDigit(digit: string) {
+    setReceivedInput((current) => current + digit)
+    refocusReceivedInput()
+  }
+
+  function handleKeypadBackspace() {
+    setReceivedInput((current) => current.slice(0, -1))
+    refocusReceivedInput()
+  }
+
+  function handleKeypadClear() {
+    setReceivedInput("")
+    refocusReceivedInput()
+  }
+
+  function handleQuickAmount(amount: number) {
+    setReceivedInput(String(amount))
+    refocusReceivedInput()
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -113,6 +145,7 @@ export function CashPaymentModal({
             <label htmlFor="received-amount">Montant reçu</label>
             <div className="money-input payment-money-input">
               <input
+                ref={receivedInputRef}
                 id="received-amount"
                 autoFocus
                 inputMode="numeric"
@@ -125,6 +158,48 @@ export function CashPaymentModal({
             </div>
           </div>
 
+          <div className="numeric-keypad" aria-label="Pavé numérique">
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
+              <button
+                key={digit}
+                className="numeric-keypad-key"
+                type="button"
+                disabled={isSubmitting}
+                aria-label={`Chiffre ${digit}`}
+                onClick={() => handleKeypadDigit(digit)}
+              >
+                {digit}
+              </button>
+            ))}
+            <button
+              className="numeric-keypad-key numeric-keypad-clear"
+              type="button"
+              disabled={isSubmitting || receivedInput === ""}
+              aria-label="Effacer le montant"
+              onClick={handleKeypadClear}
+            >
+              C
+            </button>
+            <button
+              className="numeric-keypad-key"
+              type="button"
+              disabled={isSubmitting}
+              aria-label="Chiffre 0"
+              onClick={() => handleKeypadDigit("0")}
+            >
+              0
+            </button>
+            <button
+              className="numeric-keypad-key numeric-keypad-backspace"
+              type="button"
+              disabled={isSubmitting || receivedInput === ""}
+              aria-label="Supprimer le dernier chiffre"
+              onClick={handleKeypadBackspace}
+            >
+              ⌫
+            </button>
+          </div>
+
           <div className="quick-amounts" aria-label="Montants rapides">
             {quickAmounts.map((amount) => (
               <button
@@ -132,23 +207,22 @@ export function CashPaymentModal({
                 className="button button-secondary quick-amount"
                 type="button"
                 disabled={isSubmitting}
-                onClick={() => setReceivedInput(String(amount))}
+                onClick={() => handleQuickAmount(amount)}
               >
                 {amount === total ? "Montant exact" : formatMoney(amount)}
               </button>
             ))}
           </div>
 
-          <div className="change-preview" aria-live="polite">
-            <span>Monnaie à rendre</span>
-            <strong>{formatMoney(changeAmount)}</strong>
+          <div
+            className={isSufficient ? "change-preview" : "change-preview change-preview-pending"}
+            role={receivedAmount !== null && !isSufficient ? "alert" : undefined}
+            aria-live="polite"
+          >
+            <span>{isSufficient ? "Monnaie à rendre" : "Reste à recevoir"}</span>
+            <strong>{formatMoney(isSufficient ? changeAmount : missingAmount)}</strong>
           </div>
 
-          {receivedAmount !== null && !isSufficient ? (
-            <p className="form-error" role="alert">
-              Montant insuffisant : il manque {formatMoney(missingAmount)}.
-            </p>
-          ) : null}
           {errorMessage ? (
             <p className="form-error" role="alert">
               {errorMessage}
