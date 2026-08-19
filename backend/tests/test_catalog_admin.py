@@ -19,6 +19,18 @@ def store() -> Store:
 
 
 @pytest.fixture
+def product(store: Store) -> Product:
+    product = Product.objects.create(
+        name="Coca 50cl",
+        barcode="5449000000996",
+        selling_price=Decimal("500.00"),
+        purchase_price=Decimal("350.00"),
+    )
+    Stock.objects.create(store=store, product=product, quantity=24)
+    return product
+
+
+@pytest.fixture
 def admin_client(client) -> "django.test.Client":  # noqa: F821
     User.objects.create_superuser(username="manager", password="pass1234", email="m@example.com")
     client.login(username="manager", password="pass1234")
@@ -115,3 +127,60 @@ def test_editing_product_does_not_replay_initial_stock(admin_client, store: Stor
     stock = Stock.objects.get(product=product, store=store)
     assert stock.quantity == 24
     assert InventoryMovement.objects.filter(product=product).count() == 1
+
+
+def test_product_change_page_shows_stocks_overview(admin_client, product: Product) -> None:
+    response = admin_client.get(reverse("admin:catalog_product_change", args=[product.pk]))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "Supérette Louga" in content
+    assert "+ Ajouter du stock" in content
+
+
+def test_receive_stock_view_adds_stock(admin_client, product: Product, store: Store) -> None:
+    response = admin_client.post(
+        reverse("admin:catalog_product_receive_stock", args=[product.pk]),
+        {"store": str(store.pk), "quantity": "12"},
+        follow=True,
+    )
+
+    assert response.status_code == 200
+
+    stock = Stock.objects.get(product=product, store=store)
+    assert stock.quantity == 36
+
+    movement = InventoryMovement.objects.get(
+        product=product, store=store, movement_type=InventoryMovement.Type.STOCK_IN
+    )
+    assert movement.quantity == 12
+
+
+def test_receive_stock_view_rejects_non_positive_quantity(
+    admin_client, product: Product, store: Store
+) -> None:
+    response = admin_client.post(
+        reverse("admin:catalog_product_receive_stock", args=[product.pk]),
+        {"store": str(store.pk), "quantity": "0"},
+    )
+
+    assert response.status_code == 200
+    stock = Stock.objects.get(product=product, store=store)
+    assert stock.quantity == 24
+    assert not InventoryMovement.objects.filter(product=product).exists()
+
+
+def test_receive_stock_view_requires_change_permission(client, product: Product, store: Store) -> None:
+    User.objects.create_user(
+        username="cashier", password="pass1234", is_staff=True
+    )
+    client.login(username="cashier", password="pass1234")
+
+    response = client.post(
+        reverse("admin:catalog_product_receive_stock", args=[product.pk]),
+        {"store": str(store.pk), "quantity": "12"},
+    )
+
+    assert response.status_code == 403
+    stock = Stock.objects.get(product=product, store=store)
+    assert stock.quantity == 24
