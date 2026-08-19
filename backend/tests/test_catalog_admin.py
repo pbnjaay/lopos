@@ -1,0 +1,117 @@
+from decimal import Decimal
+from unittest.mock import patch
+
+import pytest
+from django.contrib.auth.models import User
+from django.urls import reverse
+
+from apps.catalog.models import Product
+from apps.inventory.models import InventoryMovement, Stock
+from apps.stores.models import Store
+
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture
+def store() -> Store:
+    return Store.objects.create(name="Supérette Louga")
+
+
+@pytest.fixture
+def admin_client(client) -> "django.test.Client":  # noqa: F821
+    User.objects.create_superuser(username="manager", password="pass1234", email="m@example.com")
+    client.login(username="manager", password="pass1234")
+    return client
+
+
+def _product_post_data(**overrides) -> dict:
+    data = {
+        "name": "Coca 50cl",
+        "barcode": "5449000000996",
+        "selling_price": "500.00",
+        "purchase_price": "350.00",
+        "is_active": "on",
+        "initial_store": "",
+        "initial_quantity": "0",
+    }
+    data.update(overrides)
+    return data
+
+
+def test_create_product_without_initial_stock_creates_no_movement(admin_client) -> None:
+    response = admin_client.post(
+        reverse("admin:catalog_product_add"),
+        _product_post_data(),
+        follow=True,
+    )
+
+    assert response.status_code == 200
+    product = Product.objects.get(barcode="5449000000996")
+    assert not Stock.objects.filter(product=product).exists()
+    assert not InventoryMovement.objects.filter(product=product).exists()
+
+
+def test_create_product_with_initial_stock(admin_client, store: Store) -> None:
+    response = admin_client.post(
+        reverse("admin:catalog_product_add"),
+        _product_post_data(initial_store=str(store.pk), initial_quantity="24"),
+        follow=True,
+    )
+
+    assert response.status_code == 200
+    product = Product.objects.get(barcode="5449000000996")
+
+    stock = Stock.objects.get(product=product, store=store)
+    assert stock.quantity == 24
+
+    movement = InventoryMovement.objects.get(product=product, store=store)
+    assert movement.movement_type == InventoryMovement.Type.STOCK_IN
+    assert movement.quantity == 24
+
+
+def test_create_product_with_quantity_but_no_store_is_rejected(admin_client) -> None:
+    response = admin_client.post(
+        reverse("admin:catalog_product_add"),
+        _product_post_data(initial_quantity="24"),
+    )
+
+    assert response.status_code == 200
+    assert "Sélectionnez un magasin" in response.content.decode()
+    assert not Product.objects.filter(barcode="5449000000996").exists()
+
+
+def test_create_product_rolls_back_when_receive_stock_fails(admin_client, store: Store) -> None:
+    with patch("apps.catalog.admin.receive_stock", side_effect=RuntimeError("boom")):
+        with pytest.raises(RuntimeError):
+            admin_client.post(
+                reverse("admin:catalog_product_add"),
+                _product_post_data(initial_store=str(store.pk), initial_quantity="24"),
+            )
+
+    assert not Product.objects.filter(barcode="5449000000996").exists()
+    assert not Stock.objects.exists()
+    assert not InventoryMovement.objects.exists()
+
+
+def test_editing_product_does_not_replay_initial_stock(admin_client, store: Store) -> None:
+    admin_client.post(
+        reverse("admin:catalog_product_add"),
+        _product_post_data(initial_store=str(store.pk), initial_quantity="24"),
+    )
+    product = Product.objects.get(barcode="5449000000996")
+    assert Stock.objects.get(product=product, store=store).quantity == 24
+
+    response = admin_client.post(
+        reverse("admin:catalog_product_change", args=[product.pk]),
+        _product_post_data(selling_price="550.00"),
+        follow=True,
+    )
+
+    assert response.status_code == 200
+    product.refresh_from_db()
+    assert product.selling_price == Decimal("550.00")
+
+    stock = Stock.objects.get(product=product, store=store)
+    assert stock.quantity == 24
+    assert InventoryMovement.objects.filter(product=product).count() == 1
