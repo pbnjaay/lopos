@@ -1115,7 +1115,34 @@ h1 {
 }
 
 .payment-method-card strong {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 1.1rem;
+}
+
+.payment-method-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex-shrink: 0;
+  border-radius: 0.4rem;
+  background: rgba(31, 157, 99, 0.15);
+  color: #12563f;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.payment-method-last-used {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #dff5e9;
+  color: #12563f;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .payment-method-copy {

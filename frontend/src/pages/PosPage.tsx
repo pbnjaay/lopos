@@ -14,6 +14,7 @@ import { usePosSession } from "../features/cash-session/queries"
 import { CashPaymentModal } from "../features/checkout/CashPaymentModal"
 import { MobileMoneyConfirmation } from "../features/checkout/MobileMoneyConfirmation"
 import { PaymentMethodModal } from "../features/checkout/PaymentMethodModal"
+import { getLastPaymentMethod, storeLastPaymentMethod } from "../features/checkout/paymentMethodStorage"
 import { SaleSuccessModal } from "../features/checkout/SaleSuccessModal"
 import { OfflineBanner } from "../features/offline/OfflineBanner"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
@@ -39,6 +40,9 @@ export function PosPage() {
   const cart = useCart(ownSession?.id ?? null)
   const [checkoutStep, setCheckoutStep] = useState<"METHODS" | PaymentMethod | null>(null)
   const [completedSale, setCompletedSale] = useState<ReceiptView | null>(null)
+  const [lastPaymentMethod, setLastPaymentMethod] = useState<PaymentMethod | null>(
+    getLastPaymentMethod,
+  )
   useProductCatalogCache(selectedRegister?.store_id ?? null)
   const storeQuery = useQuery({
     queryKey: ["stores", selectedRegister?.store_id],
@@ -102,6 +106,8 @@ export function PosPage() {
       cart.clearCart()
       setCheckoutStep(null)
       setCompletedSale(sale)
+      storeLastPaymentMethod(sale.payment.method)
+      setLastPaymentMethod(sale.payment.method)
       void queryClient.invalidateQueries({ queryKey: ["products"] })
       void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })
       if (sale.isPendingSync) void triggerSync()
@@ -216,6 +222,7 @@ export function PosPage() {
       {checkoutStep === "METHODS" ? (
         <PaymentMethodModal
           total={cart.total}
+          lastUsedMethod={lastPaymentMethod}
           onClose={closeCheckout}
           onSelect={(method) => {
             saleMutation.reset()

@@ -21,4 +21,35 @@ describe("PaymentMethodModal", () => {
     await user.click(screen.getByRole("button", { name: /Wave/ }))
     expect(onSelect).toHaveBeenCalledWith("WAVE")
   })
+
+  it("selects a method with its number shortcut", async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    render(<PaymentMethodModal total={1_000} onClose={vi.fn()} onSelect={onSelect} />)
+
+    await user.keyboard("2")
+    expect(onSelect).toHaveBeenCalledWith("WAVE")
+
+    await user.keyboard("3")
+    expect(onSelect).toHaveBeenCalledWith("ORANGE_MONEY")
+
+    await user.keyboard("1")
+    expect(onSelect).toHaveBeenCalledWith("CASH")
+  })
+
+  it("highlights and focuses the last used method", () => {
+    const onSelect = vi.fn()
+    render(
+      <PaymentMethodModal
+        total={1_000}
+        lastUsedMethod="WAVE"
+        onClose={vi.fn()}
+        onSelect={onSelect}
+      />,
+    )
+
+    const waveButton = screen.getByRole("button", { name: /Wave/ })
+    expect(waveButton).toHaveTextContent("Dernier utilisé")
+    expect(waveButton).toHaveFocus()
+  })
 })
