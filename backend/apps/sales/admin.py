@@ -1,5 +1,12 @@
+from django.conf import settings
 from django.contrib import admin
+from django.db.models import QuerySet
+from django.http import HttpRequest
+from django.utils.html import format_html
+from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin, TabularInline
+
+from apps.dashboard.formatting import format_fcfa
 
 from .models import Payment, Sale, SaleItem
 
@@ -47,16 +54,84 @@ class PaymentInline(ReadOnlyTabularInline):
 @admin.register(Sale)
 class SaleAdmin(ReadOnlySalesAdmin):
     list_display = (
-        "created_at",
+        "occurred_at",
         "id",
         "cash_session",
         "cashier",
-        "total",
+        "total_display",
+        "payment_method",
         "status",
     )
-    list_filter = ("status", "cash_session__cash_register__store")
+    list_filter = (
+        "status",
+        "cash_session__cash_register__store",
+        "cash_session__cash_register",
+        "cashier",
+        "payment__method",
+    )
+    date_hierarchy = "occurred_at"
     search_fields = ("id", "cashier__username")
+    readonly_fields = (
+        "id",
+        "cash_session",
+        "cashier",
+        "subtotal",
+        "discount",
+        "total",
+        "status",
+        "occurred_at",
+        "created_at",
+        "ticket_link",
+    )
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    "id",
+                    "cash_session",
+                    "cashier",
+                    "subtotal",
+                    "discount",
+                    "total",
+                    "status",
+                    "occurred_at",
+                    "created_at",
+                    "ticket_link",
+                )
+            },
+        ),
+    )
     inlines = (SaleItemInline, PaymentInline)
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Sale]:
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("cash_session__cash_register", "cashier", "payment")
+        )
+
+    @admin.display(description=_("total"), ordering="total")
+    def total_display(self, obj: Sale) -> str:
+        return format_fcfa(obj.total)
+
+    @admin.display(description=_("paiement"))
+    def payment_method(self, obj: Sale) -> str:
+        payment = getattr(obj, "payment", None)
+        return payment.get_method_display() if payment else "—"
+
+    @admin.display(description=_("ticket"))
+    def ticket_link(self, obj: Sale) -> str:
+        if not obj.pk:
+            return "—"
+        url = f"{settings.FRONTEND_URL}/sales/{obj.pk}/receipt"
+        return format_html(
+            '<a href="{}" target="_blank" rel="noopener" '
+            'class="rounded-default bg-primary-600 text-white px-3 py-2 text-sm inline-block">'
+            "{}</a>",
+            url,
+            _("Voir / imprimer le ticket"),
+        )
 
 
 @admin.register(SaleItem)

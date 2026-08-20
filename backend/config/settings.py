@@ -36,6 +36,8 @@ INSTALLED_APPS = [
 
 LOW_STOCK_THRESHOLD_DEFAULT = 5
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+
 UNFOLD = {
     "SITE_TITLE": "LoPOS Admin",
     "SITE_HEADER": "LoPOS",
