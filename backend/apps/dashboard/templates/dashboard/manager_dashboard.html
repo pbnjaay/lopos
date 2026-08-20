@@ -2,43 +2,77 @@
 
 <div class="flex flex-col gap-6">
 
+    {# --- Filters + primary actions ---------------------------------- #}
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <form method="get" class="flex flex-wrap items-center gap-2">
+            <select name="period" onchange="this.form.submit()"
+                    class="text-sm rounded-default border border-base-200 dark:border-base-800 bg-white dark:bg-base-900 text-base-700 dark:text-base-300 py-2 px-3">
+                {% for value, label in dashboard_period_choices %}
+                    <option value="{{ value }}" {% if value == dashboard.period %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+
+            {% if dashboard_stores|length > 1 %}
+                <select name="store" onchange="this.form.submit()"
+                        class="text-sm rounded-default border border-base-200 dark:border-base-800 bg-white dark:bg-base-900 text-base-700 dark:text-base-300 py-2 px-3">
+                    <option value="">{% translate "Tous les magasins" %}</option>
+                    {% for store in dashboard_stores %}
+                        <option value="{{ store.pk }}" {% if store.pk|stringformat:"s" == dashboard.store_id %}selected{% endif %}>{{ store.name }}</option>
+                    {% endfor %}
+                </select>
+            {% endif %}
+        </form>
+
+        <div class="flex flex-wrap gap-2">
+            <a href="{% url 'admin:catalog_product_add' %}" class="text-sm px-3 py-2 rounded-default bg-primary-600 text-white hover:bg-primary-700">{% translate "+ Nouveau produit" %}</a>
+            <a href="{% url 'admin:catalog_product_changelist' %}" class="text-sm px-3 py-2 rounded-default border border-base-200 dark:border-base-800 text-base-700 dark:text-base-300 hover:bg-base-50 dark:hover:bg-base-800">{% translate "Ajouter du stock" %}</a>
+        </div>
+    </div>
+
     {# --- KPI row --------------------------------------------------- #}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
-            <div class="text-xs font-medium uppercase text-base-400 dark:text-base-500">{% translate "CA aujourd'hui" %}</div>
-            <div class="text-2xl font-semibold text-base-900 dark:text-base-100 mt-1">{{ dashboard.gross_sales_today|fcfa }}</div>
-        </div>
-        <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
+        <a href="{{ dashboard.sales_url }}" class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4 hover:border-base-300 dark:hover:border-base-700 transition-colors">
+            <div class="text-xs font-medium uppercase text-base-400 dark:text-base-500">{% translate "CA" %}</div>
+            <div class="text-2xl font-semibold text-base-900 dark:text-base-100 mt-1">{{ dashboard.gross_sales|fcfa }}</div>
+        </a>
+        <a href="{{ dashboard.sales_url }}" class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4 hover:border-base-300 dark:hover:border-base-700 transition-colors">
             <div class="text-xs font-medium uppercase text-base-400 dark:text-base-500">{% translate "Ventes" %}</div>
-            <div class="text-2xl font-semibold text-base-900 dark:text-base-100 mt-1">{{ dashboard.sales_count_today }}</div>
-        </div>
+            <div class="text-2xl font-semibold text-base-900 dark:text-base-100 mt-1">{{ dashboard.sales_count }}</div>
+        </a>
         <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
             <div class="text-xs font-medium uppercase text-base-400 dark:text-base-500">{% translate "Panier moyen" %}</div>
             <div class="text-2xl font-semibold text-base-900 dark:text-base-100 mt-1">{{ dashboard.average_basket|fcfa }}</div>
         </div>
-        <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
+        <a href="{{ dashboard.open_sessions_url }}" class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4 hover:border-base-300 dark:hover:border-base-700 transition-colors">
             <div class="text-xs font-medium uppercase text-base-400 dark:text-base-500">{% translate "Sessions ouvertes" %}</div>
             <div class="text-2xl font-semibold text-base-900 dark:text-base-100 mt-1">{{ dashboard.open_sessions|length }}</div>
-        </div>
+            {% if dashboard.open_sessions %}
+                <div class="flex flex-col gap-0.5 mt-2 text-xs text-base-500 dark:text-base-400">
+                    {% for session in dashboard.open_sessions|slice:":3" %}
+                        <div>{{ session.cash_register }} — {{ session.cashier.username }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </a>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {# --- Payments ------------------------------------------------ #}
         <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
-            <h2 class="font-semibold text-[15px] text-base-900 dark:text-base-100 mb-3">{% translate "Paiements aujourd'hui" %}</h2>
+            <h2 class="font-semibold text-[15px] text-base-900 dark:text-base-100 mb-3">{% translate "Paiements" %}</h2>
             <div class="flex flex-col gap-2 text-sm">
                 <div class="flex justify-between border-b border-base-100 dark:border-base-800 pb-2">
                     <span class="text-base-500 dark:text-base-400">{% translate "Espèces" %}</span>
-                    <span class="font-medium text-base-900 dark:text-base-100">{{ dashboard.payment_totals.cash|fcfa }}</span>
+                    <span class="font-medium text-base-900 dark:text-base-100">{{ dashboard.payment_totals.cash|fcfa }} <span class="text-base-400 dark:text-base-500 font-normal">({{ dashboard.payment_percentages.cash }} %)</span></span>
                 </div>
                 <div class="flex justify-between border-b border-base-100 dark:border-base-800 pb-2">
                     <span class="text-base-500 dark:text-base-400">{% translate "Wave" %}</span>
-                    <span class="font-medium text-base-900 dark:text-base-100">{{ dashboard.payment_totals.wave|fcfa }}</span>
+                    <span class="font-medium text-base-900 dark:text-base-100">{{ dashboard.payment_totals.wave|fcfa }} <span class="text-base-400 dark:text-base-500 font-normal">({{ dashboard.payment_percentages.wave }} %)</span></span>
                 </div>
                 <div class="flex justify-between">
                     <span class="text-base-500 dark:text-base-400">{% translate "Orange Money" %}</span>
-                    <span class="font-medium text-base-900 dark:text-base-100">{{ dashboard.payment_totals.orange_money|fcfa }}</span>
+                    <span class="font-medium text-base-900 dark:text-base-100">{{ dashboard.payment_totals.orange_money|fcfa }} <span class="text-base-400 dark:text-base-500 font-normal">({{ dashboard.payment_percentages.orange_money }} %)</span></span>
                 </div>
             </div>
         </div>
@@ -47,28 +81,22 @@
         <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
             <h2 class="font-semibold text-[15px] text-base-900 dark:text-base-100 mb-3">{% translate "À surveiller" %}</h2>
             <div class="flex flex-col gap-2 text-sm">
-                {% if dashboard.low_stock_count %}
-                    <a href="{% url 'admin:inventory_stock_changelist' %}" class="flex items-center gap-2 text-amber-600 dark:text-amber-400 hover:underline">
-                        <span class="material-symbols-outlined text-base">warning</span>
-                        {% blocktranslate count counter=dashboard.low_stock_count %}{{ counter }} produit en stock faible{% plural %}{{ counter }} produits en stock faible{% endblocktranslate %}
+                {% for alert in dashboard.alerts %}
+                    <a href="{{ alert.url }}" class="flex items-center gap-2 hover:underline
+                        {% if alert.severity == 'critical' %}text-red-600 dark:text-red-400
+                        {% elif alert.severity == 'warning' %}text-amber-600 dark:text-amber-400
+                        {% else %}text-base-500 dark:text-base-400{% endif %}">
+                        <span class="material-symbols-outlined text-base">
+                            {% if alert.severity == 'critical' %}error{% elif alert.severity == 'warning' %}warning{% else %}info{% endif %}
+                        </span>
+                        {{ alert.text }}
                     </a>
-                {% endif %}
-
-                {% for session in dashboard.cash_discrepancies %}
-                    <a href="{% url 'admin:cash_cashsession_change' session.pk %}" class="flex items-center gap-2 text-amber-600 dark:text-amber-400 hover:underline">
-                        <span class="material-symbols-outlined text-base">warning</span>
-                        {{ session.cash_register }} —
-                        {% if session.difference > 0 %}
-                            {% translate "surplus" %} {{ session.difference|fcfa }}
-                        {% else %}
-                            {% translate "manque" %} {{ session.difference|fcfa }}
-                        {% endif %}
-                    </a>
+                {% empty %}
+                    <span class="flex items-center gap-2 text-green-600 dark:text-green-400">
+                        <span class="material-symbols-outlined text-base">check_circle</span>
+                        {% translate "Rien à signaler" %}
+                    </span>
                 {% endfor %}
-
-                {% if not dashboard.low_stock_count and not dashboard.cash_discrepancies %}
-                    <span class="text-base-400 dark:text-base-500">{% translate "Rien à signaler." %}</span>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -77,18 +105,21 @@
 
         {# --- Top products ------------------------------------------ #}
         <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
-            <h2 class="font-semibold text-[15px] text-base-900 dark:text-base-100 mb-3">{% translate "Top produits aujourd'hui" %}</h2>
+            <h2 class="font-semibold text-[15px] text-base-900 dark:text-base-100 mb-3">{% translate "Top produits" %}</h2>
             {% if dashboard.top_products %}
-                <ol class="flex flex-col gap-2 text-sm list-decimal list-inside">
+                <div class="flex flex-col gap-2 text-sm">
                     {% for product in dashboard.top_products %}
-                        <li class="flex justify-between text-base-700 dark:text-base-300">
-                            <span>{{ product.name }}</span>
-                            <span class="font-medium text-base-900 dark:text-base-100">{{ product.quantity }} {% translate "vendus" %}</span>
-                        </li>
+                        <a href="{{ product.url }}" class="flex items-center gap-2 text-base-700 dark:text-base-300 hover:underline">
+                            <span class="text-base-400 dark:text-base-500 w-4 shrink-0 text-right">{{ forloop.counter }}.</span>
+                            <span class="grow truncate">{{ product.name }}</span>
+                            <span class="font-medium text-base-900 dark:text-base-100 shrink-0">
+                                {% if product.quantity == 1 %}{% translate "1 unité" %}{% else %}{{ product.quantity }} {% translate "unités" %}{% endif %}
+                            </span>
+                        </a>
                     {% endfor %}
-                </ol>
+                </div>
             {% else %}
-                <span class="text-sm text-base-400 dark:text-base-500">{% translate "Aucune vente aujourd'hui." %}</span>
+                <span class="text-sm text-base-400 dark:text-base-500">{% translate "Aucune vente sur la période." %}</span>
             {% endif %}
         </div>
 
@@ -96,13 +127,16 @@
         <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
             <div class="flex items-center justify-between mb-3">
                 <h2 class="font-semibold text-[15px] text-base-900 dark:text-base-100">{% translate "Dernières ventes" %}</h2>
-                <a href="{% url 'admin:sales_sale_changelist' %}" class="text-xs text-primary-600 dark:text-primary-400 hover:underline">{% translate "Voir toutes les ventes" %}</a>
+                <a href="{{ dashboard.sales_url }}" class="text-xs text-primary-600 dark:text-primary-400 hover:underline">{% translate "Voir toutes les ventes" %}</a>
             </div>
             {% if dashboard.recent_sales %}
                 <div class="flex flex-col gap-2 text-sm">
                     {% for sale in dashboard.recent_sales %}
                         <a href="{% url 'admin:sales_sale_change' sale.pk %}" class="flex justify-between text-base-700 dark:text-base-300 hover:underline">
-                            <span>{{ sale.occurred_at|date:"H:i" }} — {{ sale.cash_session.cash_register }}</span>
+                            <span>
+                                {{ sale.occurred_at|date:"H:i" }} — {{ sale.cash_session.cash_register }}
+                                {% if not dashboard.store_id and dashboard_stores|length > 1 %}({{ sale.cash_session.cash_register.store }}){% endif %}
+                            </span>
                             <span class="font-medium text-base-900 dark:text-base-100">
                                 {{ sale.total|fcfa }}
                                 {% if sale.payment %}({{ sale.payment.get_method_display }}){% endif %}
@@ -111,17 +145,8 @@
                     {% endfor %}
                 </div>
             {% else %}
-                <span class="text-sm text-base-400 dark:text-base-500">{% translate "Aucune vente aujourd'hui." %}</span>
+                <span class="text-sm text-base-400 dark:text-base-500">{% translate "Aucune vente sur la période." %}</span>
             {% endif %}
         </div>
-    </div>
-
-    {# --- Quick actions --------------------------------------------- #}
-    <div class="flex flex-wrap gap-2">
-        <a href="{% url 'admin:catalog_product_add' %}" class="text-sm px-3 py-2 rounded-default bg-primary-600 text-white hover:bg-primary-700">{% translate "+ Nouveau produit" %}</a>
-        <a href="{% url 'admin:catalog_product_changelist' %}" class="text-sm px-3 py-2 rounded-default border border-base-200 dark:border-base-800 text-base-700 dark:text-base-300 hover:bg-base-50 dark:hover:bg-base-800">{% translate "Ajouter du stock" %}</a>
-        <a href="{% url 'admin:sales_sale_changelist' %}" class="text-sm px-3 py-2 rounded-default border border-base-200 dark:border-base-800 text-base-700 dark:text-base-300 hover:bg-base-50 dark:hover:bg-base-800">{% translate "Voir ventes du jour" %}</a>
-        <a href="{% url 'admin:inventory_stock_changelist' %}" class="text-sm px-3 py-2 rounded-default border border-base-200 dark:border-base-800 text-base-700 dark:text-base-300 hover:bg-base-50 dark:hover:bg-base-800">{% translate "Voir stock faible" %}</a>
-        <a href="{% url 'admin:cash_cashsession_changelist' %}?status__exact=OPEN" class="text-sm px-3 py-2 rounded-default border border-base-200 dark:border-base-800 text-base-700 dark:text-base-300 hover:bg-base-50 dark:hover:bg-base-800">{% translate "Voir sessions ouvertes" %}</a>
     </div>
 </div>

@@ -1,4 +1,5 @@
 import os
+from decimal import Decimal
 from pathlib import Path
 
 from django.urls import reverse_lazy
@@ -35,6 +36,13 @@ INSTALLED_APPS = [
 ]
 
 LOW_STOCK_THRESHOLD_DEFAULT = 5
+
+# Seuils temporaires pour classer les écarts de caisse dans le dashboard gérant.
+# En dessous de NOTABLE : différence considérée normale (arrondis, erreurs de rendu de monnaie).
+# Au-dessus de CRITICAL : alerte prioritaire. À ajuster une fois qu'un pilote réel
+# donne une idée de ce qui est un écart "normal" pour ce type de commerce.
+CASH_DISCREPANCY_NOTABLE_THRESHOLD = Decimal("1000")
+CASH_DISCREPANCY_CRITICAL_THRESHOLD = Decimal("5000")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 

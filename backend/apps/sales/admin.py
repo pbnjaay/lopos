@@ -7,8 +7,23 @@ from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin, TabularInline
 
 from apps.dashboard.formatting import format_fcfa
+from apps.dashboard.period import PERIOD_CHOICES, resolve_period_range
 
 from .models import Payment, Sale, SaleItem
+
+
+class SalePeriodFilter(admin.SimpleListFilter):
+    title = _("période")
+    parameter_name = "period"
+
+    def lookups(self, request, model_admin):
+        return PERIOD_CHOICES
+
+    def queryset(self, request, queryset):
+        if self.value() not in dict(PERIOD_CHOICES):
+            return queryset
+        start, end = resolve_period_range(self.value())
+        return queryset.filter(occurred_at__gte=start, occurred_at__lt=end)
 
 
 class ReadOnlySalesAdmin(ModelAdmin):
@@ -63,6 +78,7 @@ class SaleAdmin(ReadOnlySalesAdmin):
         "status",
     )
     list_filter = (
+        SalePeriodFilter,
         "status",
         "cash_session__cash_register__store",
         "cash_session__cash_register",

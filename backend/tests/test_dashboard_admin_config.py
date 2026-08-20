@@ -65,5 +65,6 @@ def test_admin_index_renders_manager_dashboard(client, django_user_model) -> Non
 
     assert response.status_code == 200
     content = response.content.decode()
-    assert "CA aujourd" in content
     assert "Panier moyen" in content
+    assert "Rien à signaler" in content
+    assert "Toutes les applications" not in content
