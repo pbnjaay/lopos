@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Outlet, useNavigate } from "react-router-dom"
 
 import { logout } from "../../api/auth"
+import { resetAnalytics } from "../../analytics/posthog"
+import { clearSentryUser } from "../../analytics/sentry"
 import type { CurrentUser } from "../../types/api"
 
 type AppLayoutProps = {
@@ -15,6 +17,8 @@ export function AppLayout({ user }: AppLayoutProps) {
     mutationFn: logout,
     onSuccess: () => {
       queryClient.clear()
+      resetAnalytics()
+      clearSentryUser()
       navigate("/login", { replace: true })
     },
   })

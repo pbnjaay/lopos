@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom"
 
 import { getCurrentCashSession } from "../api/cashRegisters"
 import { openCashSession } from "../api/cashSessions"
+import { trackCashSessionOpened } from "../analytics/events"
 import { saveLocalCashSession } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
 import { storeCashRegisterId, usePosSession } from "../features/cash-session/queries"
@@ -46,6 +47,11 @@ export function OpenCashSessionPage() {
         ["cash-registers", session.cash_register_id, "current-session"],
         session,
       )
+      trackCashSessionOpened({
+        cash_session_id: session.id,
+        store_id: openedRegister?.store_id ?? null,
+        cash_register_id: session.cash_register_id,
+      })
       navigate("/pos", { replace: true })
     },
     onError: () => {

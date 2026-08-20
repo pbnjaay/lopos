@@ -5,6 +5,12 @@ import { Link } from "react-router-dom"
 import { completeSale } from "../api/sales"
 import { getStore } from "../api/stores"
 import { ApiError, isApiUnavailable } from "../api/client"
+import {
+  trackCheckoutOpened,
+  trackPaymentMethodSelected,
+  trackSaleCompleted,
+  trackSaleFailed,
+} from "../analytics/events"
 import { InsufficientLocalStockError, createLocalSale } from "../db/sales"
 import { updateLocalCashSessionStoreName } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
@@ -117,8 +123,18 @@ export function PosPage() {
       void queryClient.invalidateQueries({ queryKey: ["products"] })
       void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })
       if (sale.isPendingSync) void triggerSync()
+      trackSaleCompleted({
+        sale_id: sale.id,
+        store_id: selectedRegister?.store_id ?? null,
+        cash_register_id: selectedRegister?.id ?? null,
+        cash_session_id: ownSession?.id ?? null,
+        payment_method: sale.payment.method,
+        items_count: sale.items.length,
+        total_amount: sale.total,
+        offline: sale.isPendingSync,
+      })
     },
-    onError: (error) => {
+    onError: (error, payment) => {
       if (
         (error instanceof ApiError &&
           ["INSUFFICIENT_STOCK", "PRODUCT_INACTIVE", "PRODUCT_NOT_FOUND"].includes(
@@ -133,6 +149,16 @@ export function PosPage() {
           queryKey: ["cash-registers", selectedRegister?.id, "current-session"],
         })
       }
+      trackSaleFailed({
+        error_code:
+          error instanceof ApiError
+            ? error.code ?? "UNKNOWN"
+            : error instanceof InsufficientLocalStockError
+              ? "INSUFFICIENT_STOCK"
+              : "NETWORK_ERROR",
+        payment_method: payment.method,
+        offline: !isOnline,
+      })
     },
   })
 
@@ -180,10 +206,12 @@ export function PosPage() {
       if (!ownSession || cart.items.length === 0) return
       saleMutation.reset()
       setCheckoutStep(method)
+      trackCheckoutOpened({ cart_items_count: cart.items.length, cart_total: cart.total })
+      trackPaymentMethodSelected({ method })
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [checkoutStep, completedSale, ownSession, cart.items.length, saleMutation])
+  }, [checkoutStep, completedSale, ownSession, cart.items.length, cart.total, saleMutation])
 
   return (
     <main className="pos-page">
@@ -238,6 +266,10 @@ export function PosPage() {
             onCheckout={() => {
               saleMutation.reset()
               setCheckoutStep("METHODS")
+              trackCheckoutOpened({
+                cart_items_count: cart.items.length,
+                cart_total: cart.total,
+              })
             }}
           />
         </div>
@@ -254,6 +286,7 @@ export function PosPage() {
           onSelect={(method) => {
             saleMutation.reset()
             setCheckoutStep(method)
+            trackPaymentMethodSelected({ method })
           }}
         />
       ) : null}

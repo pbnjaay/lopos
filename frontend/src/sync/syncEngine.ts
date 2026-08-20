@@ -1,6 +1,13 @@
 import { isApiUnavailable } from "../api/client"
 import { pushSyncEvents, type SyncEvent, type SyncResult } from "../api/sync"
 import {
+  trackSyncCompleted,
+  trackSyncConflict,
+  trackSyncFailed,
+  trackSyncStarted,
+} from "../analytics/events"
+import { Sentry } from "../analytics/sentry"
+import {
   listPendingLocalSales,
   markLocalSaleConflict,
   markLocalSaleSynced,
@@ -107,9 +114,12 @@ async function runSync(): Promise<SyncOutcome> {
   }
 
   const terminalId = await getOrCreateTerminalId()
+  const startedAt = Date.now()
+  trackSyncStarted({ pending_count: pending.length })
   let attempted = 0
   let synced = 0
   let conflicts = 0
+  let networkFailure = false
 
   for (const batch of chunk(pending, BATCH_SIZE)) {
     try {
@@ -119,12 +129,30 @@ async function runSync(): Promise<SyncOutcome> {
       conflicts += outcome.conflicts
       consecutiveFailures = 0
     } catch (error) {
-      if (!isApiUnavailable(error)) throw error
+      if (!isApiUnavailable(error)) {
+        Sentry.captureException(error, { tags: { sync_event_id: terminalId } })
+        throw error
+      }
       // Network/5xx failure: the remaining batches stay PENDING_SYNC and are retried with backoff.
       consecutiveFailures += 1
+      networkFailure = true
+      // Only report once the backoff has maxed out — a single isolated retry is normal, not a failure.
+      if (consecutiveFailures >= BACKOFF_STEPS_MS.length) {
+        trackSyncFailed({ pending_count: pending.length - attempted })
+      }
       scheduleRetry()
       break
     }
+  }
+
+  if (conflicts > 0) trackSyncConflict({ conflict_count: conflicts })
+  if (!networkFailure) {
+    trackSyncCompleted({
+      pending_count: pending.length,
+      processed_count: synced,
+      conflict_count: conflicts,
+      duration_ms: Date.now() - startedAt,
+    })
   }
 
   return { attempted, synced, conflicts }

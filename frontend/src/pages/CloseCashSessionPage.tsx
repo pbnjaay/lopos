@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useNavigate } from "react-router-dom"
 
 import { closeCashSession, getCashSessionSummary } from "../api/cashSessions"
+import { trackCashSessionClosed } from "../analytics/events"
 import { RouteState } from "../components/ui/RouteState"
 import { countPendingLocalSalesForSession } from "../db/sales"
 import { markLocalCashSessionClosed } from "../db/sessions"
@@ -65,6 +66,17 @@ export function CloseCashSessionPage() {
         ["cash-sessions", closedSummary.id, "summary"],
         closedSummary,
       )
+      trackCashSessionClosed({
+        cash_session_id: closedSummary.id,
+        store_id: null,
+        cash_register_id: closedSummary.cash_register.id,
+        sales_count: closedSummary.sales_count,
+        gross_sales: Math.round(Number(closedSummary.gross_sales)),
+        cash_difference:
+          closedSummary.cash_difference !== null
+            ? Math.round(Number(closedSummary.cash_difference))
+            : null,
+      })
     },
   })
 

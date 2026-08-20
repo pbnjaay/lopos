@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Navigate, useLocation, useNavigate } from "react-router-dom"
 
 import { login } from "../api/auth"
+import { identifyUser } from "../analytics/posthog"
+import { setSentryUser } from "../analytics/sentry"
 import { RouteState } from "../components/ui/RouteState"
 import { currentUserQueryKey, useCurrentUser } from "../features/auth/queries"
 
@@ -21,6 +23,8 @@ export function LoginPage() {
     mutationFn: login,
     onSuccess: (user) => {
       queryClient.setQueryData(currentUserQueryKey, user)
+      identifyUser(user)
+      setSentryUser(user)
       const requestedPath = (location.state as LocationState | null)?.from
       navigate(requestedPath || "/", { replace: true })
     },
@@ -79,6 +83,18 @@ export function LoginPage() {
             {loginMutation.isPending ? "Connexion…" : "Se connecter"}
           </button>
         </form>
+
+        {import.meta.env.DEV ? (
+          <button
+            className="button button-secondary button-small"
+            type="button"
+            onClick={() => {
+              throw new Error("Sentry test error — dev-only button")
+            }}
+          >
+            Test Sentry (dev)
+          </button>
+        ) : null}
       </section>
     </main>
   )
