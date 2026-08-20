@@ -7,6 +7,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
+from apps.observability.sentry_context import tag_cash_session_scope
 from apps.stores.models import CashRegister
 
 from .exceptions import (
@@ -172,6 +173,11 @@ def close_cash_session(
 
     if locked_session.status != CashSession.Status.OPEN:
         raise CashSessionAlreadyClosed("Cette session de caisse est déjà clôturée.")
+
+    tag_cash_session_scope(
+        cash_session_id=locked_session.id,
+        store_id=locked_session.cash_register.store_id,
+    )
 
     _, _, cash_sales, _, _ = _aggregate_totals(locked_session)
     expected_cash = locked_session.opening_balance + cash_sales

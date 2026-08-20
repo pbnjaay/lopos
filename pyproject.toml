@@ -8,7 +8,9 @@ dependencies = [
     "Django>=5.2,<5.3",
     "django-unfold>=0.102,<0.103",
     "djangorestframework>=3.16,<3.17",
+    "posthog>=7.39.2",
     "psycopg[binary]>=3.2,<4",
+    "sentry-sdk[django]>=2.68.0",
 ]
 
 [dependency-groups]

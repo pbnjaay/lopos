@@ -16,6 +16,7 @@ from unfold.widgets import (
 from apps.inventory.exceptions import InvalidStockQuantity
 from apps.inventory.models import Stock
 from apps.inventory.services import adjust_stock, receive_stock
+from apps.observability import posthog_client
 from apps.stores.models import Store
 
 from .models import Product
@@ -164,7 +165,21 @@ class ProductAdmin(ModelAdmin):
             if quantity > 0:
                 receive_stock(store=store, product=obj, quantity=quantity)
 
+        posthog_client.capture(
+            str(request.user.pk),
+            "product_created",
+            {"product_id": str(obj.pk), "store_id": str(store.pk) if store else None},
+        )
         if quantity > 0:
+            posthog_client.capture(
+                str(request.user.pk),
+                "stock_received",
+                {
+                    "store_id": str(store.pk),
+                    "product_id": str(obj.pk),
+                    "quantity": quantity,
+                },
+            )
             self.message_user(
                 request,
                 f"{quantity} unités de {obj.name} enregistrées en stock initial "
@@ -303,6 +318,15 @@ class ProductAdmin(ModelAdmin):
                 except InvalidStockQuantity as exc:
                     form.add_error("quantity", str(exc))
                 else:
+                    posthog_client.capture(
+                        str(request.user.pk),
+                        "stock_received",
+                        {
+                            "store_id": str(store.pk),
+                            "product_id": str(product.pk),
+                            "quantity": quantity,
+                        },
+                    )
                     self.message_user(
                         request,
                         f"{quantity} unités de {product.name} ajoutées au stock de "
@@ -353,6 +377,15 @@ class ProductAdmin(ModelAdmin):
                             f"Stock de {product.name} ({store.name}) ajusté : "
                             f"{result.previous_quantity} → {counted_quantity} "
                             f"({result.delta:+d})."
+                        )
+                        posthog_client.capture(
+                            str(request.user.pk),
+                            "stock_adjusted",
+                            {
+                                "store_id": str(store.pk),
+                                "product_id": str(product.pk),
+                                "delta": result.delta,
+                            },
                         )
                     self.message_user(request, message, level=messages.SUCCESS)
                     return redirect(

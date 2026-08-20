@@ -10,6 +10,7 @@ from django.utils import timezone
 from apps.cash.exceptions import CashSessionClosed
 from apps.cash.models import CashSession
 from apps.catalog.models import Product
+from apps.observability.sentry_context import tag_sync_scope
 from apps.sales.exceptions import (
     InvalidPayment,
     InvalidSaleItems,
@@ -64,6 +65,8 @@ def process_sale_completed_event(
         "entity_id": str(entity_id),
         "cashier_id": cashier.pk,
     }
+
+    tag_sync_scope(sync_event_id=event_id)
 
     existing = ProcessedSyncEvent.objects.filter(pk=event_id).first()
     if existing is not None:

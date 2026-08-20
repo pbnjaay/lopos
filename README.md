@@ -529,3 +529,134 @@ Le back-office disponible sur `http://localhost:8000/admin/` utilise Django
 Unfold. Les écrans produits, magasins, caisses et stocks conservent les actions
 de l'admin Django. Les sessions de caisse, mouvements de stock et ventes
 restent en lecture seule afin de préserver leur auditabilité.
+
+## Observability (pilote)
+
+Instrumentation légère pour le pilote réel : Sentry pour les erreurs/crash,
+PostHog pour l'usage produit. Pas de Prometheus/Grafana/OpenTelemetry/ELK/
+Datadog dans cette phase.
+
+### Séparation des responsabilités
+
+- **Sentry** : exceptions inattendues, 500, erreurs de sync non prévues,
+  performance technique (traces). Les erreurs métier connues
+  (`INSUFFICIENT_STOCK`, `INVALID_PAYMENT`, `CASH_SESSION_CLOSED`, etc.) sont
+  gérées normalement par l'API et **ne sont pas** envoyées à Sentry comme des
+  exceptions.
+- **PostHog** : usage produit (funnel checkout → vente, moyens de paiement,
+  ventes offline, fiabilité sync, adoption dashboard/stock).
+  - `posthog-js` (frontend) capture les events du parcours caisse (React) :
+    `checkout_opened`, `payment_method_selected`, `sale_completed`,
+    `sale_failed`, `cash_session_opened`, `cash_session_closed`,
+    `sync_started`, `sync_completed`, `sync_failed`, `sync_conflict`.
+  - `posthog` (backend Python) capture uniquement les events déclenchés
+    depuis le **Django Admin**, où aucun JS PostHog n'est chargé :
+    `product_created`, `stock_received`, `stock_adjusted`, `dashboard_viewed`.
+  - Aucun event n'est dupliqué entre les deux SDK.
+
+### Variables d'environnement
+
+Backend (`.env.example`, racine) :
+
+```
+SENTRY_DSN=                       # vide = Sentry désactivé
+SENTRY_ENVIRONMENT=development    # development / pilot / production
+SENTRY_RELEASE=                   # SHA git court si vide
+SENTRY_TRACES_SAMPLE_RATE=0.1
+
+POSTHOG_API_KEY=
+POSTHOG_HOST=https://us.i.posthog.com
+POSTHOG_ENABLED=false             # false en local pour ne pas polluer le pilote
+```
+
+Frontend (`frontend/.env.example`) :
+
+```
+VITE_SENTRY_DSN=
+VITE_SENTRY_ENVIRONMENT=development
+VITE_SENTRY_RELEASE=              # SHA git court injecté au build si vide
+
+VITE_POSTHOG_KEY=
+VITE_POSTHOG_HOST=https://us.i.posthog.com
+VITE_POSTHOG_ENABLED=false
+```
+
+En local, `SENTRY_DSN`/`VITE_SENTRY_DSN` vides désactivent complètement
+l'envoi, et `POSTHOG_ENABLED`/`VITE_POSTHOG_ENABLED=false` désactivent
+PostHog des deux côtés (pas de sessions de dev dans les analytics du pilote).
+
+### Environnement pilote
+
+Utiliser `SENTRY_ENVIRONMENT=pilot` / `VITE_SENTRY_ENVIRONMENT=pilot` pour ne
+pas mélanger le pilote avec `development` ou une future `production`.
+
+### Release / source maps frontend
+
+La release Sentry est le SHA git court, injecté automatiquement au build
+(`git rev-parse --short HEAD` dans `vite.config.ts`) si `VITE_SENTRY_RELEASE`
+n'est pas défini. `vite build` génère des source maps (`build.sourcemap:
+true`) pour des stack traces lisibles en prod.
+
+L'upload des source maps vers Sentry (pour qu'il résolve les stack traces
+minifiées) n'est **pas automatisé** (pas de CI dans ce repo). Processus
+manuel documenté :
+
+```bash
+npm run build
+npx @sentry/cli releases files "$RELEASE" upload-sourcemaps dist/assets \
+  --org "$SENTRY_ORG" --project "$SENTRY_PROJECT"
+```
+
+`SENTRY_AUTH_TOKEN` doit être fourni uniquement à cette commande (variable
+d'environnement de la machine/CI qui build), **jamais** exposé au navigateur
+(ne pas le préfixer `VITE_`).
+
+### Tester l'intégration
+
+- Backend : `uv run python backend/manage.py trigger_sentry_test_error`
+  (refuse de s'exécuter si `SENTRY_ENVIRONMENT=production`).
+- Frontend : bouton "Test Sentry (dev)" sur la page de connexion, visible
+  uniquement en `import.meta.env.DEV` (build de dev, jamais en prod).
+
+### Décisions de confidentialité
+
+- `send_default_pii=False` côté backend ; aucune donnée personnelle
+  (mot de passe, cookie, token, téléphone client) n'est envoyée à Sentry —
+  `before_send` retire `Authorization`/`Cookie` des requêtes capturées par
+  défense en profondeur.
+- Identification PostHog/Sentry limitée à `user_id` + `role` (pas d'email,
+  pas de nom complet, pas de téléphone).
+- **Session replay désactivé** (`disable_session_recording: true`) : le POS
+  affiche des prix et transactions, et le bénéfice n'est pas encore justifié
+  pour ce pilote.
+- **Autocapture désactivé** (`autocapture: false`, `capture_pageview:
+  false`) : seuls les events explicitement listés ci-dessus sont envoyés,
+  pas de capture automatique de clics/champs qui pourrait inclure des
+  données sensibles (codes-barres, montants saisis).
+- `posthog.reset()` au logout pour ne pas associer le prochain caissier
+  d'un poste partagé à la session précédente.
+- Feature flags PostHog non utilisés dans le code métier pour ce pilote.
+
+### `sale_completed` et offline
+
+`sale_completed` est capturé **uniquement côté frontend**, au moment réel de
+l'encaissement (succès API en ligne OU écriture locale IndexedDB hors
+ligne), avec la propriété `offline: true/false`. Le `sync_completed` qui
+suit une vente offline est un event technique séparé — jamais un second
+`sale_completed`.
+
+### Checklist pilote
+
+- [ ] erreur frontend visible dans Sentry (bouton test dev)
+- [ ] erreur backend visible dans Sentry (`trigger_sentry_test_error`)
+- [ ] release correcte (SHA git)
+- [ ] `SENTRY_ENVIRONMENT`/`VITE_SENTRY_ENVIRONMENT=pilot`
+- [ ] source maps uploadées et stack traces lisibles
+- [ ] aucune donnée sensible envoyée (vérifié par relecture des tags/events)
+- [ ] login identifie l'utilisateur dans PostHog
+- [ ] logout reset PostHog
+- [ ] `checkout_opened` visible
+- [ ] `payment_method_selected` visible
+- [ ] `sale_completed` visible, propriété `offline` correcte
+- [ ] `sync_started`/`sync_completed` visibles après une vente offline
+- [ ] `cash_session_closed` visible

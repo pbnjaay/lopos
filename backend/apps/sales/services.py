@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from django.db import transaction
 
 from apps.cash.exceptions import CashSessionClosed
+from apps.observability.sentry_context import tag_sale_scope
 from apps.cash.models import CashSession
 from apps.catalog.models import Product
 from apps.inventory.models import InventoryMovement, Stock
@@ -153,6 +154,13 @@ def _execute_sale(
     le stock devient négatif et l'appelant en est informé (booléen retourné)
     afin de tracer la divergence.
     """
+    tag_sale_scope(
+        sale_id=sale_id,
+        cash_session_id=locked_session.id,
+        payment_method=payment_method,
+        offline=allow_negative_stock,
+    )
+
     store_id = locked_session.cash_register.store_id
     product_ids = sorted({spec.product.id for spec in line_specs})
 

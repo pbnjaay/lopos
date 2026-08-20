@@ -1,15 +1,54 @@
+import logging
 import os
 from decimal import Decimal
 from pathlib import Path
 
+import sentry_sdk
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
+from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() in {"1", "true", "yes"}
+
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+SENTRY_ENVIRONMENT = os.getenv("SENTRY_ENVIRONMENT", "development")
+SENTRY_RELEASE = os.getenv("SENTRY_RELEASE") or None
+SENTRY_TRACES_SAMPLE_RATE = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
+
+POSTHOG_API_KEY = os.getenv("POSTHOG_API_KEY", "")
+POSTHOG_HOST = os.getenv("POSTHOG_HOST", "https://us.i.posthog.com")
+POSTHOG_ENABLED = os.getenv("POSTHOG_ENABLED", "false").lower() in {"1", "true", "yes"}
+
+
+def _sentry_before_send(event, hint):
+    request = event.get("request")
+    if request:
+        headers = request.get("headers")
+        if headers:
+            headers.pop("Authorization", None)
+            headers.pop("Cookie", None)
+        request.pop("cookies", None)
+    return event
+
+
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=SENTRY_ENVIRONMENT,
+        release=SENTRY_RELEASE,
+        traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
+        send_default_pii=False,
+        before_send=_sentry_before_send,
+        integrations=[
+            DjangoIntegration(),
+            LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
+        ],
+    )
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
@@ -33,6 +72,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.sync",
     "apps.dashboard",
+    "apps.observability",
 ]
 
 LOW_STOCK_THRESHOLD_DEFAULT = 5
