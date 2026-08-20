@@ -1,6 +1,9 @@
 import os
 from pathlib import Path
 
+from django.urls import reverse_lazy
+from django.utils.translation import gettext_lazy as _
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -28,13 +31,106 @@ INSTALLED_APPS = [
     "apps.sales",
     "apps.accounts",
     "apps.sync",
+    "apps.dashboard",
 ]
+
+LOW_STOCK_THRESHOLD_DEFAULT = 5
 
 UNFOLD = {
     "SITE_TITLE": "LoPOS Admin",
     "SITE_HEADER": "LoPOS",
     "SITE_SUBHEADER": "Administration du point de vente",
     "SITE_SYMBOL": "point_of_sale",
+    "DASHBOARD_CALLBACK": "apps.dashboard.views.manager_dashboard_callback",
+    "SIDEBAR": {
+        "show_search": True,
+        "show_all_applications": False,
+        "navigation": [
+            {
+                "title": None,
+                "separator": False,
+                "items": [
+                    {
+                        "title": _("Tableau de bord"),
+                        "icon": "dashboard",
+                        "link": reverse_lazy("admin:index"),
+                    },
+                ],
+            },
+            {
+                "title": _("Catalogue"),
+                "separator": True,
+                "items": [
+                    {
+                        "title": _("Produits"),
+                        "icon": "inventory_2",
+                        "link": reverse_lazy("admin:catalog_product_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": _("Stock"),
+                "separator": True,
+                "items": [
+                    {
+                        "title": _("État du stock"),
+                        "icon": "warehouse",
+                        "link": reverse_lazy("admin:inventory_stock_changelist"),
+                    },
+                    {
+                        "title": _("Mouvements de stock"),
+                        "icon": "sync_alt",
+                        "link": reverse_lazy(
+                            "admin:inventory_inventorymovement_changelist"
+                        ),
+                    },
+                ],
+            },
+            {
+                "title": _("Caisses"),
+                "separator": True,
+                "items": [
+                    {
+                        "title": _("Caisses"),
+                        "icon": "point_of_sale",
+                        "link": reverse_lazy("admin:stores_cashregister_changelist"),
+                    },
+                    {
+                        "title": _("Sessions de caisse"),
+                        "icon": "receipt_long",
+                        "link": reverse_lazy("admin:cash_cashsession_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": _("Ventes"),
+                "separator": True,
+                "items": [
+                    {
+                        "title": _("Ventes"),
+                        "icon": "shopping_cart",
+                        "link": reverse_lazy("admin:sales_sale_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": _("Configuration"),
+                "separator": True,
+                "items": [
+                    {
+                        "title": _("Magasins"),
+                        "icon": "store",
+                        "link": reverse_lazy("admin:stores_store_changelist"),
+                    },
+                    {
+                        "title": _("Utilisateurs"),
+                        "icon": "group",
+                        "link": reverse_lazy("admin:auth_user_changelist"),
+                    },
+                ],
+            },
+        ],
+    },
 }
 
 MIDDLEWARE = [
@@ -52,7 +148,7 @@ ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [

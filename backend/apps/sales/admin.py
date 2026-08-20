@@ -1,5 +1,5 @@
 from django.contrib import admin
-from unfold.admin import ModelAdmin
+from unfold.admin import ModelAdmin, TabularInline
 
 from .models import Payment, Sale, SaleItem
 
@@ -15,6 +15,35 @@ class ReadOnlySalesAdmin(ModelAdmin):
         return False
 
 
+class ReadOnlyTabularInline(TabularInline):
+    extra = 0
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        return False
+
+
+class SaleItemInline(ReadOnlyTabularInline):
+    model = SaleItem
+    fields = ("product_name", "unit_price", "quantity", "line_total")
+    verbose_name = "article vendu"
+    verbose_name_plural = "articles vendus"
+
+
+class PaymentInline(ReadOnlyTabularInline):
+    model = Payment
+    fields = ("method", "amount", "received_amount", "change_amount")
+    max_num = 1
+    verbose_name = "paiement"
+    verbose_name_plural = "paiement"
+
+
 @admin.register(Sale)
 class SaleAdmin(ReadOnlySalesAdmin):
     list_display = (
@@ -27,6 +56,7 @@ class SaleAdmin(ReadOnlySalesAdmin):
     )
     list_filter = ("status", "cash_session__cash_register__store")
     search_fields = ("id", "cashier__username")
+    inlines = (SaleItemInline, PaymentInline)
 
 
 @admin.register(SaleItem)
