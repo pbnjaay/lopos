@@ -660,3 +660,60 @@ suit une vente offline est un event technique séparé — jamais un second
 - [ ] `sale_completed` visible, propriété `offline` correcte
 - [ ] `sync_started`/`sync_completed` visibles après une vente offline
 - [ ] `cash_session_closed` visible
+
+## Déploiement
+
+Backend sur Railway (Dockerfile), frontend sur Vercel (statique). Ce sont
+deux domaines différents en production : le CORS et les cookies de session
+cross-domain sont déjà configurés côté backend, il ne reste que des
+variables d'environnement à renseigner de chaque côté.
+
+### Backend — Railway
+
+1. Créer un projet Railway à partir de ce repo. Railway détecte le
+   `Dockerfile` à la racine (voir `railway.json` : builder explicite +
+   healthcheck sur `/admin/login/`).
+2. Attacher un service **PostgreSQL** Railway au service backend : Railway
+   injecte automatiquement `DATABASE_URL`, rien à configurer côté code
+   (voir `backend/config/settings.py`, qui bascule sur `DATABASE_URL` dès
+   qu'elle est présente).
+3. Variables d'environnement à définir sur le service backend (voir
+   `.env.example` pour la liste complète et les commentaires) :
+   ```
+   DJANGO_SECRET_KEY=<valeur aléatoire longue, ex: python -c "import secrets; print(secrets.token_urlsafe(50))">
+   DJANGO_DEBUG=false
+   DJANGO_ALLOWED_HOSTS=<domaine-railway>.up.railway.app
+   DJANGO_CSRF_TRUSTED_ORIGINS=https://<domaine-vercel>.vercel.app
+   DJANGO_CORS_ALLOWED_ORIGINS=https://<domaine-vercel>.vercel.app
+   DJANGO_COOKIE_SAMESITE=None
+   DJANGO_COOKIE_SECURE=true
+   ```
+   Le démarrage refuse volontairement de tourner avec `DJANGO_DEBUG=false`
+   et la clé par défaut (`ImproperlyConfigured`) — c'est un garde-fou, pas
+   un bug.
+4. Le `Dockerfile` fait `migrate` + `collectstatic` + `gunicorn` au
+   démarrage du conteneur (fichiers statiques servis par WhiteNoise —
+   pas de CDN séparé nécessaire pour ce volume).
+5. Créer un compte admin une fois déployé :
+   `railway run python backend/manage.py createsuperuser`
+   (et éventuellement `railway run python backend/manage.py create_default_groups`).
+6. Une fois le domaine et le certificat confirmés fonctionnels, activer le
+   durcissement HTTPS optionnel : `DJANGO_SECURE_SSL_REDIRECT=true`,
+   `DJANGO_SECURE_HSTS_SECONDS=3600` (à augmenter progressivement).
+
+### Frontend — Vercel
+
+1. Importer le repo sur Vercel, **Root Directory = `frontend`** (monorepo :
+   Vercel ne doit builder que ce sous-dossier). `frontend/vercel.json`
+   fournit déjà la commande de build et le rewrite SPA pour react-router.
+2. Variable d'environnement à définir sur le projet Vercel :
+   ```
+   VITE_API_BASE_URL=https://<domaine-railway>.up.railway.app/api/v1
+   ```
+   (le proxy `/api` de `vite.config.ts` ne sert qu'en dev local — en
+   production le frontend appelle directement le backend Railway, en
+   cross-origin avec cookies, d'où la config CORS/CSRF ci-dessus.)
+3. Ordre recommandé : déployer le backend d'abord pour connaître son URL
+   Railway, la renseigner dans Vercel, déployer le frontend, puis mettre à
+   jour `DJANGO_CSRF_TRUSTED_ORIGINS`/`DJANGO_CORS_ALLOWED_ORIGINS` côté
+   Railway avec l'URL Vercel définitive et redéployer le backend.

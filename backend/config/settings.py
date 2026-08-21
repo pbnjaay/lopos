@@ -3,7 +3,9 @@ import os
 from decimal import Decimal
 from pathlib import Path
 
+import dj_database_url
 import sentry_sdk
+from django.core.exceptions import ImproperlyConfigured
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from sentry_sdk.integrations.django import DjangoIntegration
@@ -14,6 +16,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key-change-me")
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() in {"1", "true", "yes"}
+
+if not DEBUG and SECRET_KEY == "unsafe-development-key-change-me":
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY doit être défini explicitement lorsque DJANGO_DEBUG=false."
+    )
 
 SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 SENTRY_ENVIRONMENT = os.getenv("SENTRY_ENVIRONMENT", "development")
@@ -63,6 +70,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "corsheaders",
     "rest_framework",
     "apps.stores",
     "apps.catalog",
@@ -185,6 +193,8 @@ UNFOLD = {
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -213,16 +223,27 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB", "lopos"),
-        "USER": os.getenv("POSTGRES_USER", "lopos"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "lopos"),
-        "HOST": os.getenv("POSTGRES_HOST", "localhost"),
-        "PORT": os.getenv("POSTGRES_PORT", "5433"),
+if os.getenv("DATABASE_URL"):
+    # Fourni tel quel par Railway (et la plupart des hébergeurs Postgres managés).
+    DATABASES = {
+        "default": dj_database_url.config(
+            conn_max_age=600,
+            ssl_require=os.getenv("DATABASE_SSL_REQUIRE", "true").lower()
+            in {"1", "true", "yes"},
+        )
     }
-}
+else:
+    # Développement local (docker-compose) : variables individuelles.
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_DB", "lopos"),
+            "USER": os.getenv("POSTGRES_USER", "lopos"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", "lopos"),
+            "HOST": os.getenv("POSTGRES_HOST", "localhost"),
+            "PORT": os.getenv("POSTGRES_PORT", "5433"),
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -237,7 +258,21 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": (
+            "django.contrib.staticfiles.storage.StaticFilesStorage"
+            if DEBUG
+            # Nécessite `collectstatic` (voir Dockerfile) — pas de collectstatic
+            # en dev, donc pas de manifest strict hors production.
+            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        )
+    },
+}
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -257,8 +292,6 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ]
 CSRF_COOKIE_HTTPONLY = False
-CSRF_COOKIE_SAMESITE = "Lax"
-SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = os.getenv("DJANGO_COOKIE_SECURE", "false").lower() in {
     "1",
     "true",
@@ -266,3 +299,40 @@ CSRF_COOKIE_SECURE = os.getenv("DJANGO_COOKIE_SECURE", "false").lower() in {
 }
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE
 CSRF_FAILURE_VIEW = "config.csrf.csrf_failure"
+
+# "Lax" en local (front et back sur le même site via le proxy Vite).
+# "None" en production (Vercel + Railway = domaines différents) : requiert
+# alors CSRF_COOKIE_SECURE/SESSION_COOKIE_SECURE=true (HTTPS obligatoire pour
+# qu'un navigateur accepte SameSite=None).
+_COOKIE_SAMESITE = os.getenv("DJANGO_COOKIE_SAMESITE", "Lax")
+CSRF_COOKIE_SAMESITE = _COOKIE_SAMESITE
+SESSION_COOKIE_SAMESITE = _COOKIE_SAMESITE
+
+# CORS : le frontend (Vercel) et le backend (Railway) sont deux domaines
+# différents en production. IsAuthenticated + SessionAuthentication exigent
+# les cookies de session, donc CORS_ALLOW_CREDENTIALS=True et une allowlist
+# explicite (pas de wildcard, incompatible avec les credentials).
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("DJANGO_CORS_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+CORS_ALLOW_CREDENTIALS = True
+
+# Railway (comme la plupart des PaaS) termine le TLS à son edge proxy et
+# transmet en HTTP en interne : sans ceci, request.is_secure() est toujours
+# faux et les cookies "Secure" ne partent jamais.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+
+# Durcissement HTTPS optionnel — désactivé par défaut pour ne pas risquer de
+# casser un healthcheck ou un accès direct par IP avant que le domaine et le
+# certificat soient confirmés fonctionnels. À activer une fois le déploiement
+# validé (voir README, section Déploiement).
+SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "0"))
