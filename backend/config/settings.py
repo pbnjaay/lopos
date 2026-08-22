@@ -205,6 +205,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "apps.accounts.middleware.ExposeCsrfTokenMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -322,6 +323,10 @@ CORS_ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 CORS_ALLOW_CREDENTIALS = True
+# Sans ceci, le fetch() du frontend ne peut pas lire le header X-CSRFToken
+# ajouté par ExposeCsrfTokenMiddleware — les headers de réponse cross-origin
+# sont masqués par défaut au JS, même quand la requête réussit.
+CORS_EXPOSE_HEADERS = ["X-CSRFToken"]
 
 # Railway (comme la plupart des PaaS) termine le TLS à son edge proxy et
 # transmet en HTTP en interne : sans ceci, request.is_secure() est toujours
