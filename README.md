@@ -672,7 +672,10 @@ variables d'environnement à renseigner de chaque côté.
 
 1. Créer un projet Railway à partir de ce repo. Railway détecte le
    `Dockerfile` à la racine (voir `railway.json` : builder explicite +
-   healthcheck sur `/admin/login/`).
+   healthcheck sur `/admin/login/`). Railway envoie toujours ce healthcheck
+   avec `Host: healthcheck.railway.app` (quel que soit le domaine réel du
+   service) — `backend/config/settings.py` l'ajoute automatiquement à
+   `ALLOWED_HOSTS`, rien à configurer côté variables d'environnement pour ça.
 2. Attacher un service **PostgreSQL** Railway au service backend : Railway
    injecte automatiquement `DATABASE_URL`, rien à configurer côté code
    (voir `backend/config/settings.py`, qui bascule sur `DATABASE_URL` dès

@@ -61,6 +61,10 @@ ALLOWED_HOSTS = [
     for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if host.strip()
 ]
+# Railway envoie systématiquement ce Host sur ses requêtes de healthcheck,
+# quel que soit le domaine réel du service — sans ça, Django répond 400
+# DisallowedHost et Railway marque le déploiement comme en échec.
+ALLOWED_HOSTS.append("healthcheck.railway.app")
 
 INSTALLED_APPS = [
     "unfold",
