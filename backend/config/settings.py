@@ -336,3 +336,19 @@ SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "false").lower() i
     "yes",
 }
 SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "0"))
+
+# Sans ceci, les erreurs "Bad Request (400)" (ex. DisallowedHost quand
+# ALLOWED_HOSTS ne correspond pas au Host reçu) ne vont qu'à mail_admins par
+# défaut — donc invisibles dans les logs Railway tant qu'aucun SMTP n'est
+# configuré. On les fait remonter sur la console à la place.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+    },
+    "loggers": {
+        "django.request": {"handlers": ["console"], "level": "WARNING"},
+        "django.security": {"handlers": ["console"], "level": "WARNING"},
+    },
+}

@@ -15,4 +15,4 @@ EXPOSE 8000
 # Utilisé tel quel par Railway (build Dockerfile). docker-compose.yaml
 # surcharge `command:` pour le développement local (runserver + reload) et
 # n'est donc pas affecté par ce CMD.
-CMD ["sh", "-c", "python backend/manage.py migrate --noinput && python backend/manage.py collectstatic --noinput && gunicorn config.wsgi:application --pythonpath backend --chdir backend --bind 0.0.0.0:${PORT:-8000} --workers 3"]
+CMD ["sh", "-c", "python backend/manage.py migrate --noinput && python backend/manage.py collectstatic --noinput && gunicorn config.wsgi:application --pythonpath backend --chdir backend --bind 0.0.0.0:${PORT:-8000} --workers 3 --access-logfile - --error-logfile -"]
