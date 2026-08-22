@@ -59,6 +59,20 @@ function getCookie(name: string): string | undefined {
   return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : undefined
 }
 
+/**
+ * Cross-domain deployments (Vercel frontend + Railway backend) can't read
+ * the `csrftoken` cookie via `document.cookie` — it belongs to a different
+ * registrable domain, and no CORS/SameSite setting changes that. The
+ * backend mirrors the token onto an `X-CSRFToken` response header instead
+ * (see `ExposeCsrfTokenMiddleware`); cache it here and fall back to it
+ * whenever the cookie itself isn't readable.
+ */
+let cachedCsrfToken: string | undefined
+
+function getCsrfToken(): string | undefined {
+  return getCookie("csrftoken") ?? cachedCsrfToken
+}
+
 function isUnsafeMethod(method: string): boolean {
   return !["GET", "HEAD", "OPTIONS", "TRACE"].includes(method.toUpperCase())
 }
@@ -142,7 +156,7 @@ export async function apiRequest<T>(
   }
 
   if (isUnsafeMethod(method)) {
-    const csrfToken = getCookie("csrftoken")
+    const csrfToken = getCsrfToken()
     if (csrfToken) headers.set("X-CSRFToken", csrfToken)
   }
 
@@ -164,6 +178,9 @@ export async function apiRequest<T>(
   } finally {
     clearTimeout(timeoutId)
   }
+
+  const refreshedCsrfToken = response.headers.get("X-CSRFToken")
+  if (refreshedCsrfToken) cachedCsrfToken = refreshedCsrfToken
 
   const responseBody = await readResponseBody(response)
   if (!response.ok) {
