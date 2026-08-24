@@ -77,8 +77,9 @@ describe("CashSessionReportPage", () => {
     )
 
     expect(screen.getByRole("heading", { name: "Rapport Z" })).toBeInTheDocument()
-    expect(screen.getByText("Supérette Test")).toBeInTheDocument()
-    expect(screen.getByText("Caisse 01")).toBeInTheDocument()
+    expect(screen.getByText("Supérette Test · Caisse 01")).toBeInTheDocument()
+    expect(screen.getByText("Supérette Test", { selector: ".report-identity strong" })).toBeInTheDocument()
+    expect(screen.getByText("Caisse 01", { selector: ".report-identity span" })).toBeInTheDocument()
     expect(screen.getByText("43 000 FCFA")).toBeInTheDocument()
     expect(screen.getByText("30 000 FCFA")).toBeInTheDocument()
     expect(screen.getByText("29 500 FCFA")).toBeInTheDocument()

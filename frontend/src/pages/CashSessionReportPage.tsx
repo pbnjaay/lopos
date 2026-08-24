@@ -1,10 +1,11 @@
 import { useEffect } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Link, useParams } from "react-router-dom"
+import { useParams } from "react-router-dom"
 
 import { getCashRegister } from "../api/cashRegisters"
 import { getCashSessionSummary } from "../api/cashSessions"
 import { getStore } from "../api/stores"
+import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
 import { RouteState } from "../components/ui/RouteState"
 import { formatDateTime } from "../utils/date"
 import { describeCashDifference, formatBackendMoney } from "../utils/money"
@@ -64,21 +65,25 @@ export function CashSessionReportPage() {
   const difference = describeCashDifference(summary.cash_difference ?? "0.00")
 
   return (
-    <main className="report-page">
-      <article className="z-report" aria-labelledby="z-report-title">
-        <header className="report-heading">
-          <div>
-            <p className="eyebrow">Fin de journée</p>
-            <h1 id="z-report-title">Rapport Z</h1>
-          </div>
-          <div className="report-actions no-print">
-            <Link className="text-button" to="/cash/open">
-              Retour
-            </Link>
+    <main className="operational-page operational-page-narrow report-page">
+      <div className="no-print">
+        <OperationalPageHeader
+          backTo="/cash/open"
+          backLabel="Retour à l’ouverture de caisse"
+          eyebrow="Fin de journée"
+          title="Rapport Z"
+          context={`${store.name} · ${summary.cash_register.name}`}
+          actions={(
             <button className="button button-primary button-small" type="button" onClick={() => window.print()}>
               Imprimer
             </button>
-          </div>
+          )}
+        />
+      </div>
+
+      <article className="z-report" aria-label="Contenu du rapport Z">
+        <header className="report-print-heading print-only" aria-hidden="true">
+          <h1>Rapport Z</h1>
         </header>
 
         <div className="report-identity">

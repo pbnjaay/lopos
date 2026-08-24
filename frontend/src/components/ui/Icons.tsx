@@ -57,6 +57,10 @@ export function LogOutIcon(props: IconProps) {
   return <Icon {...props}><path d="M10 17l5-5-5-5" /><path d="M15 12H3" /><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /></Icon>
 }
 
+export function UserIcon(props: IconProps) {
+  return <Icon {...props}><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></Icon>
+}
+
 export function BarcodeIcon(props: IconProps) {
   return <Icon {...props}><path d="M3 5v14M7 5v14M10 5v14M14 5v14M17 5v14M21 5v14" /></Icon>
 }

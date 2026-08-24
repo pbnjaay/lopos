@@ -2,6 +2,8 @@ import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
 
+import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
+import { EmptyState } from "../components/ui/EmptyState"
 import { listConflictLocalSales, listPendingLocalSales } from "../db/sales"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
@@ -52,25 +54,32 @@ export function PendingSalesPage() {
   }
 
   return (
-    <main className="content-page">
-      <section className="setup-card" aria-labelledby="pending-sales-title">
-        <p className="eyebrow">Hors ligne</p>
-        <h1 id="pending-sales-title">Ventes en attente</h1>
-        <p className="muted">
-          Ces ventes ont été enregistrées localement et seront synchronisées dès la
-          reconnexion.
-        </p>
+    <main className="operational-page">
+      <OperationalPageHeader
+        backTo="/pos"
+        backLabel="Retour au point de vente"
+        eyebrow="Synchronisation locale"
+        title="Ventes en attente"
+        context={isLoading ? "Vérification en cours" : `${sales.length} en attente · ${conflicts.length} en conflit`}
+        actions={(
+          <button
+            className="button button-primary button-small"
+            type="button"
+            disabled={!isOnline || isSyncing}
+            onClick={() => void handleSyncClick()}
+          >
+            {isSyncing ? "Synchronisation…" : "Synchroniser"}
+          </button>
+        )}
+      />
 
-        <button
-          className="button button-secondary"
-          type="button"
-          disabled={!isOnline || isSyncing}
-          onClick={() => void handleSyncClick()}
-        >
-          {isSyncing ? "Synchronisation…" : "Synchroniser"}
-        </button>
+      <section className="operational-card pending-sales-card" aria-label="État de la synchronisation">
+        <div className="section-introduction">
+          <h2>Synchronisation des ventes</h2>
+          <p>Les ventes locales sont envoyées automatiquement dès que la connexion revient.</p>
+        </div>
         {!isOnline ? (
-          <p className="muted">Reconnectez-vous pour synchroniser.</p>
+          <p className="pending-sales-notice">Reconnectez-vous pour lancer la synchronisation.</p>
         ) : null}
         {syncResultMessage ? (
           <p className="form-success" role="status">
@@ -81,8 +90,8 @@ export function PendingSalesPage() {
         {isLoading ? <p className="muted">Chargement…</p> : null}
 
         {!isLoading && conflicts.length > 0 ? (
-          <>
-            <h2>Ventes en conflit</h2>
+          <section className="pending-sales-section" aria-labelledby="conflict-sales-title">
+            <h2 id="conflict-sales-title">Ventes en conflit</h2>
             <p className="muted">
               Ces ventes ont été refusées par le serveur et ne seront pas renvoyées
               automatiquement.
@@ -93,8 +102,6 @@ export function PendingSalesPage() {
                   <Link
                     className="pending-sale-row pending-sale-row-conflict"
                     to={`/sales/${encodeURIComponent(sale.id)}/receipt?from=pending`}
-                    target="_blank"
-                    rel="noopener noreferrer"
                   >
                     <span>{formatDateTime(sale.createdAt)}</span>
                     <strong>{formatMoney(sale.total)}</strong>
@@ -103,35 +110,35 @@ export function PendingSalesPage() {
                 </li>
               ))}
             </ul>
-          </>
+          </section>
         ) : null}
 
-        {!isLoading && sales.length === 0 ? (
-          <p className="muted">Aucune vente en attente de synchronisation.</p>
+        {!isLoading && sales.length === 0 && conflicts.length === 0 ? (
+          <EmptyState
+            title="Aucune vente en attente de synchronisation."
+            description="Toutes les ventes locales ont été envoyées au serveur."
+          />
         ) : null}
 
         {sales.length > 0 ? (
-          <ul className="pending-sales-list">
-            {sales.map((sale) => (
-              <li key={sale.id}>
-                <Link
-                  className="pending-sale-row"
-                  to={`/sales/${encodeURIComponent(sale.id)}/receipt?from=pending`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <span>{formatDateTime(sale.createdAt)}</span>
-                  <strong>{formatMoney(sale.total)}</strong>
-                  <span>{paymentLabels[sale.payment.method]}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <section className="pending-sales-section" aria-labelledby="pending-sync-title">
+            <h2 id="pending-sync-title">À synchroniser</h2>
+            <ul className="pending-sales-list">
+              {sales.map((sale) => (
+                <li key={sale.id}>
+                  <Link
+                    className="pending-sale-row"
+                    to={`/sales/${encodeURIComponent(sale.id)}/receipt?from=pending`}
+                  >
+                    <span>{formatDateTime(sale.createdAt)}</span>
+                    <strong>{formatMoney(sale.total)}</strong>
+                    <span>{paymentLabels[sale.payment.method]}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : null}
-
-        <Link className="text-button" to="/pos">
-          Retour au point de vente
-        </Link>
       </section>
     </main>
   )

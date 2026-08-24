@@ -4,6 +4,7 @@ import { Link } from "react-router-dom"
 
 import { listSales } from "../api/sales"
 import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
+import { EmptyState } from "../components/ui/EmptyState"
 import { RouteState } from "../components/ui/RouteState"
 import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
@@ -69,10 +70,11 @@ export function SalesPage() {
       />
 
       {!online ? (
-        <section className="sales-empty" role="status">
-          <h2>Historique indisponible hors connexion</h2>
-          <p>Reconnectez-vous pour consulter les ventes et effectuer un retour.</p>
-        </section>
+        <EmptyState
+          role="status"
+          title="Historique indisponible hors connexion"
+          description="Reconnectez-vous pour consulter les ventes et effectuer un retour."
+        />
       ) : (
         <>
           <form className="sales-filters" onSubmit={submitFilters}>
@@ -108,7 +110,10 @@ export function SalesPage() {
           {salesQuery.isLoading ? <RouteState message="Chargement des ventes…" /> : null}
           {salesQuery.error ? <RouteState message="" error={salesQuery.error} onRetry={() => void salesQuery.refetch()} /> : null}
           {salesQuery.data?.results.length === 0 ? (
-            <section className="sales-empty"><h2>Aucune vente trouvée</h2><p>Modifiez les critères de recherche ou revenez au point de vente.</p></section>
+            <EmptyState
+              title="Aucune vente trouvée"
+              description="Modifiez les critères de recherche ou revenez au point de vente."
+            />
           ) : null}
           {salesQuery.data?.results.length ? (
             <section className="sales-list" aria-label="Ventes de la boutique">

@@ -56,7 +56,7 @@ describe("AppLayout", () => {
     )
 
     expect(screen.queryByRole("link", { name: "Ventes" })).not.toBeInTheDocument()
-    await userEvents.click(screen.getByRole("button", { name: "Awa" }))
+    await userEvents.click(screen.getByRole("button", { name: "Menu de session — Awa" }))
 
     expect(screen.getByRole("link", { name: "Ventes" })).toHaveAttribute("href", "/sales")
     expect(screen.getByRole("link", { name: "Clôturer la caisse" })).toHaveAttribute(
@@ -67,6 +67,6 @@ describe("AppLayout", () => {
 
     fireEvent.keyDown(document, { key: "Escape" })
     expect(screen.queryByRole("link", { name: "Ventes" })).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Awa" })).toHaveFocus()
+    expect(screen.getByRole("button", { name: "Menu de session — Awa" })).toHaveFocus()
   })
 })

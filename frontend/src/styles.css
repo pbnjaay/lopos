@@ -326,8 +326,13 @@ h1 {
   transition: transform 0.15s ease;
 }
 
-.session-menu-trigger[aria-expanded="true"] svg {
+.session-menu-trigger[aria-expanded="true"] .session-menu-chevron {
   transform: rotate(180deg);
+}
+
+.session-menu-user-icon {
+  width: 1.15rem !important;
+  height: 1.15rem !important;
 }
 
 .session-menu-panel {
@@ -664,6 +669,15 @@ h1 {
   text-align: center;
 }
 
+.closing-result-state h2 {
+  margin: 0.75rem 0 0;
+}
+
+.closing-result-state > .muted {
+  margin: 0.4rem auto 0;
+  max-width: 32rem;
+}
+
 .closing-result-state .closing-identity {
   justify-items: center;
 }
@@ -703,40 +717,31 @@ h1 {
   text-decoration: none;
 }
 
-.report-page {
-  width: min(100%, 48rem);
-  margin: 0 auto;
-  padding: 2rem;
-}
-
 .z-report {
   padding: 2.5rem;
+  border: 1px solid #e0e7e3;
   border-radius: 1rem;
   background: #fff;
   box-shadow: 0 1rem 3rem rgb(18 55 42 / 8%);
 }
 
-.report-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1.5rem;
+.print-only {
+  display: none;
 }
 
-.report-heading h1 {
-  margin-bottom: 0;
+.report-print-heading {
+  text-align: center;
 }
 
-.report-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+.report-print-heading h1,
+.report-print-heading p {
+  margin: 0;
 }
 
 .report-identity {
   display: grid;
   gap: 0.35rem;
-  margin-top: 2rem;
+  margin-top: 0;
   color: #527064;
 }
 
@@ -851,7 +856,7 @@ h1 {
   font-weight: 700;
 }
 
-.sales-empty {
+.empty-state {
   margin-top: 1rem;
   padding: 2.5rem 1.5rem;
   border: 1px dashed #b7c5be;
@@ -859,12 +864,12 @@ h1 {
   text-align: center;
 }
 
-.sales-empty h2,
-.sales-empty p {
+.empty-state h2,
+.empty-state p {
   margin: 0;
 }
 
-.sales-empty p {
+.empty-state p {
   margin-top: 0.5rem;
   color: #527064;
 }
@@ -1326,8 +1331,12 @@ h1 {
     box-shadow: none;
   }
 
-  .report-heading {
+  .print-only {
     display: block;
+  }
+
+  .report-identity {
+    margin-top: 1.5rem;
   }
 
   .report-identity,
@@ -1376,6 +1385,34 @@ h1 {
   gap: 0.5rem;
 }
 
+.pending-sales-card {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.pending-sales-card .empty-state {
+  margin-top: 0;
+}
+
+.pending-sales-section h2,
+.pending-sales-section p {
+  margin: 0;
+}
+
+.pending-sales-section > p {
+  margin-top: 0.4rem;
+}
+
+.pending-sales-notice {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #dce4df;
+  border-radius: 0.65rem;
+  background: #f3f5f4;
+  color: #45534c;
+  font-weight: 700;
+}
+
 .pending-sale-row {
   display: flex;
   align-items: center;
@@ -1393,8 +1430,8 @@ h1 {
 }
 
 .pending-sale-row-conflict {
-  border-color: #f5c2c7;
-  background: #fdf3f4;
+  border-color: #d8b5b1;
+  background: #fffafa;
 }
 
 .network-status {
@@ -2512,6 +2549,15 @@ h1 {
   .icon-button,
   .cart-action-button {
     min-height: 3rem;
+  }
+
+  .pending-sale-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .pending-sale-row > span:last-child {
+    grid-column: 1 / -1;
   }
 
   .header-user-name {

@@ -90,8 +90,9 @@ export function SaleReturnPage() {
               <label htmlFor={`return-quantity-${item.id}`}>Quantité à retourner</label>
               <input
                 id={`return-quantity-${item.id}`}
-                inputMode="decimal"
-                placeholder={saleUnit === "KG" ? "0,300" : "1"}
+                inputMode={saleUnit === "KG" ? "decimal" : "numeric"}
+                enterKeyHint="done"
+                placeholder={saleUnit === "KG" ? "Ex. 0,3" : "Ex. 1"}
                 value={quantities[item.id] ?? ""}
                 disabled={isUnavailable}
                 aria-invalid={isInvalid}

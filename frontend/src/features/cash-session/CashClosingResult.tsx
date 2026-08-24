@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom"
 
+import { OperationalPageHeader } from "../../components/layout/OperationalPageHeader"
 import type { CashSessionSummary } from "../../types/api"
 import { formatDateTime } from "../../utils/date"
 import { describeCashDifference, formatBackendMoney } from "../../utils/money"
@@ -13,15 +14,19 @@ export function CashClosingResult({ summary, onFinish }: CashClosingResultProps)
   const difference = describeCashDifference(summary.cash_difference ?? "0.00")
 
   return (
-    <main className="closing-page">
-      <section className="closing-sheet closing-result-state" aria-live="polite">
+    <main className="operational-page operational-page-narrow closing-result-page">
+      <OperationalPageHeader
+        eyebrow="Fin de journée"
+        title="Caisse clôturée"
+        context={summary.cash_register.name}
+      />
+      <section className="operational-card closing-sheet closing-result-state" aria-live="polite">
         <div className="success-mark" aria-hidden="true">
           ✓
         </div>
-        <p className="eyebrow">Fin de journée</p>
-        <h1>Caisse clôturée</h1>
+        <h2>Session terminée</h2>
+        <p className="muted">Les ventes et les montants de cette caisse ont été enregistrés.</p>
         <div className="closing-identity">
-          <strong>{summary.cash_register.name}</strong>
           <span>Caissier : {summary.cashier.username}</span>
           {summary.closed_at ? <span>Clôturée le {formatDateTime(summary.closed_at)}</span> : null}
         </div>

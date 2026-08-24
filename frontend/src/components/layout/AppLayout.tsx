@@ -5,7 +5,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { logout } from "../../api/auth"
 import { resetAnalytics } from "../../analytics/posthog"
 import { clearSentryUser } from "../../analytics/sentry"
-import { ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon } from "../ui/Icons"
+import { ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, UserIcon } from "../ui/Icons"
 import { ConnectionStatus } from "../../features/offline/OfflineBanner"
 import type { CurrentUser } from "../../types/api"
 
@@ -74,10 +74,12 @@ export function AppLayout({ user }: AppLayoutProps) {
             aria-expanded={isSessionMenuOpen}
             aria-controls="session-menu-panel"
             aria-haspopup="true"
+            aria-label={`Menu de session — ${userName}`}
             onClick={() => setIsSessionMenuOpen((isOpen) => !isOpen)}
           >
+            <UserIcon className="session-menu-user-icon" />
             <span className="header-user-name">{userName}</span>
-            <ChevronDownIcon />
+            <ChevronDownIcon className="session-menu-chevron" />
           </button>
           {isSessionMenuOpen ? (
             <div id="session-menu-panel" className="session-menu-panel" aria-label="Actions de session">
