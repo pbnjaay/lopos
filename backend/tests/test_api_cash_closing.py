@@ -361,4 +361,4 @@ def test_sale_detail_is_forbidden_for_another_cashier(api_client: APIClient) -> 
     response = api_client.get(reverse("sale-detail", kwargs={"pk": sale["id"]}))
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
-    assert response.json()["code"] == "SALE_NOT_OWNED"
+    assert response.json()["code"] == "OPEN_CASH_SESSION_REQUIRED"

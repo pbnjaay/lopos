@@ -434,18 +434,46 @@ class ReturnItemInput(TypedDict):
     restock: bool
 
 
+def _validated_idempotent_return(
+    existing: SaleReturn | None,
+    *,
+    original_sale: Sale,
+    cash_session: CashSession,
+    created_by,
+) -> SaleReturn | None:
+    if existing is None:
+        return None
+    if (
+        existing.original_sale_id != original_sale.pk
+        or existing.cash_session_id != cash_session.pk
+        or existing.created_by_id != created_by.pk
+    ):
+        raise InvalidReturn("Cette clé d’idempotence appartient à un autre retour.")
+    return existing
+
+
 @transaction.atomic
 def create_sale_return(
     *, original_sale: Sale, cash_session: CashSession, created_by,
     payment_method: str, items: Sequence[ReturnItemInput], idempotency_key: UUID,
 ) -> SaleReturn:
-    existing = SaleReturn.objects.filter(idempotency_key=idempotency_key).first()
+    existing = _validated_idempotent_return(
+        SaleReturn.objects.filter(idempotency_key=idempotency_key).first(),
+        original_sale=original_sale,
+        cash_session=cash_session,
+        created_by=created_by,
+    )
     if existing:
         return existing
     if not items:
         raise InvalidReturn("Sélectionnez au moins un article à retourner.")
     locked_session = CashSession.objects.select_for_update().select_related("cash_register").get(pk=cash_session.pk)
-    existing = SaleReturn.objects.filter(idempotency_key=idempotency_key).first()
+    existing = _validated_idempotent_return(
+        SaleReturn.objects.filter(idempotency_key=idempotency_key).first(),
+        original_sale=original_sale,
+        cash_session=locked_session,
+        created_by=created_by,
+    )
     if existing:
         return existing
     if locked_session.status != CashSession.Status.OPEN:

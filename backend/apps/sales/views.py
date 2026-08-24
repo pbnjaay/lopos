@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import status
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -13,14 +14,79 @@ from .exceptions import (
     ProductNotFound,
     InvalidReturn,
 )
+from .access import get_pos_cash_session, returns_for_pos_session, sales_for_pos_session
 from .models import Sale, SaleReturn
 from .serializers import (
-    CompleteSaleSerializer, SaleSerializer, CreateSaleReturnSerializer, SaleReturnSerializer
+    CompleteSaleSerializer,
+    CreateSaleReturnSerializer,
+    SaleListQuerySerializer,
+    SaleReturnSerializer,
+    SaleSerializer,
+    SaleSummarySerializer,
 )
 from .services import complete_sale, create_sale_return
 
 
+class SalePagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
+def _pos_cash_session_or_error(request, cash_session_id):
+    cash_session = get_pos_cash_session(
+        user=request.user,
+        cash_session_id=cash_session_id,
+    )
+    if cash_session is None:
+        return None, Response(
+            {
+                "code": "OPEN_CASH_SESSION_REQUIRED",
+                "message": "Une session de caisse ouverte vous appartenant est requise.",
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return cash_session, None
+
+
 class CompleteSaleView(APIView):
+    def get(self, request) -> Response:
+        query_serializer = SaleListQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+        filters = query_serializer.validated_data
+        cash_session, error = _pos_cash_session_or_error(
+            request, filters.get("cash_session_id")
+        )
+        if error is not None:
+            return error
+
+        queryset = (
+            sales_for_pos_session(cash_session=cash_session)
+            .select_related(
+                "payment", "cashier", "cash_session__cash_register__store"
+            )
+            .prefetch_related("returns")
+            .order_by("-occurred_at", "-created_at")
+        )
+        search = filters.get("search", "").strip()
+        if search:
+            queryset = queryset.filter(id__icontains=search)
+        if date_from := filters.get("date_from"):
+            queryset = queryset.filter(occurred_at__date__gte=date_from)
+        if date_to := filters.get("date_to"):
+            queryset = queryset.filter(occurred_at__date__lte=date_to)
+        if cash_register_id := filters.get("cash_register_id"):
+            queryset = queryset.filter(cash_session__cash_register_id=cash_register_id)
+        if cashier_id := filters.get("cashier_id"):
+            queryset = queryset.filter(cashier_id=cashier_id)
+        if payment_method := filters.get("payment_method"):
+            queryset = queryset.filter(payment__method=payment_method)
+
+        paginator = SalePagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = SaleSummarySerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
     def post(self, request) -> Response:
         serializer = CompleteSaleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -79,21 +145,19 @@ class CompleteSaleView(APIView):
 
 class SaleDetailView(APIView):
     def get(self, request, pk=None) -> Response:
+        query_serializer = SaleListQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+        cash_session, error = _pos_cash_session_or_error(
+            request, query_serializer.validated_data.get("cash_session_id")
+        )
+        if error is not None:
+            return error
         sale = get_object_or_404(
-            Sale.objects.select_related(
+            sales_for_pos_session(cash_session=cash_session).select_related(
                 "payment", "cashier", "cash_session__cash_register__store"
             ).prefetch_related("items__return_items__sale_return", "returns"),
             pk=pk,
         )
-        if sale.cashier_id != request.user.pk and not request.user.is_staff:
-            return Response(
-                {
-                    "code": "SALE_NOT_OWNED",
-                    "message": "Cette vente appartient à un autre caissier.",
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         return Response(SaleSerializer(sale).data, status=status.HTTP_200_OK)
 
 
@@ -115,9 +179,17 @@ class SaleReturnListCreateView(APIView):
 
 class SaleReturnDetailView(APIView):
     def get(self, request, pk=None) -> Response:
-        sale_return = get_object_or_404(
-            SaleReturn.objects.select_related("created_by").prefetch_related("items__original_sale_item"), pk=pk
+        query_serializer = SaleListQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+        cash_session, error = _pos_cash_session_or_error(
+            request, query_serializer.validated_data.get("cash_session_id")
         )
-        if sale_return.created_by_id != request.user.pk and not request.user.is_staff:
-            return Response({"code": "RETURN_NOT_OWNED", "message": "Ce retour appartient à un autre caissier."}, status=status.HTTP_403_FORBIDDEN)
+        if error is not None:
+            return error
+        sale_return = get_object_or_404(
+            returns_for_pos_session(cash_session=cash_session)
+            .select_related("created_by")
+            .prefetch_related("items__original_sale_item"),
+            pk=pk,
+        )
         return Response(SaleReturnSerializer(sale_return).data)

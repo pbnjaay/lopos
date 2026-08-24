@@ -35,6 +35,16 @@ class CompleteSaleSerializer(serializers.Serializer):
     payment = PaymentInputSerializer()
 
 
+class SaleListQuerySerializer(serializers.Serializer):
+    cash_session_id = serializers.UUIDField(required=False)
+    search = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    date_from = serializers.DateField(required=False)
+    date_to = serializers.DateField(required=False)
+    cash_register_id = serializers.UUIDField(required=False)
+    cashier_id = serializers.IntegerField(required=False, min_value=1)
+    payment_method = serializers.ChoiceField(choices=Payment.Method.choices, required=False)
+
+
 class SaleItemSerializer(serializers.ModelSerializer):
     product_id = serializers.UUIDField(read_only=True)
     quantity_returned = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
@@ -105,6 +115,24 @@ class SaleSerializer(serializers.ModelSerializer):
 
     def get_net_total(self, sale: Sale) -> Decimal:
         return sale.total - self.get_returned_total(sale)
+
+
+class SaleSummarySerializer(SaleSerializer):
+    created_at = serializers.DateTimeField(source="occurred_at", read_only=True)
+
+    class Meta(SaleSerializer.Meta):
+        fields = (
+            "id",
+            "created_at",
+            "store",
+            "cash_register",
+            "cashier",
+            "status",
+            "total",
+            "returned_total",
+            "net_total",
+            "payment",
+        )
 
 
 class SaleReturnItemInputSerializer(serializers.Serializer):
