@@ -91,6 +91,21 @@ h1 {
   margin-top: 2rem;
 }
 
+.opening-review {
+  display: grid;
+  gap: 0.3rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid #c9ddd3;
+  border-radius: 0.75rem;
+  background: #f2f8f5;
+  color: #527064;
+}
+
+.opening-review strong {
+  color: #17211c;
+  font-size: 1.05rem;
+}
+
 .field {
   display: grid;
   gap: 0.5rem;

@@ -3,14 +3,14 @@
 import "@testing-library/jest-dom/vitest"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { currentUserQueryKey } from "../features/auth/queries"
 import { SELECTED_CASH_REGISTER_KEY } from "../features/cash-session/queries"
-import type { CashRegister, CashSession, CurrentUser } from "../types/api"
+import type { CashRegister, CashSession, CurrentUser, Store } from "../types/api"
 import { OpenCashSessionPage } from "./OpenCashSessionPage"
 
 vi.mock("../db/sessions", () => ({
@@ -35,6 +35,28 @@ const cashRegister: CashRegister = {
   updated_at: "2026-08-17T00:00:00Z",
 }
 
+const store: Store = {
+  id: "store-id",
+  name: "Supérette Louga",
+  address: null,
+  is_active: true,
+  created_at: "2026-08-17T00:00:00Z",
+  updated_at: "2026-08-17T00:00:00Z",
+}
+
+const secondStore: Store = {
+  ...store,
+  id: "second-store-id",
+  name: "Supérette Dakar",
+}
+
+const secondRegister: CashRegister = {
+  ...cashRegister,
+  id: "second-register-id",
+  store_id: secondStore.id,
+  name: "Caisse Dakar",
+}
+
 const openedSession: CashSession = {
   id: "session-id",
   cash_register_id: cashRegister.id,
@@ -48,7 +70,10 @@ const openedSession: CashSession = {
   closed_at: null,
 }
 
-function renderPage() {
+function renderPage(
+  stores: Store[] = [store],
+  registers: CashRegister[] = [cashRegister],
+) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Infinity },
@@ -56,11 +81,14 @@ function renderPage() {
     },
   })
   queryClient.setQueryData(currentUserQueryKey, cashier)
-  queryClient.setQueryData(["cash-registers"], [cashRegister])
-  queryClient.setQueryData(
-    ["cash-registers", cashRegister.id, "current-session"],
-    null,
-  )
+  queryClient.setQueryData(["stores"], stores)
+  queryClient.setQueryData(["cash-registers"], registers)
+  registers.forEach((register) => {
+    queryClient.setQueryData(
+      ["cash-registers", register.id, "current-session"],
+      null,
+    )
+  })
 
   render(
     <QueryClientProvider client={queryClient}>
@@ -75,6 +103,7 @@ function renderPage() {
 }
 
 afterEach(() => {
+  cleanup()
   vi.restoreAllMocks()
   localStorage.clear()
   document.cookie = "csrftoken=; Max-Age=0; path=/"
@@ -92,10 +121,16 @@ describe("OpenCashSessionPage", () => {
     )
 
     renderPage()
-    expect(screen.getByLabelText("Caisse")).toHaveValue(cashRegister.id)
+    expect(screen.getByLabelText("Boutique")).toHaveValue("")
+    expect(screen.getByLabelText("Caisse")).toBeDisabled()
+    await user.selectOptions(screen.getByLabelText("Boutique"), store.id)
+    await user.selectOptions(screen.getByLabelText("Caisse"), cashRegister.id)
     await user.type(screen.getByLabelText("Fond de caisse initial"), "15 000")
     expect(screen.getByText("15 000 FCFA")).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Ouvrir la caisse" }))
+    expect(screen.getByLabelText("Récapitulatif de l’ouverture")).toHaveTextContent(
+      "Supérette Louga · Caisse 01",
+    )
+    await user.click(screen.getByRole("button", { name: "Ouvrir Caisse 01" }))
 
     expect(await screen.findByText("Caisse ouverte")).toBeInTheDocument()
     expect(localStorage.getItem(SELECTED_CASH_REGISTER_KEY)).toBe(cashRegister.id)
@@ -106,5 +141,30 @@ describe("OpenCashSessionPage", () => {
         opening_balance: "15000.00",
       }),
     )
+  })
+
+  it("filters registers by store and clears the register when the store changes", async () => {
+    const user = userEvent.setup()
+    renderPage([store, secondStore], [cashRegister, secondRegister])
+
+    await user.selectOptions(screen.getByLabelText("Boutique"), store.id)
+    expect(screen.getByRole("option", { name: "Caisse 01" })).toBeInTheDocument()
+    expect(screen.queryByRole("option", { name: "Caisse Dakar" })).not.toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText("Caisse"), cashRegister.id)
+
+    await user.selectOptions(screen.getByLabelText("Boutique"), secondStore.id)
+
+    expect(screen.getByLabelText("Caisse")).toHaveValue("")
+    expect(screen.queryByRole("option", { name: "Caisse 01" })).not.toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "Caisse Dakar" })).toBeInTheDocument()
+  })
+
+  it("explains when the user has no assigned store", () => {
+    renderPage([], [])
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Aucune boutique ne vous est affectée",
+    )
+    expect(screen.queryByRole("button", { name: /Ouvrir/ })).not.toBeInTheDocument()
   })
 })
