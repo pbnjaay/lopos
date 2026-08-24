@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react"
 
 import { useDialogFocusTrap } from "../../components/ui/useDialogFocusTrap"
+import { XIcon } from "../../components/ui/Icons"
 import type { PaymentMethod } from "../../types/api"
 import { formatMoney } from "../../utils/money"
 import { useSlowSubmitHint } from "./useSlowSubmitHint"
@@ -95,7 +96,7 @@ export function MobileMoneyConfirmation({
             disabled={isSubmitting}
             onClick={onClose}
           >
-            ×
+            <XIcon />
           </button>
         </header>
 

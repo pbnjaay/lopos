@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react"
 
 import { useDialogFocusTrap } from "../../components/ui/useDialogFocusTrap"
+import { XIcon } from "../../components/ui/Icons"
 import { formatMoney, parseMoneyInput } from "../../utils/money"
 import { getSuggestedCashAmounts } from "./cashSuggestions"
 import { useSlowSubmitHint } from "./useSlowSubmitHint"
@@ -135,7 +136,7 @@ export function CashPaymentModal({
             disabled={isSubmitting}
             onClick={onClose}
           >
-            ×
+            <XIcon />
           </button>
         </header>
 

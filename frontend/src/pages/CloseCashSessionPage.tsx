@@ -279,7 +279,7 @@ export function CloseCashSessionPage() {
         <Dialog
           eyebrow="Confirmation"
           title={`Clôturer ${summary.cash_register.name} ?`}
-          className="closing-confirmation"
+          className="closing-confirmation checkout-modal-sm"
           dismissible={!closeMutation.isPending}
           onClose={() => {
             closeMutation.reset()

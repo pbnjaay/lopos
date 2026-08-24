@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react"
 
 import { useDialogFocusTrap } from "../../components/ui/useDialogFocusTrap"
+import { XIcon } from "../../components/ui/Icons"
 import type { PaymentMethod } from "../../types/api"
 import { formatMoney } from "../../utils/money"
 
@@ -92,7 +93,7 @@ export function PaymentMethodModal({
             <h2 id="payment-method-title">Mode de paiement</h2>
           </div>
           <button className="modal-close" type="button" aria-label="Fermer" onClick={onClose}>
-            ×
+            <XIcon />
           </button>
         </header>
 

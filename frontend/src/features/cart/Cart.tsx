@@ -97,7 +97,7 @@ export function Cart({
               <div className="cart-item-heading">
                 <div className="cart-item-identity">
                   <div className="cart-item-name-row">
-                    <strong>{item.name}</strong>
+                    <strong title={item.name}>{item.name}</strong>
                     {item.unitPrice !== (item.catalogUnitPrice ?? item.unitPrice) ? <span className="price-override-badge">Prix modifié</span> : null}
                   </div>
                   <span>
@@ -194,7 +194,7 @@ export function Cart({
       />
     ) : null}
     {isClearConfirming ? (
-      <Dialog eyebrow="Vente en cours" title="Vider le panier ?" onClose={closeClearDialog}>
+      <Dialog eyebrow="Vente en cours" title="Vider le panier ?" className="checkout-modal-sm" onClose={closeClearDialog}>
         <div className="pos-dialog-body">
           <p>Les {items.length} article{items.length > 1 ? "s" : ""} seront retirés de la vente en cours.</p>
           <div className="modal-actions">
