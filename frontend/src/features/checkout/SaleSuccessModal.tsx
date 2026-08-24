@@ -6,10 +6,11 @@ import { formatMoney } from "../../utils/money"
 
 type SaleSuccessModalProps = {
   sale: ReceiptView
+  cashSessionId?: string
   onNewSale: () => void
 }
 
-export function SaleSuccessModal({ sale, onNewSale }: SaleSuccessModalProps) {
+export function SaleSuccessModal({ sale, cashSessionId, onNewSale }: SaleSuccessModalProps) {
   const dialogRef = useRef<HTMLElement>(null)
   useDialogFocusTrap(dialogRef)
   const paymentLabel = {
@@ -75,7 +76,7 @@ export function SaleSuccessModal({ sale, onNewSale }: SaleSuccessModalProps) {
         <div className="sale-success-actions">
           <a
             className="button button-secondary receipt-link"
-            href={`/sales/${encodeURIComponent(sale.id)}/receipt`}
+            href={`/sales/${encodeURIComponent(sale.id)}/receipt${cashSessionId ? `?cash_session_id=${encodeURIComponent(cashSessionId)}` : ""}`}
             target="_blank"
             rel="noopener noreferrer"
           >

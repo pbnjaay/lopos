@@ -420,7 +420,7 @@ describe("POS keyboard shortcuts", () => {
   it("keeps return and closing actions clearly available", () => {
     renderPos()
 
-    expect(screen.getByRole("link", { name: "Retour marchandise" })).toHaveAttribute("href", "/returns/new")
+    expect(screen.getByRole("link", { name: "Ventes" })).toHaveAttribute("href", "/sales")
     expect(screen.getByRole("link", { name: "Clôturer la caisse" })).toHaveAttribute("href", "/cash/close")
   })
 

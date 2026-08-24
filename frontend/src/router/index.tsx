@@ -10,8 +10,10 @@ import { OpenCashSessionPage } from "../pages/OpenCashSessionPage"
 import { PendingSalesPage } from "../pages/PendingSalesPage"
 import { PosPage } from "../pages/PosPage"
 import { SaleReceiptPage } from "../pages/SaleReceiptPage"
+import { SaleDetailPage } from "../pages/SaleDetailPage"
 import { SaleReturnPage } from "../pages/SaleReturnPage"
 import { SaleReturnReceiptPage } from "../pages/SaleReturnReceiptPage"
+import { SalesPage } from "../pages/SalesPage"
 
 export const router = createBrowserRouter([
   { path: "/", element: <AppEntryPage /> },
@@ -58,8 +60,11 @@ export const router = createBrowserRouter([
         path: "/sales/:saleId/receipt",
         element: <SaleReceiptPage />,
       },
-      { path: "/returns/new", element: <SessionRoute requireOpen><SaleReturnPage /></SessionRoute> },
-      { path: "/returns/:returnId/receipt", element: <SaleReturnReceiptPage /> },
+      { path: "/sales", element: <SessionRoute requireOpen><SalesPage /></SessionRoute> },
+      { path: "/sales/:saleId", element: <SessionRoute requireOpen><SaleDetailPage /></SessionRoute> },
+      { path: "/sales/:saleId/return", element: <SessionRoute requireOpen><SaleReturnPage /></SessionRoute> },
+      { path: "/returns/new", element: <Navigate to="/sales" replace /> },
+      { path: "/returns/:returnId/receipt", element: <SessionRoute requireOpen><SaleReturnReceiptPage /></SessionRoute> },
     ],
   },
   { path: "*", element: <Navigate to="/" replace /> },

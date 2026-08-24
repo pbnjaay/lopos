@@ -143,6 +143,27 @@ export type SaleReceipt = SaleResponse & {
   }
 }
 
+export type SaleSummary = Pick<
+  SaleReceipt,
+  | "id"
+  | "created_at"
+  | "store"
+  | "cash_register"
+  | "cashier"
+  | "status"
+  | "total"
+  | "returned_total"
+  | "net_total"
+  | "payment"
+>
+
+export type PaginatedSales = {
+  count: number
+  next: string | null
+  previous: string | null
+  results: SaleSummary[]
+}
+
 export type SaleReturn = {
   id: string
   reference: string

@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { completeSale, getSaleReceipt } from "./sales"
+import { completeSale, getSaleReceipt, listSales } from "./sales"
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -113,5 +113,25 @@ describe("sales API", () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/sales/sale%2Fid/")
     expect(request?.method).toBe("GET")
     expect(request?.body).toBeUndefined()
+  })
+
+  it("lists sales in the scope of the selected open session", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ count: 0, next: null, previous: null, results: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    )
+
+    await listSales({
+      cashSessionId: "session-id",
+      search: "A12F",
+      paymentMethod: "WAVE",
+      page: 2,
+    })
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/v1/sales/?cash_session_id=session-id&search=A12F&payment_method=WAVE&page=2",
+    )
   })
 })

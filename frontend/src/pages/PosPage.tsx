@@ -5,7 +5,7 @@ import { Link } from "react-router-dom"
 import { completeSale } from "../api/sales"
 import { getStore } from "../api/stores"
 import { ApiError, isApiUnavailable } from "../api/client"
-import { PowerIcon, RotateCcwIcon } from "../components/ui/Icons"
+import { PowerIcon, ReceiptIcon } from "../components/ui/Icons"
 import {
   trackCheckoutOpened,
   trackPaymentMethodSelected,
@@ -234,9 +234,9 @@ export function PosPage() {
           <p className="pos-register-name">{selectedRegister?.name ?? "Caisse"}</p>
         </div>
         <div className="session-actions">
-          <Link className="session-action-link" to="/returns/new">
-            <RotateCcwIcon />
-            <span>Retour marchandise</span>
+          <Link className="session-action-link" to="/sales">
+            <ReceiptIcon />
+            <span>Ventes</span>
           </Link>
           <Link className="session-action-link" to="/cash/close">
             <PowerIcon />
@@ -342,6 +342,7 @@ export function PosPage() {
       {completedSale ? (
         <SaleSuccessModal
           sale={completedSale}
+          cashSessionId={ownSession?.id}
           onNewSale={() => {
             setCompletedSale(null)
             focusProductSearch()

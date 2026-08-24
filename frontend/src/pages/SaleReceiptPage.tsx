@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { Link, useParams } from "react-router-dom"
+import { Link, useParams, useSearchParams } from "react-router-dom"
 
 import { getSaleReceipt } from "../api/sales"
 import { RouteState } from "../components/ui/RouteState"
@@ -17,12 +17,14 @@ const paymentLabels = {
 
 export function SaleReceiptPage() {
   const { saleId } = useParams<{ saleId: string }>()
+  const [searchParams] = useSearchParams()
+  const cashSessionId = searchParams.get("cash_session_id") ?? undefined
   const receiptQuery = useQuery({
-    queryKey: ["sales", saleId, "receipt"],
+    queryKey: ["sales", saleId, "receipt", cashSessionId],
     queryFn: async () => {
       const localSale = await getLocalSaleById(saleId!)
       if (localSale) return receiptViewFromLocalSale(localSale)
-      return receiptViewFromApiReceipt(await getSaleReceipt(saleId!))
+      return receiptViewFromApiReceipt(await getSaleReceipt(saleId!, cashSessionId))
     },
     enabled: Boolean(saleId),
     retry: false,
