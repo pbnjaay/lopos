@@ -22,7 +22,7 @@ function Icon({ children, ...props }: IconProps) {
 }
 
 export function PencilIcon(props: IconProps) {
-  return <Icon {...props}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></Icon>
+  return <Icon {...props}><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10Z" /><path d="m14.5 7 3 3" /></Icon>
 }
 
 export function TrashIcon(props: IconProps) {
@@ -45,12 +45,24 @@ export function CartIcon(props: IconProps) {
   return <Icon {...props}><path d="M3 3h2l2.4 11.2a2 2 0 0 0 2 1.6h6.9a2 2 0 0 0 2-1.6L20 7H6" /><circle cx="10" cy="20" r="1" /><circle cx="17" cy="20" r="1" /></Icon>
 }
 
+export function CashRegisterIcon(props: IconProps) {
+  return <Icon {...props}><path d="M6 9V4h12v5" /><path d="M8 4V2h8v2" /><path d="M4 9h16l1 11H3Z" /><path d="M7 13h.01M11 13h.01M15 13h.01M7 16h10" /></Icon>
+}
+
 export function PowerIcon(props: IconProps) {
   return <Icon {...props}><path d="M12 2v10" /><path d="M18.4 6.6a9 9 0 1 1-12.8 0" /></Icon>
 }
 
 export function ChevronDownIcon(props: IconProps) {
   return <Icon {...props}><path d="m6 9 6 6 6-6" /></Icon>
+}
+
+export function ChevronLeftIcon(props: IconProps) {
+  return <Icon {...props}><path d="m15 18-6-6 6-6" /></Icon>
+}
+
+export function ChevronRightIcon(props: IconProps) {
+  return <Icon {...props}><path d="m9 18 6-6-6-6" /></Icon>
 }
 
 export function LogOutIcon(props: IconProps) {

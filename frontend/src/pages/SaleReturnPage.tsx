@@ -4,13 +4,14 @@ import { useNavigate, useParams } from "react-router-dom"
 import { createSaleReturn, getSaleReceipt } from "../api/sales"
 import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
 import { Dialog } from "../components/ui/Dialog"
+import { QuantityControl } from "../components/ui/QuantityControl"
 import { RouteState } from "../components/ui/RouteState"
 import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import type { PaymentMethod, SaleReceipt } from "../types/api"
 import { formatBackendMoney } from "../utils/money"
-import { formatQuantity, milliToBackendQuantity, parseQuantityToMilli, backendQuantityToMilli, lineTotal } from "../utils/quantity"
+import { formatQuantity, milliToBackendQuantity, milliToDisplayQuantity, parseQuantityToMilli, backendQuantityToMilli, lineTotal } from "../utils/quantity"
 
 export function SaleReturnPage() {
   const { saleId } = useParams<{ saleId: string }>()
@@ -39,8 +40,19 @@ export function SaleReturnPage() {
   }) ?? []
   const total = selected.reduce((sum, row) => sum + row.amount, 0)
   const hasInvalidQuantity = selected.some(
-    ({ item, milli }) => milli > backendQuantityToMilli(item.quantity_returnable ?? item.quantity),
+    ({ item, milli }) =>
+      milli > backendQuantityToMilli(item.quantity_returnable ?? item.quantity) ||
+      ((item.sale_unit ?? "UNIT") === "UNIT" && milli % 1000 !== 0),
   )
+
+  function adjustQuantity(item: SaleReceipt["items"][number], direction: -1 | 1) {
+    const saleUnit = item.sale_unit ?? "UNIT"
+    const maximum = backendQuantityToMilli(item.quantity_returnable ?? item.quantity)
+    const current = parseQuantityToMilli(quantities[item.id] ?? "") ?? 0
+    const step = saleUnit === "KG" ? 100 : 1000
+    const next = Math.max(0, Math.min(maximum, current + direction * step))
+    setQuantities({ ...quantities, [item.id]: next === 0 ? "" : milliToDisplayQuantity(next) })
+  }
 
   async function submit() {
     if (!sale || !ownSession || selected.length === 0) return
@@ -59,7 +71,7 @@ export function SaleReturnPage() {
   if (saleQuery.isLoading) return <RouteState message="Chargement de la vente…" />
   if (saleQuery.error || !sale) return <RouteState message="Vente introuvable dans cette boutique." error={saleQuery.error} onRetry={() => void saleQuery.refetch()} />
 
-  return <main className="operational-page operational-page-narrow">
+  return <main className="operational-page">
   <OperationalPageHeader
     backTo={`/sales/${sale.id}`}
     backLabel="Retour à la vente"
@@ -73,60 +85,68 @@ export function SaleReturnPage() {
       <p>Saisissez uniquement les quantités réellement rapportées par le client.</p>
     </div>
 
-    <div className="return-items">
-      {sale.items.map((item) => {
+    <div className="return-workspace">
+      <div className="return-items">
+        {sale.items.map((item) => {
         const saleUnit = item.sale_unit ?? "UNIT"
         const returnableMilli = backendQuantityToMilli(item.quantity_returnable ?? item.quantity)
         const enteredMilli = parseQuantityToMilli(quantities[item.id] ?? "")
         const isUnavailable = returnableMilli <= 0
-        const isInvalid = enteredMilli !== null && enteredMilli > returnableMilli
         return <article className={`return-item${isUnavailable ? " return-item-disabled" : ""}`} key={item.id}>
           <header>
-            <div><strong>{item.product_name}</strong><span>Vendu : {formatQuantity(backendQuantityToMilli(item.quantity), saleUnit)}</span></div>
-            <span className="returnable-badge">{isUnavailable ? "Déjà retourné" : `Retournable : ${formatQuantity(returnableMilli, saleUnit)}`}</span>
+            <div><strong>{item.product_name}</strong><span>Acheté : {formatQuantity(backendQuantityToMilli(item.quantity), saleUnit)}</span></div>
+            <span className={`returnable-badge${isUnavailable ? " returnable-badge-disabled" : ""}`}>{isUnavailable ? "Entièrement retourné" : `${formatQuantity(returnableMilli, saleUnit)} disponible${saleUnit === "UNIT" && returnableMilli > 1000 ? "s" : ""}`}</span>
           </header>
           <div className="return-item-controls">
             <div className="form-field">
               <label htmlFor={`return-quantity-${item.id}`}>Quantité à retourner</label>
-              <input
-                id={`return-quantity-${item.id}`}
-                inputMode={saleUnit === "KG" ? "decimal" : "numeric"}
-                enterKeyHint="done"
-                placeholder={saleUnit === "KG" ? "Ex. 0,3" : "Ex. 1"}
-                value={quantities[item.id] ?? ""}
+              <QuantityControl
+                valueMilli={enteredMilli}
+                saleUnit={saleUnit}
+                maximumMilli={returnableMilli}
                 disabled={isUnavailable}
-                aria-invalid={isInvalid}
-                onChange={(event) => setQuantities({ ...quantities, [item.id]: event.target.value })}
+                inputId={`return-quantity-${item.id}`}
+                quantityLabel="Quantité à retourner"
+                decreaseLabel={`Diminuer la quantité de ${item.product_name}`}
+                increaseLabel={`Augmenter la quantité de ${item.product_name}`}
+                onDecrease={() => adjustQuantity(item, -1)}
+                onIncrease={() => adjustQuantity(item, 1)}
+                onCommit={(value) => setQuantities({ ...quantities, [item.id]: milliToDisplayQuantity(value) })}
               />
-              {isInvalid ? <small className="field-error">La quantité dépasse le maximum retournable.</small> : null}
             </div>
-            <label className="checkbox-field">
+            <label className="return-restock-field">
               <input type="checkbox" checked={restocks[item.id] ?? true} disabled={isUnavailable} onChange={(event) => setRestocks({ ...restocks, [item.id]: event.target.checked })} />
-              <span><strong>Remettre en stock</strong><small>Le produit est en état d’être revendu.</small></span>
+              <span className="return-restock-switch" aria-hidden="true" />
+              <span><strong>Remettre en stock</strong><small>Le produit peut être revendu.</small></span>
             </label>
           </div>
         </article>
-      })}
-    </div>
-
-    <div className="return-summary">
-      <div className="form-field">
-        <label htmlFor="return-payment-method">Mode de remboursement</label>
-        <select id="return-payment-method" value={method} onChange={(event) => setMethod(event.target.value as PaymentMethod)}>
-          <option value="CASH">Espèces</option>
-          <option value="WAVE">Wave</option>
-          <option value="ORANGE_MONEY">Orange Money</option>
-        </select>
+        })}
       </div>
-      <div className="return-total"><span>Montant à rembourser</span><strong>{formatBackendMoney(`${total}.00`)}</strong></div>
-      <button className="button button-primary return-submit" type="button" disabled={submitting || selected.length === 0 || hasInvalidQuantity} onClick={() => setIsConfirming(true)}>Continuer</button>
+      <aside className="return-summary" aria-label="Résumé du remboursement">
+        <div>
+          <p className="eyebrow">Remboursement</p>
+          <h2>Résumé du retour</h2>
+        </div>
+        <div className="return-selection-count"><span>Articles sélectionnés</span><strong>{selected.length}</strong></div>
+        <div className="form-field">
+          <label htmlFor="return-payment-method">Mode de remboursement</label>
+          <select id="return-payment-method" value={method} onChange={(event) => setMethod(event.target.value as PaymentMethod)}>
+            <option value="CASH">Espèces</option>
+            <option value="WAVE">Wave</option>
+            <option value="ORANGE_MONEY">Orange Money</option>
+          </select>
+        </div>
+        <div className="return-total"><span>Montant à rembourser</span><strong>{formatBackendMoney(`${total}.00`)}</strong></div>
+        <button className="button button-primary return-submit" type="button" disabled={submitting || selected.length === 0 || hasInvalidQuantity} onClick={() => setIsConfirming(true)}>Rembourser {formatBackendMoney(`${total}.00`)}</button>
+        {error && !isConfirming ? <p className="form-error" role="alert">{error}</p> : null}
+      </aside>
     </div>
-    {error && !isConfirming ? <p className="form-error" role="alert">{error}</p> : null}
   </section>
   {isConfirming ? (
     <Dialog
       eyebrow="Retour marchandise"
-      title="Confirmer le retour ?"
+      title="Confirmer le remboursement ?"
       dismissible={!submitting}
       onClose={() => setIsConfirming(false)}
     >
@@ -136,7 +156,7 @@ export function SaleReturnPage() {
         {error ? <p className="form-error" role="alert">{error}</p> : null}
         <div className="modal-actions">
           <button className="button button-secondary" type="button" disabled={submitting} onClick={() => setIsConfirming(false)}>Annuler</button>
-          <button className="button button-primary" type="button" disabled={submitting} onClick={() => void submit()}>{submitting ? "Traitement…" : "Confirmer le retour"}</button>
+          <button className="button button-primary" type="button" disabled={submitting} onClick={() => void submit()}>{submitting ? "Traitement…" : `Rembourser ${formatBackendMoney(`${total}.00`)}`}</button>
         </div>
       </div>
     </Dialog>

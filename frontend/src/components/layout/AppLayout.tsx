@@ -5,7 +5,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom"
 import { logout } from "../../api/auth"
 import { resetAnalytics } from "../../analytics/posthog"
 import { clearSentryUser } from "../../analytics/sentry"
-import { ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, UserIcon } from "../ui/Icons"
+import { CashRegisterIcon, ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, UserIcon } from "../ui/Icons"
 import { ConnectionStatus } from "../../features/offline/OfflineBanner"
 import type { CurrentUser } from "../../types/api"
 
@@ -24,6 +24,12 @@ export function AppLayout({ user }: AppLayoutProps) {
   const showCashSessionActions =
     location.pathname === "/pos" ||
     location.pathname === "/cash/close" ||
+    location.pathname.startsWith("/sales") ||
+    location.pathname.startsWith("/returns")
+  const isCashRoute =
+    location.pathname === "/pos" ||
+    location.pathname.startsWith("/cash")
+  const isSalesRoute =
     location.pathname.startsWith("/sales") ||
     location.pathname.startsWith("/returns")
   const logoutMutation = useMutation({
@@ -85,10 +91,6 @@ export function AppLayout({ user }: AppLayoutProps) {
             <div id="session-menu-panel" className="session-menu-panel" aria-label="Actions de session">
               {showCashSessionActions ? (
                 <>
-                  <Link className="session-menu-item" to="/sales" onClick={() => setIsSessionMenuOpen(false)}>
-                    <ReceiptIcon />
-                    <span>Ventes</span>
-                  </Link>
                   <Link className="session-menu-item" to="/cash/close" onClick={() => setIsSessionMenuOpen(false)}>
                     <PowerIcon />
                     <span>Clôturer la caisse</span>
@@ -117,7 +119,41 @@ export function AppLayout({ user }: AppLayoutProps) {
           {logoutMutation.error.message}
         </p>
       ) : null}
-      <Outlet />
+      <div className="app-frame">
+        <nav className="app-navigation" aria-label="Navigation principale">
+          <Link
+            className={`app-navigation-link${isCashRoute ? " app-navigation-link-active" : ""}`}
+            to="/"
+            title="Caisse"
+            aria-current={isCashRoute ? "page" : undefined}
+          >
+            <CashRegisterIcon />
+            <span>Caisse</span>
+          </Link>
+          <Link
+            className={`app-navigation-link${isSalesRoute ? " app-navigation-link-active" : ""}`}
+            to="/sales"
+            title="Ventes"
+            aria-current={isSalesRoute ? "page" : undefined}
+          >
+            <ReceiptIcon />
+            <span>Ventes</span>
+          </Link>
+          {showCashSessionActions ? (
+            <Link
+              className="app-navigation-link app-navigation-session-action"
+              to="/cash/close"
+              title="Clôturer la caisse"
+            >
+              <PowerIcon />
+              <span>Clôturer</span>
+            </Link>
+          ) : null}
+        </nav>
+        <div className="app-content">
+          <Outlet />
+        </div>
+      </div>
     </div>
   )
 }

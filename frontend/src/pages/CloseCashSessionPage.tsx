@@ -187,31 +187,36 @@ export function CloseCashSessionPage() {
         context={cashContext}
       />
       <section className="operational-card closing-sheet" aria-label="Résumé de clôture">
-
-        <div className="closing-identity">
-          <strong>{summary.cash_register.name}</strong>
-          <span>Caissier : {summary.cashier.username}</span>
-          <span>Ouverte le {formatDateTime(summary.opened_at)}</span>
+        <div className="closing-session-meta" aria-label="Informations de la session">
+          <div><span>Caissier</span><strong>{summary.cashier.username}</strong></div>
+          <div><span>Ouverture</span><strong>{formatDateTime(summary.opened_at)}</strong></div>
         </div>
 
+        <div className="closing-section-heading">
+          <div>
+            <p className="eyebrow">Activité</p>
+            <h2>Résumé de la session</h2>
+          </div>
+          <span>Depuis l’ouverture de la caisse</span>
+        </div>
         <dl className="closing-summary" aria-label="Résumé de la session">
-          <div className="closing-summary-total">
+          <div className="closing-summary-kpi">
             <dt>Nombre de ventes</dt>
             <dd>{summary.sales_count}</dd>
           </div>
-          <div className="closing-summary-total">
+          <div className="closing-summary-kpi">
             <dt>Chiffre d’affaires</dt>
             <dd>{formatBackendMoney(summary.gross_sales)}</dd>
           </div>
-          <div>
+          <div className="closing-summary-payment">
             <dt>Espèces</dt>
             <dd>{formatBackendMoney(summary.payments.cash)}</dd>
           </div>
-          <div>
+          <div className="closing-summary-payment">
             <dt>Wave</dt>
             <dd>{formatBackendMoney(summary.payments.wave)}</dd>
           </div>
-          <div>
+          <div className="closing-summary-payment">
             <dt>Orange Money</dt>
             <dd>{formatBackendMoney(summary.payments.orange_money)}</dd>
           </div>
@@ -221,47 +226,53 @@ export function CloseCashSessionPage() {
           </div>
         </dl>
 
-        <p className="closing-instruction">
-          Comptez l’argent présent dans le tiroir-caisse, puis saisissez le montant obtenu.
-        </p>
-
-        <form className="counted-cash-form" onSubmit={handleContinue}>
-          <div className="counted-cash-field">
-            <label htmlFor="counted-cash">Montant compté</label>
-            <div className="money-input">
-              <input
-                id="counted-cash"
-                autoFocus
-                inputMode="numeric"
-                placeholder="29 500"
-                value={countedCash}
-                disabled={closeMutation.isPending}
-                aria-describedby="counted-cash-help"
-                aria-invalid={hasCountedCash && parsedCountedCash === null}
-                onChange={(event) => setCountedCash(event.target.value)}
-              />
-              <span>FCFA</span>
+        <section className="closing-count-section" aria-labelledby="closing-count-title">
+          <div className="closing-count-heading">
+            <div>
+              <p className="eyebrow">Dernière étape</p>
+              <h2 id="closing-count-title">Comptage des espèces</h2>
             </div>
-            <small
-              id="counted-cash-help"
-              className={hasCountedCash && parsedCountedCash === null ? "field-error" : undefined}
-            >
-              {parsedCountedCash !== null
-                ? formatMoney(parsedCountedCash)
-                : hasCountedCash
-                  ? "Saisissez un montant positif ou nul, sans décimales."
-                  : "Montant entier, sans décimales"}
-            </small>
+            <p>Comptez uniquement l’argent présent dans le tiroir-caisse.</p>
           </div>
 
-          <button
-            className="button button-primary"
-            type="submit"
-            disabled={parsedCountedCash === null || closeMutation.isPending}
-          >
-            Continuer
-          </button>
-        </form>
+          <form className="counted-cash-form" onSubmit={handleContinue}>
+            <div className="counted-cash-field">
+              <label htmlFor="counted-cash">Montant compté</label>
+              <div className="money-input">
+                <input
+                  id="counted-cash"
+                  autoFocus
+                  inputMode="numeric"
+                  placeholder="29 500"
+                  value={countedCash}
+                  disabled={closeMutation.isPending}
+                  aria-describedby="counted-cash-help"
+                  aria-invalid={hasCountedCash && parsedCountedCash === null}
+                  onChange={(event) => setCountedCash(event.target.value)}
+                />
+                <span>FCFA</span>
+              </div>
+              <small
+                id="counted-cash-help"
+                className={hasCountedCash && parsedCountedCash === null ? "field-error" : undefined}
+              >
+                {parsedCountedCash !== null
+                  ? formatMoney(parsedCountedCash)
+                  : hasCountedCash
+                    ? "Saisissez un montant positif ou nul, sans décimales."
+                    : "Montant entier, sans décimales"}
+              </small>
+            </div>
+
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={parsedCountedCash === null || closeMutation.isPending}
+            >
+              Vérifier la clôture
+            </button>
+          </form>
+        </section>
       </section>
 
       {isConfirming ? (

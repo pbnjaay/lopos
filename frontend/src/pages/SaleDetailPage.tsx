@@ -36,22 +36,26 @@ export function SaleDetailPage() {
       <OperationalPageHeader
         backTo="/sales"
         backLabel="Retour aux ventes"
-        eyebrow={`Ticket ${sale.id.slice(0, 8).toUpperCase()}`}
-        title="Détail de la vente"
+        eyebrow="Vente"
+        title={`Ticket ${sale.id.slice(0, 8).toUpperCase()}`}
         context={`${sale.store.name} · ${sale.cash_register.name}`}
         actions={<>
           <Link className="button button-secondary button-small button-with-icon" to={`/sales/${sale.id}/receipt?cash_session_id=${ownSession!.id}&from=detail`}>
             <ReceiptIcon />
             <span>Voir le ticket</span>
           </Link>
-          {canReturn ? <Link className="button button-return button-small button-with-icon" to={`/sales/${sale.id}/return`}><RotateCcwIcon /><span>Effectuer un retour</span></Link> : null}
+          {canReturn ? <Link className="button button-primary button-small button-with-icon" to={`/sales/${sale.id}/return`}><RotateCcwIcon /><span>Effectuer un retour</span></Link> : null}
         </>}
       />
       <section className="operational-card sale-detail-card">
         <div className="sale-detail-meta" aria-label="Informations de la vente">
-          <div><span>Date</span><strong>{formatDateTime(sale.created_at)}</strong></div>
+          <div><span>Date et heure</span><strong>{formatDateTime(sale.created_at)}</strong></div>
           <div><span>Caissier</span><strong>{sale.cashier.username}</strong></div>
-          <div><span>Paiement</span><strong>{{ CASH: "Espèces", WAVE: "Wave", ORANGE_MONEY: "Orange Money" }[sale.payment.method]}</strong></div>
+          <div><span>Mode de paiement</span><strong>{{ CASH: "Espèces", WAVE: "Wave", ORANGE_MONEY: "Orange Money" }[sale.payment.method]}</strong></div>
+        </div>
+        <div className="sale-detail-section-heading">
+          <h2>Articles vendus</h2>
+          <span>{sale.items.length} article{sale.items.length > 1 ? "s" : ""}</span>
         </div>
         <ul className="sale-detail-items">
           {sale.items.map((item) => (
@@ -61,10 +65,13 @@ export function SaleDetailPage() {
             </li>
           ))}
         </ul>
-        <dl className="sale-detail-totals">
-          <div><dt>Total vendu</dt><dd>{formatBackendMoney(sale.total)}</dd></div>
-          {Number(sale.returned_total ?? 0) > 0 ? <><div><dt>Déjà retourné</dt><dd>− {formatBackendMoney(sale.returned_total!)}</dd></div><div className="sale-detail-net"><dt>Total net</dt><dd>{formatBackendMoney(sale.net_total!)}</dd></div></> : null}
-        </dl>
+        <div className="sale-detail-summary">
+          <p className="eyebrow">Récapitulatif</p>
+          <dl className="sale-detail-totals">
+            <div><dt>Total vendu</dt><dd>{formatBackendMoney(sale.total)}</dd></div>
+            {Number(sale.returned_total ?? 0) > 0 ? <><div><dt>Déjà retourné</dt><dd>− {formatBackendMoney(sale.returned_total!)}</dd></div><div className="sale-detail-net"><dt>Total net</dt><dd>{formatBackendMoney(sale.net_total!)}</dd></div></> : null}
+          </dl>
+        </div>
         {!canReturn ? <p className="sale-fully-returned">Aucun article de cette vente ne peut encore être retourné.</p> : null}
       </section>
     </main>

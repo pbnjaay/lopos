@@ -3,7 +3,7 @@
 import "@testing-library/jest-dom/vitest"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, describe, expect, it } from "vitest"
@@ -38,9 +38,13 @@ describe("AppLayout", () => {
     )
 
     expect(screen.getByRole("link", { name: "LoPOS — Accueil" })).toHaveAttribute("href", "/")
+    const navigation = screen.getByRole("navigation", { name: "Navigation principale" })
+    expect(within(navigation).getByRole("link", { name: "Caisse" })).toHaveAttribute("aria-current", "page")
+    expect(within(navigation).getByRole("link", { name: "Ventes" })).toHaveAttribute("href", "/sales")
+    expect(within(navigation).getByRole("link", { name: "Clôturer" })).toHaveAttribute("href", "/cash/close")
   })
 
-  it("groups sales, closing and logout actions in the user menu", async () => {
+  it("keeps closing and logout actions in the user menu without duplicating navigation", async () => {
     const userEvents = userEvent.setup()
     const queryClient = new QueryClient()
     render(
@@ -55,18 +59,41 @@ describe("AppLayout", () => {
       </QueryClientProvider>,
     )
 
-    expect(screen.queryByRole("link", { name: "Ventes" })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Actions de session")).not.toBeInTheDocument()
     await userEvents.click(screen.getByRole("button", { name: "Menu de session — Awa" }))
 
-    expect(screen.getByRole("link", { name: "Ventes" })).toHaveAttribute("href", "/sales")
-    expect(screen.getByRole("link", { name: "Clôturer la caisse" })).toHaveAttribute(
+    const sessionMenu = screen.getByLabelText("Actions de session")
+    expect(within(sessionMenu).queryByRole("link", { name: "Ventes" })).not.toBeInTheDocument()
+    expect(within(sessionMenu).getByRole("link", { name: "Clôturer la caisse" })).toHaveAttribute(
       "href",
       "/cash/close",
     )
-    expect(screen.getByRole("button", { name: "Se déconnecter" })).toBeInTheDocument()
+    expect(within(sessionMenu).getByRole("button", { name: "Se déconnecter" })).toBeInTheDocument()
 
     fireEvent.keyDown(document, { key: "Escape" })
-    expect(screen.queryByRole("link", { name: "Ventes" })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Actions de session")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Menu de session — Awa" })).toHaveFocus()
+  })
+
+  it("keeps the same navigation visible on setup screens", () => {
+    const queryClient = new QueryClient()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/cash/open"]}>
+          <Routes>
+            <Route element={<AppLayout user={user} />}>
+              <Route path="/cash/open" element={<p>Ouverture</p>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    const navigation = screen.getByRole("navigation", { name: "Navigation principale" })
+    expect(within(navigation).getByRole("link", { name: "Caisse" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    )
+    expect(within(navigation).getByRole("link", { name: "Caisse" })).toHaveAttribute("href", "/")
   })
 })

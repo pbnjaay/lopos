@@ -21,22 +21,27 @@ export function CashClosingResult({ summary, onFinish }: CashClosingResultProps)
         context={summary.cash_register.name}
       />
       <section className="operational-card closing-sheet closing-result-state" aria-live="polite">
-        <div className="success-mark" aria-hidden="true">
-          ✓
+        <div className="closing-result-intro">
+          <div className="success-mark" aria-hidden="true">✓</div>
+          <div>
+            <h2>Session terminée</h2>
+            <p className="muted">Les ventes et les montants de cette caisse ont été enregistrés.</p>
+          </div>
         </div>
-        <h2>Session terminée</h2>
-        <p className="muted">Les ventes et les montants de cette caisse ont été enregistrés.</p>
-        <div className="closing-identity">
-          <span>Caissier : {summary.cashier.username}</span>
-          {summary.closed_at ? <span>Clôturée le {formatDateTime(summary.closed_at)}</span> : null}
+        <div className="closing-session-meta">
+          <div><span>Caissier</span><strong>{summary.cashier.username}</strong></div>
+          {summary.closed_at ? <div><span>Clôture</span><strong>{formatDateTime(summary.closed_at)}</strong></div> : null}
         </div>
 
+        <div className="closing-section-heading">
+          <div><p className="eyebrow">Résultat</p><h2>Résumé de clôture</h2></div>
+        </div>
         <dl className="closing-summary closing-result-summary" aria-label="Résultat de clôture">
-          <div className="closing-summary-total">
+          <div className="closing-summary-kpi">
             <dt>Nombre de ventes</dt>
             <dd>{summary.sales_count}</dd>
           </div>
-          <div className="closing-summary-total">
+          <div className="closing-summary-kpi">
             <dt>CA net</dt>
             <dd>{formatBackendMoney(summary.net_sales ?? summary.gross_sales)}</dd>
           </div>

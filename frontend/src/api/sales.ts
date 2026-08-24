@@ -15,6 +15,7 @@ export function listSales(input: {
   dateTo?: string
   paymentMethod?: PaymentMethod | ""
   page?: number
+  pageSize?: number
 }): Promise<PaginatedSales> {
   return apiRequest<PaginatedSales>(buildApiUrl("sales/", {
     cash_session_id: input.cashSessionId,
@@ -23,6 +24,7 @@ export function listSales(input: {
     date_to: input.dateTo || undefined,
     payment_method: input.paymentMethod || undefined,
     page: input.page,
+    page_size: input.pageSize,
   }))
 }
 

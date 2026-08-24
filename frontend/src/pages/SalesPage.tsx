@@ -5,6 +5,7 @@ import { Link } from "react-router-dom"
 import { listSales } from "../api/sales"
 import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
 import { EmptyState } from "../components/ui/EmptyState"
+import { ChevronLeftIcon, ChevronRightIcon } from "../components/ui/Icons"
 import { RouteState } from "../components/ui/RouteState"
 import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
@@ -27,6 +28,25 @@ type Filters = {
 }
 
 const emptyFilters: Filters = { search: "", dateFrom: "", dateTo: "", paymentMethod: "" }
+const SALES_PAGE_SIZE = 20
+
+type PaginationItem = number | "ellipsis-start" | "ellipsis-end"
+
+function getPaginationItems(currentPage: number, totalPages: number): PaginationItem[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1)
+  }
+
+  if (currentPage <= 4) {
+    return [1, 2, 3, 4, 5, "ellipsis-end", totalPages]
+  }
+
+  if (currentPage >= totalPages - 3) {
+    return [1, "ellipsis-start", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+  }
+
+  return [1, "ellipsis-start", currentPage - 1, currentPage, currentPage + 1, "ellipsis-end", totalPages]
+}
 
 export function SalesPage() {
   const user = useCurrentUser().data!
@@ -45,6 +65,7 @@ export function SalesPage() {
       dateTo: filters.dateTo,
       paymentMethod: filters.paymentMethod,
       page,
+      pageSize: SALES_PAGE_SIZE,
     }),
     enabled: Boolean(ownSession && online),
     placeholderData: keepPreviousData,
@@ -58,6 +79,8 @@ export function SalesPage() {
   }
 
   const storeName = localSession?.storeName || "Boutique actuelle"
+  const totalPages = salesQuery.data ? Math.ceil(salesQuery.data.count / SALES_PAGE_SIZE) : 0
+  const paginationItems = getPaginationItems(page, totalPages)
 
   return (
     <main className="operational-page">
@@ -123,16 +146,17 @@ export function SalesPage() {
                   <Link className="sale-row" key={sale.id} to={`/sales/${sale.id}`}>
                     <div className="sale-row-main">
                       <strong>Ticket {sale.id.slice(0, 8).toUpperCase()}</strong>
-                      <span>{formatDateTime(sale.created_at)}</span>
-                      <span>{sale.cash_register.name} · {sale.cashier.username}</span>
+                      <div className="sale-row-meta">
+                        <span>{formatDateTime(sale.created_at)}</span>
+                        <span aria-hidden="true">•</span>
+                        <span>{sale.cash_register.name} · {sale.cashier.username}</span>
+                      </div>
                     </div>
-                    <div className="sale-row-payment">
-                      <span>{paymentLabels[sale.payment.method]}</span>
-                      {returned > 0 ? <span className="sale-return-status">Retour : − {formatBackendMoney(sale.returned_total!)}</span> : null}
-                    </div>
-                    <div className="sale-row-total">
+                    <div className="sale-row-summary">
+                      <span className="payment-chip">{paymentLabels[sale.payment.method]}</span>
                       <strong>{formatBackendMoney(sale.net_total ?? sale.total)}</strong>
                       {returned > 0 ? <span>Net</span> : <span>Total</span>}
+                      {returned > 0 ? <span className="sale-return-status">Retour : − {formatBackendMoney(sale.returned_total!)}</span> : null}
                     </div>
                   </Link>
                 )
@@ -140,11 +164,42 @@ export function SalesPage() {
             </section>
           ) : null}
 
-          {salesQuery.data && (salesQuery.data.previous || salesQuery.data.next) ? (
+          {salesQuery.data && totalPages > 1 ? (
             <nav className="sales-pagination" aria-label="Pagination des ventes">
-              <button className="button button-secondary button-small" type="button" disabled={!salesQuery.data.previous} onClick={() => setPage((value) => Math.max(1, value - 1))}>Précédent</button>
-              <span>Page {page}</span>
-              <button className="button button-secondary button-small" type="button" disabled={!salesQuery.data.next} onClick={() => setPage((value) => value + 1)}>Suivant</button>
+              <button
+                className="sales-pagination-button sales-pagination-arrow"
+                type="button"
+                aria-label="Page précédente"
+                disabled={page === 1}
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+              >
+                <ChevronLeftIcon />
+              </button>
+              <div className="sales-pagination-pages">
+                {paginationItems.map((item) => typeof item === "number" ? (
+                  <button
+                    key={item}
+                    className={`sales-pagination-button${item === page ? " sales-pagination-button-active" : ""}`}
+                    type="button"
+                    aria-label={`Page ${item}`}
+                    aria-current={item === page ? "page" : undefined}
+                    onClick={() => setPage(item)}
+                  >
+                    {item}
+                  </button>
+                ) : (
+                  <span className="sales-pagination-ellipsis" aria-hidden="true" key={item}>…</span>
+                ))}
+              </div>
+              <button
+                className="sales-pagination-button sales-pagination-arrow"
+                type="button"
+                aria-label="Page suivante"
+                disabled={page === totalPages}
+                onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+              >
+                <ChevronRightIcon />
+              </button>
             </nav>
           ) : null}
         </>

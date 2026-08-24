@@ -128,10 +128,11 @@ describe("sales API", () => {
       search: "A12F",
       paymentMethod: "WAVE",
       page: 2,
+      pageSize: 20,
     })
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      "/api/v1/sales/?cash_session_id=session-id&search=A12F&payment_method=WAVE&page=2",
+      "/api/v1/sales/?cash_session_id=session-id&search=A12F&payment_method=WAVE&page=2&page_size=20",
     )
   })
 })

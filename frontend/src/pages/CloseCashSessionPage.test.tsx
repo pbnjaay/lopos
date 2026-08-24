@@ -138,7 +138,7 @@ describe("CloseCashSessionPage", () => {
     await user.type(input, "-1")
     expect(input).toHaveAttribute("aria-invalid", "true")
     expect(screen.getByText("Saisissez un montant positif ou nul, sans décimales.")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Continuer" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Vérifier la clôture" })).toBeDisabled()
   })
 
   it("asks for confirmation and submits the close request only once", async () => {
@@ -160,7 +160,7 @@ describe("CloseCashSessionPage", () => {
     const queryClient = renderPage()
 
     await user.type(screen.getByLabelText("Montant compté"), "29 500")
-    await user.click(screen.getByRole("button", { name: "Continuer" }))
+    await user.click(screen.getByRole("button", { name: "Vérifier la clôture" }))
     expect(screen.getByRole("dialog")).toHaveTextContent(
       "Après cette opération, aucune nouvelle vente ne pourra être enregistrée",
     )
@@ -201,7 +201,7 @@ describe("CloseCashSessionPage", () => {
     renderPage()
 
     await user.type(screen.getByLabelText("Montant compté"), "29 500")
-    await user.click(screen.getByRole("button", { name: "Continuer" }))
+    await user.click(screen.getByRole("button", { name: "Vérifier la clôture" }))
     await user.click(screen.getByRole("button", { name: "Confirmer la clôture" }))
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -217,7 +217,7 @@ describe("CloseCashSessionPage", () => {
     renderPage()
 
     await user.type(screen.getByLabelText("Montant compté"), "29 500")
-    await user.click(screen.getByRole("button", { name: "Continuer" }))
+    await user.click(screen.getByRole("button", { name: "Vérifier la clôture" }))
     await user.click(screen.getByRole("button", { name: "Confirmer la clôture" }))
 
     expect(await screen.findByRole("alert")).toHaveTextContent(

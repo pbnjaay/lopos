@@ -70,6 +70,7 @@ describe("Cart checkout action", () => {
   it("is disabled when the cart is empty", () => {
     renderCart([])
     expect(screen.getByRole("button", { name: "Encaisser" })).toBeDisabled()
+    expect(screen.queryByText("0 produit dans la vente")).not.toBeInTheDocument()
   })
 
   it("shows the total and allows checkout when products exist", async () => {

@@ -65,9 +65,23 @@ export function SaleReturnReceiptPage() {
         />
       </div>
 
-      <article className="receipt" aria-labelledby="return-receipt-title">
-        <header className="receipt-heading">
-          <h1 id="return-receipt-title">{originalSale.store.name}</h1>
+      <article className="receipt return-detail-receipt" aria-labelledby="return-receipt-title">
+        <div className="return-detail-intro no-print">
+          <div className="success-mark" aria-hidden="true">✓</div>
+          <div>
+            <p className="eyebrow">Retour enregistré</p>
+            <h2 id="return-receipt-title">Remboursement effectué</h2>
+            <p>Le stock et les montants de la vente ont été mis à jour.</p>
+          </div>
+        </div>
+        <div className="return-detail-meta no-print" aria-label="Informations du retour">
+          <div><span>Référence</span><strong>{saleReturn.reference}</strong></div>
+          <div><span>Ticket d’origine</span><strong>{saleReturn.original_sale_id.slice(0, 8).toUpperCase()}</strong></div>
+          <div><span>Date et heure</span><strong>{formatDateTime(saleReturn.created_at)}</strong></div>
+        </div>
+
+        <header className="receipt-heading print-only">
+          <h1>{originalSale.store.name}</h1>
           <p><strong>N° retour : {saleReturn.reference}</strong></p>
           <p>Ticket d’origine : {saleReturn.original_sale_id.slice(0, 8).toUpperCase()}</p>
           <p>{formatDateTime(saleReturn.created_at)}</p>
@@ -75,7 +89,11 @@ export function SaleReturnReceiptPage() {
           <p>Caissier : {originalSale.cashier.username}</p>
         </header>
 
-        <ul className="receipt-items" aria-label="Articles retournés">
+        <div className="return-detail-section-heading no-print">
+          <h2>Articles retournés</h2>
+          <span>{saleReturn.items.length} article{saleReturn.items.length > 1 ? "s" : ""}</span>
+        </div>
+        <ul className="receipt-items return-detail-items" aria-label="Articles retournés">
           {saleReturn.items.map((item) => (
             <li key={item.id}>
               <strong>{item.product_name}</strong>

@@ -86,11 +86,28 @@ describe("SaleReturnPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Ticket A12F0000" })).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Retour à la vente" })).toHaveAttribute("href", `/sales/${sale.id}`)
-    expect(screen.getByLabelText("Quantité à retourner", { selector: "#return-quantity-item-2" })).toBeDisabled()
+    expect(document.getElementById("return-quantity-item-2")).toBeDisabled()
 
-    const quantity = screen.getByLabelText("Quantité à retourner", { selector: "#return-quantity-item-1" })
+    await actor.click(document.getElementById("return-quantity-item-1")!)
+    const quantity = screen.getByRole("textbox", { name: "Quantité à retourner" })
     await actor.type(quantity, "2")
-    expect(screen.getByText("La quantité dépasse le maximum retournable.")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Continuer" })).toBeDisabled()
+    await actor.keyboard("{Enter}")
+    expect(document.getElementById("return-quantity-item-1")).toHaveTextContent("0")
+    expect(screen.getByRole("button", { name: /Rembourser/ })).toBeDisabled()
+  })
+
+  it("lets the cashier adjust a return quantity directly from the counter", async () => {
+    const actor = userEvent.setup()
+    renderPage()
+
+    await screen.findByRole("heading", { name: "Ticket A12F0000" })
+    const quantity = document.getElementById("return-quantity-item-1")!
+    expect(quantity).toHaveTextContent("0")
+    await actor.click(screen.getByRole("button", { name: "Augmenter la quantité de Riz" }))
+    expect(quantity).toHaveTextContent("0,1 kg")
+    expect(screen.getByText("100 FCFA", { selector: ".return-total strong" })).toBeInTheDocument()
+
+    await actor.click(screen.getByRole("button", { name: "Diminuer la quantité de Riz" }))
+    expect(quantity).toHaveTextContent("0")
   })
 })

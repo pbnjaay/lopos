@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 
-import { CartIcon, MinusIcon, PencilIcon, PlusIcon, TrashIcon, XIcon } from "../../components/ui/Icons"
+import { CartIcon, PencilIcon, TrashIcon, XIcon } from "../../components/ui/Icons"
 import { Dialog } from "../../components/ui/Dialog"
+import { QuantityControl } from "../../components/ui/QuantityControl"
 import { formatMoney } from "../../utils/money"
 import type { CartItem } from "./cartState"
-import { formatQuantity, lineTotal, milliToDisplayQuantity, parseQuantityToMilli } from "../../utils/quantity"
+import { formatQuantity, lineTotal } from "../../utils/quantity"
 import { PriceDialog } from "./CartDialogs"
 
 type CartProps = {
@@ -34,51 +35,14 @@ export function Cart({
   onDialogOpenChange,
   onInteractionComplete,
 }: CartProps) {
-  const [quantityEditor, setQuantityEditor] = useState<{
-    productId: string
-    value: string
-  } | null>(null)
+  const [editingQuantityProductId, setEditingQuantityProductId] = useState<string | null>(null)
   const [priceProductId, setPriceProductId] = useState<string | null>(null)
   const [isClearConfirming, setIsClearConfirming] = useState(false)
-  const quantityInputRef = useRef<HTMLInputElement>(null)
-  const cancelQuantityBlurRef = useRef(false)
   const priceItem = items.find((item) => item.productId === priceProductId)
-  const hasBlockingInteraction = Boolean(quantityEditor || priceItem || isClearConfirming)
+  const hasBlockingInteraction = Boolean(editingQuantityProductId || priceItem || isClearConfirming)
 
   function finishInteraction() {
     onInteractionComplete?.()
-  }
-
-  function startQuantityEditing(item: CartItem) {
-    const quantityMilli = item.quantityMilli ?? (item.quantity ?? 0) * 1000
-    const value = item.saleUnit === "KG"
-      ? milliToDisplayQuantity(quantityMilli)
-      : String(quantityMilli / 1000)
-    cancelQuantityBlurRef.current = false
-    setQuantityEditor({ productId: item.productId, value })
-  }
-
-  function finishQuantityEditing(item: CartItem, apply: boolean) {
-    if (!quantityEditor || quantityEditor.productId !== item.productId) return
-    const parsed = parseQuantityToMilli(quantityEditor.value)
-    const stockMilli = item.stockMilli ?? (item.stock ?? Number.MAX_SAFE_INTEGER) * 1000
-    const currentQuantityMilli = item.quantityMilli ?? (item.quantity ?? 0) * 1000
-    const isValid =
-      parsed !== null &&
-      (item.saleUnit === "KG" || parsed % 1000 === 0) &&
-      parsed <= stockMilli
-
-    if (!apply) cancelQuantityBlurRef.current = true
-    if (
-      apply &&
-      !cancelQuantityBlurRef.current &&
-      isValid &&
-      parsed !== currentQuantityMilli
-    ) {
-      onQuantityChange(item.productId, parsed)
-    }
-    setQuantityEditor(null)
-    finishInteraction()
   }
 
   function closePriceDialog() {
@@ -95,12 +59,6 @@ export function Cart({
     onDialogOpenChange?.(hasBlockingInteraction)
     return () => onDialogOpenChange?.(false)
   }, [hasBlockingInteraction, onDialogOpenChange])
-
-  useEffect(() => {
-    if (!quantityEditor) return
-    quantityInputRef.current?.focus()
-    quantityInputRef.current?.select()
-  }, [quantityEditor?.productId])
 
   return (
     <>
@@ -164,66 +122,22 @@ export function Cart({
               </div>
 
               <div className="cart-item-actions">
-                <div
-                  className="quantity-control"
-                  role="group"
-                  aria-label={`Contrôles de quantité pour ${item.name}`}
-                >
-                  <button
-                    type="button"
-                    aria-label={`Diminuer ${item.name}`}
-                    disabled={(item.quantityMilli ?? (item.quantity ?? 0) * 1000) <= (item.saleUnit === "KG" ? 100 : 1000)}
-                    onClick={() => onDecrement(item.productId)}
-                  >
-                    <MinusIcon />
-                  </button>
-                  {quantityEditor?.productId === item.productId ? (
-                    <span className="quantity-input-wrap">
-                      <input
-                        ref={quantityInputRef}
-                        className={`quantity-input${item.saleUnit === "KG" ? " quantity-input-weight" : ""}`}
-                        type="text"
-                        inputMode={item.saleUnit === "KG" ? "decimal" : "numeric"}
-                        enterKeyHint="done"
-                        aria-label={`Quantité de ${item.name}`}
-                        value={quantityEditor.value}
-                        onChange={(event) => setQuantityEditor({
-                          productId: item.productId,
-                          value: event.target.value,
-                        })}
-                        onBlur={() => finishQuantityEditing(item, true)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault()
-                            event.currentTarget.blur()
-                          } else if (event.key === "Escape") {
-                            event.preventDefault()
-                            finishQuantityEditing(item, false)
-                          }
-                        }}
-                      />
-                      {item.saleUnit === "KG" ? <span aria-hidden="true">kg</span> : null}
-                    </span>
-                  ) : (
-                    <button
-                      className="quantity-value"
-                      type="button"
-                      aria-label={`Quantité de ${item.name}`}
-                      title="Modifier la quantité"
-                      onClick={() => startQuantityEditing(item)}
-                    >
-                      {formatQuantity(item.quantityMilli ?? (item.quantity ?? 0) * 1000, item.saleUnit ?? "UNIT")}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    aria-label={`Augmenter ${item.name}`}
-                    disabled={(item.quantityMilli ?? (item.quantity ?? 0) * 1000) >= (item.stockMilli ?? (item.stock ?? 0) * 1000)}
-                    onClick={() => onIncrement(item.productId)}
-                  >
-                    <PlusIcon />
-                  </button>
-                </div>
+                <QuantityControl
+                  valueMilli={item.quantityMilli ?? (item.quantity ?? 0) * 1000}
+                  saleUnit={item.saleUnit ?? "UNIT"}
+                  minimumMilli={item.saleUnit === "KG" ? 100 : 1000}
+                  maximumMilli={item.stockMilli ?? (item.stock ?? 0) * 1000}
+                  quantityLabel={`Quantité de ${item.name}`}
+                  decreaseLabel={`Diminuer ${item.name}`}
+                  increaseLabel={`Augmenter ${item.name}`}
+                  onDecrease={() => onDecrement(item.productId)}
+                  onIncrease={() => onIncrement(item.productId)}
+                  onCommit={(quantityMilli) => onQuantityChange(item.productId, quantityMilli)}
+                  onEditingChange={(isEditing) => {
+                    setEditingQuantityProductId(isEditing ? item.productId : null)
+                    if (!isEditing) finishInteraction()
+                  }}
+                />
                 <button
                   className="cart-action-button cart-edit-price"
                   type="button"
@@ -249,7 +163,9 @@ export function Cart({
         <div className="cart-total-block">
           <span>Total à payer</span>
           <strong>{formatMoney(total)}</strong>
-          <small>{items.length} produit{items.length > 1 ? "s" : ""} dans la vente</small>
+          {items.length > 0 ? (
+            <small>{items.length} produit{items.length > 1 ? "s" : ""} dans la vente</small>
+          ) : null}
         </div>
         <div className="checkout-button-group">
           <button
