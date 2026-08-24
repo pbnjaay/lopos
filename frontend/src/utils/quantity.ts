@@ -22,9 +22,15 @@ export function milliToBackendQuantity(value: number): string {
   return `${whole}.${fraction}`
 }
 
+export function milliToDisplayQuantity(value: number): string {
+  const [whole = "0", fraction = ""] = milliToBackendQuantity(value).split(".")
+  const significantFraction = fraction.replace(/0+$/, "")
+  return significantFraction ? `${whole},${significantFraction}` : whole
+}
+
 export function formatQuantity(value: number, saleUnit: "UNIT" | "KG"): string {
   if (saleUnit === "UNIT") return String(value / QUANTITY_SCALE)
-  return `${milliToBackendQuantity(value).replace(".", ",")} kg`
+  return `${milliToDisplayQuantity(value)} kg`
 }
 
 export function lineTotal(unitPrice: number, quantityMilli: number): number {

@@ -13,12 +13,13 @@ describe("OfflineBanner", () => {
     vi.unstubAllGlobals()
   })
 
-  it("shows the online status in the global connection indicator", () => {
+  it("keeps a discreet icon-only indicator while online", () => {
     vi.stubGlobal("navigator", { onLine: true })
     render(<ConnectionStatus />)
 
-    expect(screen.getByText("En ligne")).toBeInTheDocument()
+    expect(screen.queryByText("En ligne")).not.toBeInTheDocument()
     expect(screen.getByRole("status")).toHaveAccessibleName("Connexion Internet disponible")
+    expect(screen.getByRole("status")).toHaveAttribute("title", "Connexion Internet disponible")
   })
 
   it("shows the offline status in the global connection indicator", () => {

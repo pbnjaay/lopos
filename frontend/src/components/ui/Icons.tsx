@@ -41,8 +41,20 @@ export function ArrowLeftIcon(props: IconProps) {
   return <Icon {...props}><path d="m15 18-6-6 6-6" /><path d="M9 12h10" /></Icon>
 }
 
+export function CartIcon(props: IconProps) {
+  return <Icon {...props}><path d="M3 3h2l2.4 11.2a2 2 0 0 0 2 1.6h6.9a2 2 0 0 0 2-1.6L20 7H6" /><circle cx="10" cy="20" r="1" /><circle cx="17" cy="20" r="1" /></Icon>
+}
+
 export function PowerIcon(props: IconProps) {
   return <Icon {...props}><path d="M12 2v10" /><path d="M18.4 6.6a9 9 0 1 1-12.8 0" /></Icon>
+}
+
+export function ChevronDownIcon(props: IconProps) {
+  return <Icon {...props}><path d="m6 9 6 6 6-6" /></Icon>
+}
+
+export function LogOutIcon(props: IconProps) {
+  return <Icon {...props}><path d="M10 17l5-5-5-5" /><path d="M15 12H3" /><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /></Icon>
 }
 
 export function BarcodeIcon(props: IconProps) {

@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react"
 
 import { Dialog } from "../../components/ui/Dialog"
 import { formatMoney, parseMoneyInput } from "../../utils/money"
-import { formatQuantity, milliToBackendQuantity, parseQuantityToMilli } from "../../utils/quantity"
+import { formatQuantity, milliToDisplayQuantity, parseQuantityToMilli } from "../../utils/quantity"
 import type { CartItem } from "./cartState"
 
 type QuantityDialogProps = {
@@ -17,7 +17,7 @@ export function QuantityDialog({ item, quantityMilli, onApply, onClose }: Quanti
   const inputRef = useRef<HTMLInputElement>(null)
   const [value, setValue] = useState(() => {
     if (quantityMilli === null) return ""
-    return saleUnit === "KG" ? milliToBackendQuantity(quantityMilli).replace(".", ",") : String(quantityMilli / 1000)
+    return saleUnit === "KG" ? milliToDisplayQuantity(quantityMilli) : String(quantityMilli / 1000)
   })
   const [error, setError] = useState("")
   const parsedQuantity = parseQuantityToMilli(value)
@@ -64,7 +64,7 @@ export function QuantityDialog({ item, quantityMilli, onApply, onClose }: Quanti
               id="quantity-dialog-input"
               inputMode={saleUnit === "KG" ? "decimal" : "numeric"}
               enterKeyHint="done"
-              placeholder={saleUnit === "KG" ? "0,000" : "1"}
+              placeholder={saleUnit === "KG" ? "Ex. 0,5" : "1"}
               value={value}
               aria-invalid={Boolean(error)}
               aria-describedby={error ? "quantity-dialog-error" : undefined}

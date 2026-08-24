@@ -15,9 +15,10 @@ export function ConnectionStatus() {
       className={`network-status app-network-status ${isOnline ? "network-status-online" : "network-status-offline"}`}
       role="status"
       aria-label={isOnline ? "Connexion Internet disponible" : "Sans connexion Internet"}
+      title={isOnline ? "Connexion Internet disponible" : "Sans connexion Internet"}
     >
       {isOnline ? <WifiIcon /> : <WifiOffIcon />}
-      <span>{isOnline ? "En ligne" : "Hors ligne"}</span>
+      {!isOnline ? <span>Hors ligne</span> : null}
     </div>
   )
 }

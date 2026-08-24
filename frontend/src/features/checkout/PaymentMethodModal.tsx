@@ -106,7 +106,9 @@ export function PaymentMethodModal({
               <button
                 key={method}
                 ref={method === lastUsedMethod ? lastUsedButtonRef : undefined}
-                className={`payment-method-card payment-method-${method.toLowerCase()}`}
+                className={`payment-method-card${
+                  method === lastUsedMethod ? " payment-method-card-last-used" : ""
+                }`}
                 type="button"
                 onClick={() => onSelect(method)}
               >

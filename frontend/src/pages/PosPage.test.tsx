@@ -417,13 +417,6 @@ describe("POS sale workflow offline", () => {
 })
 
 describe("POS keyboard shortcuts", () => {
-  it("keeps return and closing actions clearly available", () => {
-    renderPos()
-
-    expect(screen.getByRole("link", { name: "Ventes" })).toHaveAttribute("href", "/sales")
-    expect(screen.getByRole("link", { name: "Clôturer la caisse" })).toHaveAttribute("href", "/cash/close")
-  })
-
   it("completes a cash sale with scanner + keyboard only: F1, digits, Enter", async () => {
     const userEvents = userEvent.setup()
     document.cookie = "csrftoken=test-token; path=/"

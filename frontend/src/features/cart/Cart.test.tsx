@@ -75,13 +75,15 @@ describe("Cart checkout action", () => {
   it("shows the total and allows checkout when products exist", async () => {
     const user = userEvent.setup()
     const callbacks = renderCart([coca])
+    expect(screen.getByRole("heading", { name: "Vente en cours" })).toBeInTheDocument()
+    expect(screen.getByText("1 produit")).toBeInTheDocument()
     expect(screen.getAllByText("1 000 FCFA")).toHaveLength(2)
     await user.click(screen.getByRole("button", { name: "Encaisser" }))
     expect(callbacks.onCheckout).toHaveBeenCalledOnce()
   })
 })
 
-describe("Cart POS dialogs", () => {
+describe("Cart POS interactions", () => {
   it("starts an initial weighed quantity empty and requires a valid value", async () => {
     const user = userEvent.setup()
     const onApply = vi.fn()
@@ -95,7 +97,7 @@ describe("Cart POS dialogs", () => {
     )
     const input = screen.getByLabelText("Quantité")
     expect(input).toHaveValue("")
-    expect(input).toHaveAttribute("placeholder", "0,000")
+    expect(input).toHaveAttribute("placeholder", "Ex. 0,5")
     expect(screen.getByRole("button", { name: "Appliquer" })).toBeDisabled()
 
     await user.type(input, "0,750")
@@ -108,25 +110,59 @@ describe("Cart POS dialogs", () => {
     const user = userEvent.setup()
     const callbacks = renderCart([coca])
     await user.click(screen.getByLabelText("Quantité de Coca 50cl"))
-    expect(screen.getByRole("heading", { name: "Modifier la quantité" })).toBeInTheDocument()
-    const input = screen.getByLabelText("Quantité")
+    expect(screen.queryByRole("heading", { name: "Modifier la quantité" })).not.toBeInTheDocument()
+    const input = screen.getByRole("textbox", { name: "Quantité de Coca 50cl" })
     expect(input).toHaveFocus()
     await user.clear(input)
     await user.type(input, "3{Enter}")
     expect(callbacks.onQuantityChange).toHaveBeenCalledWith("coca", 3000)
-    expect(screen.queryByRole("heading", { name: "Modifier la quantité" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Quantité de Coca 50cl" })).toHaveTextContent("2")
   })
 
-  it("keeps the quantity unchanged when Escape closes the dialog", async () => {
+  it("applies a weighed quantity when the inline field loses focus", async () => {
     const user = userEvent.setup()
     const callbacks = renderCart([banana])
     await user.click(screen.getByLabelText("Quantité de Banane"))
-    const input = screen.getByLabelText("Quantité")
+    const input = screen.getByRole("textbox", { name: "Quantité de Banane" })
+    await user.clear(input)
+    await user.type(input, "0,750")
+    await user.tab()
+    expect(callbacks.onQuantityChange).toHaveBeenCalledWith("banana", 750)
+  })
+
+  it("keeps the quantity unchanged when Escape cancels inline editing", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderCart([banana])
+    await user.click(screen.getByLabelText("Quantité de Banane"))
+    const input = screen.getByRole("textbox", { name: "Quantité de Banane" })
     await user.clear(input)
     await user.type(input, "0,750")
     await user.keyboard("{Escape}")
     expect(callbacks.onQuantityChange).not.toHaveBeenCalled()
-    expect(screen.queryByRole("heading", { name: "Modifier la quantité" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Quantité de Banane" })).toHaveTextContent("0,5 kg")
+  })
+
+  it("rejects a fractional quantity for a unit product", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderCart([coca])
+    await user.click(screen.getByLabelText("Quantité de Coca 50cl"))
+    const input = screen.getByRole("textbox", { name: "Quantité de Coca 50cl" })
+    await user.clear(input)
+    await user.type(input, "2,5{Enter}")
+    expect(callbacks.onQuantityChange).not.toHaveBeenCalled()
+    expect(screen.getByRole("button", { name: "Quantité de Coca 50cl" })).toHaveTextContent("2")
+  })
+
+  it("rejects an inline quantity above available stock", async () => {
+    const user = userEvent.setup()
+    const callbacks = renderCart([banana])
+    await user.click(screen.getByLabelText("Quantité de Banane"))
+    const input = screen.getByRole("textbox", { name: "Quantité de Banane" })
+    expect(input.parentElement).toHaveTextContent("kg")
+    await user.clear(input)
+    await user.type(input, "11{Enter}")
+    expect(callbacks.onQuantityChange).not.toHaveBeenCalled()
+    expect(screen.getByRole("button", { name: "Quantité de Banane" })).toHaveTextContent("0,5 kg")
   })
 
   it("changes the price with Enter", async () => {
@@ -153,7 +189,10 @@ describe("Cart POS dialogs", () => {
   it("removes a line immediately without browser confirmation", async () => {
     const user = userEvent.setup()
     const callbacks = renderCart([coca])
-    await user.click(screen.getByRole("button", { name: "Supprimer Coca 50cl du panier" }))
+    const removeButton = screen.getByRole("button", { name: "Supprimer Coca 50cl du panier" })
+    expect(removeButton).toHaveAttribute("title", "Supprimer l’article")
+    expect(removeButton).not.toHaveTextContent("Supprimer")
+    await user.click(removeButton)
     expect(callbacks.onRemove).toHaveBeenCalledWith("coca")
   })
 
