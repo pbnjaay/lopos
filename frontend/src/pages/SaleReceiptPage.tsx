@@ -7,6 +7,7 @@ import { getLocalSaleById } from "../db/sales"
 import { receiptViewFromApiReceipt, receiptViewFromLocalSale } from "../features/sales/receiptView"
 import { formatDateTime } from "../utils/date"
 import { formatMoney } from "../utils/money"
+import { formatQuantity } from "../utils/quantity"
 
 const paymentLabels = {
   CASH: "Espèces",
@@ -73,7 +74,7 @@ export function SaleReceiptPage() {
               <strong>{item.productName}</strong>
               <div>
                 <span>
-                  {item.quantity} × {formatMoney(item.unitPrice)}
+                  {formatQuantity(item.quantityMilli, item.saleUnit)} × {formatMoney(item.unitPrice)}{item.saleUnit === "KG" ? "/kg" : ""}
                 </span>
                 <span>{formatMoney(item.lineTotal)}</span>
               </div>

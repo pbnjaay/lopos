@@ -97,9 +97,17 @@ export function CashSessionReportPage() {
             <dd>{summary.sales_count}</dd>
           </div>
           <div className="closing-summary-total">
-            <dt>Chiffre d’affaires</dt>
+            <dt>Ventes brutes</dt>
             <dd>{formatBackendMoney(summary.gross_sales)}</dd>
           </div>
+          {summary.returns_total !== undefined ? <div>
+            <dt>Retours</dt>
+            <dd>− {formatBackendMoney(summary.returns_total ?? "0.00")}</dd>
+          </div> : null}
+          {summary.net_sales !== undefined ? <div className="closing-summary-total">
+            <dt>CA net</dt>
+            <dd>{formatBackendMoney(summary.net_sales ?? summary.gross_sales)}</dd>
+          </div> : null}
           <div>
             <dt>Espèces</dt>
             <dd>{formatBackendMoney(summary.payments.cash)}</dd>
@@ -112,6 +120,9 @@ export function CashSessionReportPage() {
             <dt>Orange Money</dt>
             <dd>{formatBackendMoney(summary.payments.orange_money)}</dd>
           </div>
+          {summary.refunds ? <><div><dt>Remboursements espèces</dt><dd>− {formatBackendMoney(summary.refunds.cash)}</dd></div>
+          <div><dt>Remboursements Wave</dt><dd>− {formatBackendMoney(summary.refunds.wave)}</dd></div>
+          <div><dt>Remboursements Orange Money</dt><dd>− {formatBackendMoney(summary.refunds.orange_money)}</dd></div></> : null}
           <div className="closing-summary-opening">
             <dt>Fond initial</dt>
             <dd>{formatBackendMoney(summary.opening_balance)}</dd>

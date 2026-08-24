@@ -1,6 +1,7 @@
 import type { Product } from "../types/api"
 import { db, type PosDatabase } from "./database"
 import type { LocalProduct } from "./types"
+import { backendQuantityToMilli } from "../utils/quantity"
 
 export type ProductCatalogMetadata = {
   storeId: string
@@ -31,22 +32,26 @@ export function buildLocalProducts(
   )
 
   return products.map((product) => {
-    if (!Number.isInteger(product.stock) || product.stock < 0) {
-      throw new Error(`Stock produit invalide : ${product.name}`)
-    }
-
-    return {
+    const existing = existingById.get(product.id)
+    const base: LocalProduct = {
       id: product.id,
       storeId,
       name: product.name,
       barcode: product.barcode,
       sellingPrice: toIntegerAmount(product.selling_price),
-      serverKnownStock: product.stock,
-      pendingSoldQuantity: existingById.get(product.id)?.pendingSoldQuantity ?? 0,
       isActive: product.is_active,
       updatedAt: product.updated_at,
       cachedAt,
     }
+    if (product.sale_unit) {
+      base.saleUnit = product.sale_unit
+      base.serverKnownStockMilli = backendQuantityToMilli(product.stock)
+      base.pendingSoldQuantityMilli = existing?.pendingSoldQuantityMilli ?? (existing?.pendingSoldQuantity ?? 0) * 1000
+    } else {
+      base.serverKnownStock = backendQuantityToMilli(product.stock) / 1000
+      base.pendingSoldQuantity = existing?.pendingSoldQuantity ?? (existing?.pendingSoldQuantityMilli ?? 0) / 1000
+    }
+    return base
   })
 }
 

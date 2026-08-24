@@ -3,6 +3,8 @@ export type CatalogProduct = {
   name: string
   barcode: string | null
   sellingPrice: number
-  stock: number
+  saleUnit?: "UNIT" | "KG"
+  stockMilli?: number
+  stock?: number
   isActive: boolean
 }

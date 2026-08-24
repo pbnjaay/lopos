@@ -10,6 +10,7 @@ import {
   incrementItem,
   removeItem,
   setItemQuantity,
+  setItemPrice,
 } from "./cartState"
 import { loadCartForSession, saveCartForSession } from "./cartStorage"
 
@@ -30,13 +31,15 @@ export function useCart(cashSessionId: string | null = null) {
   return {
     items,
     total: getCartTotal(items),
-    addItem: (product: CatalogProduct) => setItems((current) => addItem(current, product)),
+    addItem: (product: CatalogProduct, quantityMilli?: number) => setItems((current) => addItem(current, product, quantityMilli)),
     incrementItem: (productId: string) =>
       setItems((current) => incrementItem(current, productId)),
     decrementItem: (productId: string) =>
       setItems((current) => decrementItem(current, productId)),
-    setItemQuantity: (productId: string, quantity: number) =>
-      setItems((current) => setItemQuantity(current, productId, quantity)),
+    setItemQuantity: (productId: string, quantityMilli: number) =>
+      setItems((current) => setItemQuantity(current, productId, quantityMilli)),
+    setItemPrice: (productId: string, unitPrice: number) =>
+      setItems((current) => setItemPrice(current, productId, unitPrice)),
     removeItem: (productId: string) =>
       setItems((current) => removeItem(current, productId)),
     clearCart: () => setItems(clearCart()),

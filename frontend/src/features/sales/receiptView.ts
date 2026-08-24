@@ -1,5 +1,6 @@
 import type { LocalSale } from "../../db/types"
 import type { PaymentMethod, SaleReceipt, SaleResponse } from "../../types/api"
+import { backendQuantityToMilli } from "../../utils/quantity"
 
 export type ReceiptView = {
   id: string
@@ -13,7 +14,8 @@ export type ReceiptView = {
     productId: string
     productName: string
     unitPrice: number
-    quantity: number
+    saleUnit: "UNIT" | "KG"
+    quantityMilli: number
     lineTotal: number
   }>
   total: number
@@ -40,7 +42,8 @@ export function receiptViewFromApiReceipt(receipt: SaleReceipt): ReceiptView {
       productId: item.product_id,
       productName: item.product_name,
       unitPrice: Math.round(Number(item.unit_price)),
-      quantity: item.quantity,
+      saleUnit: item.sale_unit ?? "UNIT",
+      quantityMilli: backendQuantityToMilli(item.quantity),
       lineTotal: Math.round(Number(item.line_total)),
     })),
     total: Math.round(Number(receipt.total)),
@@ -67,7 +70,8 @@ export function receiptViewFromApiSale(
       productId: item.product_id,
       productName: item.product_name,
       unitPrice: Math.round(Number(item.unit_price)),
-      quantity: item.quantity,
+      saleUnit: item.sale_unit ?? "UNIT",
+      quantityMilli: backendQuantityToMilli(item.quantity),
       lineTotal: Math.round(Number(item.line_total)),
     })),
     total: Math.round(Number(sale.total)),
@@ -87,7 +91,11 @@ export function receiptViewFromLocalSale(sale: LocalSale): ReceiptView {
     cashRegisterName: sale.cashRegisterName,
     cashierName: sale.cashierName,
     createdAt: sale.createdAt,
-    items: sale.items,
+    items: sale.items.map((item) => ({
+      productId: item.productId, productName: item.productName,
+      unitPrice: item.unitPrice, saleUnit: item.saleUnit ?? "UNIT",
+      quantityMilli: item.quantityMilli ?? (item.quantity ?? 0) * 1000, lineTotal: item.lineTotal,
+    })),
     total: sale.total,
     payment: sale.payment,
   }

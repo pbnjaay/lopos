@@ -31,6 +31,7 @@ import { type ReceiptView, receiptViewFromApiSale, receiptViewFromLocalSale } fr
 import { useSyncStatus } from "../features/sync/useSyncStatus"
 import type { PaymentMethod } from "../types/api"
 import { toBackendMoney } from "../utils/money"
+import { milliToBackendQuantity, parseQuantityToMilli } from "../utils/quantity"
 
 type CheckoutPayment = {
   method: PaymentMethod
@@ -76,10 +77,11 @@ export function PosPage() {
         try {
           const sale = await completeSale({
             cash_session_id: ownSession!.id,
-            items: cart.items.map((item) => ({
+            items: cart.items.map((item) => item.saleUnit ? ({
               product_id: item.productId,
-              quantity: item.quantity,
-            })),
+              quantity: milliToBackendQuantity(item.quantityMilli ?? (item.quantity ?? 0) * 1000),
+              ...(item.unitPrice !== (item.catalogUnitPrice ?? item.unitPrice) ? { unit_price: toBackendMoney(item.unitPrice) } : {}),
+            }) : ({ product_id: item.productId, quantity: item.quantity ?? 1 })),
             payment:
               payment.method === "CASH"
                 ? { method: "CASH", received_amount: toBackendMoney(payment.receivedAmount!) }
@@ -106,10 +108,11 @@ export function PosPage() {
 
       const sale = await createLocalSale({
         session: localSession,
-        items: cart.items.map((item) => ({
+        items: cart.items.map((item) => item.saleUnit ? ({
           productId: item.productId,
-          quantity: item.quantity,
-        })),
+          quantityMilli: item.quantityMilli ?? (item.quantity ?? 0) * 1000,
+          unitPrice: item.unitPrice,
+        }) : ({ productId: item.productId, quantity: item.quantity ?? 1 })),
         payment: { method: payment.method, receivedAmount: payment.receivedAmount ?? null },
       })
       return receiptViewFromLocalSale(sale)
@@ -163,7 +166,15 @@ export function PosPage() {
   })
 
   function handleAddProduct(product: Parameters<typeof cart.addItem>[0]) {
-    cart.addItem(product)
+    if (product.saleUnit === "KG") {
+      const raw = window.prompt(`Quantité de ${product.name} en kg`, "0,300")
+      if (raw === null) return
+      const quantityMilli = parseQuantityToMilli(raw)
+      if (quantityMilli === null) return
+      cart.addItem(product, quantityMilli)
+      return
+    }
+    cart.addItem(product, 1000)
   }
 
   async function submitPayment(payment: CheckoutPayment) {
@@ -227,6 +238,7 @@ export function PosPage() {
           <Link className="close-session-link" to="/cash/close">
             Clôturer la caisse
           </Link>
+          <Link className="close-session-link" to="/returns/new">Retour marchandise</Link>
         </div>
       </header>
 
@@ -261,6 +273,7 @@ export function PosPage() {
             onIncrement={cart.incrementItem}
             onDecrement={cart.decrementItem}
             onQuantityChange={cart.setItemQuantity}
+            onPriceChange={cart.setItemPrice}
             onRemove={cart.removeItem}
             onClear={cart.clearCart}
             onCheckout={() => {

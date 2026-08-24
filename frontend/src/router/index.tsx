@@ -10,6 +10,8 @@ import { OpenCashSessionPage } from "../pages/OpenCashSessionPage"
 import { PendingSalesPage } from "../pages/PendingSalesPage"
 import { PosPage } from "../pages/PosPage"
 import { SaleReceiptPage } from "../pages/SaleReceiptPage"
+import { SaleReturnPage } from "../pages/SaleReturnPage"
+import { SaleReturnReceiptPage } from "../pages/SaleReturnReceiptPage"
 
 export const router = createBrowserRouter([
   { path: "/", element: <AppEntryPage /> },
@@ -56,6 +58,8 @@ export const router = createBrowserRouter([
         path: "/sales/:saleId/receipt",
         element: <SaleReceiptPage />,
       },
+      { path: "/returns/new", element: <SessionRoute requireOpen><SaleReturnPage /></SessionRoute> },
+      { path: "/returns/:returnId/receipt", element: <SaleReturnReceiptPage /> },
     ],
   },
   { path: "*", element: <Navigate to="/" replace /> },

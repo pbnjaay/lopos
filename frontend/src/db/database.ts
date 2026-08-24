@@ -8,7 +8,7 @@ import type {
 } from "./types"
 
 export const POS_DATABASE_NAME = "PosDatabase"
-export const POS_DATABASE_VERSION = 1
+export const POS_DATABASE_VERSION = 2
 
 export class PosDatabase extends Dexie {
   products!: Table<LocalProduct, [string, string]>
@@ -24,6 +24,22 @@ export class PosDatabase extends Dexie {
       localSales: "id,[status+createdAt],status,createdAt,cashSessionId",
       cashSessions: "id,cashRegisterId,status",
       metadata: "key",
+    }).upgrade(async (transaction) => {
+      await transaction.table("products").toCollection().modify((product) => {
+        product.saleUnit = product.saleUnit ?? "UNIT"
+        product.serverKnownStockMilli = product.serverKnownStock === null ? null : (product.serverKnownStock ?? 0) * 1000
+        product.pendingSoldQuantityMilli = (product.pendingSoldQuantity ?? 0) * 1000
+        delete product.serverKnownStock
+        delete product.pendingSoldQuantity
+      })
+      await transaction.table("localSales").toCollection().modify((sale) => {
+        sale.items = sale.items.map((item: Record<string, unknown>) => ({
+          ...item,
+          catalogUnitPrice: item.catalogUnitPrice ?? item.unitPrice,
+          saleUnit: item.saleUnit ?? "UNIT",
+          quantityMilli: Number(item.quantity ?? 0) * 1000,
+        }))
+      })
     })
   }
 }

@@ -5,6 +5,7 @@ import { useDebouncedValue } from "../../hooks/useDebouncedValue"
 import { formatMoney } from "../../utils/money"
 import { getProductByBarcode, searchProducts } from "./productService"
 import type { CatalogProduct } from "./types"
+import { formatQuantity } from "../../utils/quantity"
 
 type ProductSearchProps = {
   storeId: string
@@ -30,6 +31,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
     retry: false,
   })
   const products = (productsQuery.data ?? []).slice(0, 8)
+  const stockMilli = (product: CatalogProduct) => product.stockMilli ?? (product.stock ?? 0) * 1000
 
   useEffect(() => {
     setHighlightedIndex(0)
@@ -72,7 +74,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
     } else if (event.key === "Enter") {
       event.preventDefault()
       const product = products[highlightedIndex] ?? products[0]
-      if (product && product.stock > 0) handleProductSelect(product)
+      if (product && stockMilli(product) > 0) handleProductSelect(product)
     }
   }
 
@@ -82,7 +84,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
     if (
       productsQuery.data?.length === 1 &&
       exactProduct?.barcode === barcode &&
-      exactProduct.stock > 0
+      stockMilli(exactProduct) > 0
     ) {
       handleProductSelect(exactProduct)
     }
@@ -148,9 +150,9 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
                   }
                   type="button"
                   aria-current={mode === "search" && index === highlightedIndex}
-                  disabled={product.stock <= 0}
+                  disabled={stockMilli(product) <= 0}
                   aria-label={
-                    product.stock > 0
+                    stockMilli(product) > 0
                       ? `Ajouter ${product.name} au panier`
                       : `${product.name} en rupture de stock`
                   }
@@ -165,8 +167,8 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
                   </div>
                   <div className="product-numbers">
                     <strong>{formatMoney(product.sellingPrice)}</strong>
-                    <span className={product.stock === 0 ? "stock-empty" : undefined}>
-                      Stock : {product.stock}
+                    <span className={stockMilli(product) === 0 ? "stock-empty" : undefined}>
+                      Stock : {formatQuantity(stockMilli(product), product.saleUnit ?? "UNIT")}
                     </span>
                   </div>
                 </button>

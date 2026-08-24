@@ -7,7 +7,8 @@ export type SyncEventPayload = {
     product_id: string
     product_name: string
     unit_price: string
-    quantity: number
+    catalog_unit_price?: string
+    quantity: string
   }>
   payment: {
     method: PaymentMethod

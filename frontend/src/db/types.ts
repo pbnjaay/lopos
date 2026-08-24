@@ -6,8 +6,11 @@ export type LocalProduct = {
   name: string
   barcode: string | null
   sellingPrice: number
-  serverKnownStock: number | null
-  pendingSoldQuantity: number
+  saleUnit?: "UNIT" | "KG"
+  serverKnownStockMilli?: number | null
+  pendingSoldQuantityMilli?: number
+  serverKnownStock?: number | null
+  pendingSoldQuantity?: number
   isActive: boolean
   updatedAt?: string
   cachedAt: string
@@ -33,7 +36,10 @@ export type LocalSaleItem = {
   productId: string
   productName: string
   unitPrice: number
-  quantity: number
+  catalogUnitPrice?: number
+  saleUnit?: "UNIT" | "KG"
+  quantityMilli?: number
+  quantity?: number
   lineTotal: number
 }
 

@@ -32,8 +32,12 @@ export function CashClosingResult({ summary, onFinish }: CashClosingResultProps)
             <dd>{summary.sales_count}</dd>
           </div>
           <div className="closing-summary-total">
-            <dt>Chiffre d’affaires</dt>
-            <dd>{formatBackendMoney(summary.gross_sales)}</dd>
+            <dt>CA net</dt>
+            <dd>{formatBackendMoney(summary.net_sales ?? summary.gross_sales)}</dd>
+          </div>
+          <div>
+            <dt>Retours</dt>
+            <dd>− {formatBackendMoney(summary.returns_total ?? "0.00")}</dd>
           </div>
           <div>
             <dt>Espèces</dt>

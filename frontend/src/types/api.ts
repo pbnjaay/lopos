@@ -52,7 +52,14 @@ export type CashSessionSummary = {
   opened_at: string
   sales_count: number
   gross_sales: string
+  returns_total?: string
+  net_sales?: string
   payments: {
+    cash: string
+    wave: string
+    orange_money: string
+  }
+  refunds?: {
     cash: string
     wave: string
     orange_money: string
@@ -71,7 +78,8 @@ export type Product = {
   selling_price: string
   purchase_price: string | null
   is_active: boolean
-  stock: number
+  sale_unit?: "UNIT" | "KG"
+  stock: string | number
   created_at: string
   updated_at: string
 }
@@ -82,7 +90,8 @@ export type CompleteSaleInput = {
   cash_session_id: string
   items: Array<{
     product_id: string
-    quantity: number
+    quantity: string | number
+    unit_price?: string
   }>
   payment: {
     method: PaymentMethod
@@ -96,6 +105,8 @@ export type SaleResponse = {
   subtotal: string
   discount: string
   total: string
+  returned_total?: string
+  net_total?: string
   payment: {
     method: PaymentMethod
     amount: string
@@ -104,10 +115,15 @@ export type SaleResponse = {
   }
   items: Array<{
     product_id: string
+    id: string
     product_name: string
+    sale_unit?: "UNIT" | "KG"
+    catalog_unit_price?: string
     unit_price: string
-    quantity: number
+    quantity: string | number
     line_total: string
+    quantity_returned?: string
+    quantity_returnable?: string
   }>
   created_at: string
 }
@@ -125,4 +141,15 @@ export type SaleReceipt = SaleResponse & {
     id: number
     username: string
   }
+}
+
+export type SaleReturn = {
+  id: string
+  reference: string
+  original_sale_id: string
+  total_refund: string
+  payment_method: PaymentMethod
+  status: "COMPLETED"
+  created_at: string
+  items: Array<{ id: string; product_name: string; sale_unit: "UNIT" | "KG"; quantity: string; unit_price: string; refund_amount: string; restock: boolean }>
 }

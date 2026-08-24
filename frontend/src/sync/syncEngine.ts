@@ -16,6 +16,7 @@ import { getOrCreateTerminalId } from "../db/terminal"
 import type { LocalSale } from "../db/types"
 import { isNavigatorOnline } from "../utils/network"
 import { toBackendMoney } from "../utils/money"
+import { milliToBackendQuantity } from "../utils/quantity"
 
 const BATCH_SIZE = 50
 const BACKOFF_STEPS_MS = [1_000, 2_000, 5_000, 10_000]
@@ -44,7 +45,8 @@ function toSyncEvent(sale: LocalSale): SyncEvent {
         product_id: item.productId,
         product_name: item.productName,
         unit_price: toBackendMoney(item.unitPrice),
-        quantity: item.quantity,
+        ...(item.catalogUnitPrice ? { catalog_unit_price: toBackendMoney(item.catalogUnitPrice) } : {}),
+        quantity: milliToBackendQuantity(item.quantityMilli ?? (item.quantity ?? 0) * 1000),
       })),
       payment:
         sale.payment.method === "CASH"

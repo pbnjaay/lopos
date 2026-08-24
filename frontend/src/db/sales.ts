@@ -7,6 +7,7 @@ import type {
   LocalSale,
   LocalSaleItem,
 } from "./types"
+import { lineTotal } from "../utils/quantity"
 
 export class LocalSaleProductNotFoundError extends Error {
   constructor(productId: string) {
@@ -33,7 +34,7 @@ export class InsufficientLocalStockError extends Error {
 
 export type CreateLocalSaleInput = {
   session: LocalCashSession
-  items: Array<{ productId: string; quantity: number }>
+  items: Array<{ productId: string; quantityMilli?: number; quantity?: number; unitPrice?: number }>
   payment: {
     method: PaymentMethod
     receivedAmount?: number | null
@@ -72,7 +73,9 @@ export async function createLocalSale(
     const saleItems: LocalSaleItem[] = []
     const productsById = new Map<string, LocalProduct>()
 
-    for (const { productId, quantity } of items) {
+    for (const inputItem of items) {
+      const { productId } = inputItem
+      const quantityMilli = inputItem.quantityMilli ?? (inputItem.quantity ?? 0) * 1000
       const product = await database.products
         .where("[storeId+id]")
         .equals([session.storeId, productId])
@@ -82,25 +85,31 @@ export async function createLocalSale(
       }
 
       const availableStock =
-        product.serverKnownStock === null
+        (product.serverKnownStockMilli ?? product.serverKnownStock) === null
           ? Number.POSITIVE_INFINITY
-          : product.serverKnownStock - product.pendingSoldQuantity
-      if (availableStock < quantity) {
+          : (product.serverKnownStockMilli ?? (product.serverKnownStock ?? 0) * 1000) - (product.pendingSoldQuantityMilli ?? (product.pendingSoldQuantity ?? 0) * 1000)
+      if (availableStock < quantityMilli) {
         throw new InsufficientLocalStockError(
           product.name,
           Math.max(availableStock, 0),
-          quantity,
+          quantityMilli,
         )
       }
 
       productsById.set(productId, product)
-      saleItems.push({
+      const saleItem: LocalSaleItem = {
         productId: product.id,
         productName: product.name,
-        unitPrice: product.sellingPrice,
-        quantity,
-        lineTotal: product.sellingPrice * quantity,
-      })
+        unitPrice: inputItem.unitPrice ?? product.sellingPrice,
+        quantity: quantityMilli / 1000,
+        lineTotal: lineTotal(inputItem.unitPrice ?? product.sellingPrice, quantityMilli),
+      }
+      if (product.saleUnit || inputItem.quantityMilli !== undefined || inputItem.unitPrice !== undefined) {
+        saleItem.catalogUnitPrice = product.sellingPrice
+        saleItem.saleUnit = product.saleUnit ?? "UNIT"
+        saleItem.quantityMilli = quantityMilli
+      }
+      saleItems.push(saleItem)
     }
 
     const total = saleItems.reduce((sum, item) => sum + item.lineTotal, 0)
@@ -132,7 +141,8 @@ export async function createLocalSale(
     for (const item of saleItems) {
       const product = productsById.get(item.productId)!
       await database.products.update([product.storeId, product.id], {
-        pendingSoldQuantity: product.pendingSoldQuantity + item.quantity,
+        pendingSoldQuantityMilli: (product.pendingSoldQuantityMilli ?? (product.pendingSoldQuantity ?? 0) * 1000) + (item.quantityMilli ?? (item.quantity ?? 0) * 1000),
+        pendingSoldQuantity: ((product.pendingSoldQuantityMilli ?? (product.pendingSoldQuantity ?? 0) * 1000) + (item.quantityMilli ?? (item.quantity ?? 0) * 1000)) / 1000,
       })
     }
 

@@ -9,6 +9,7 @@ import type { Product } from "../../types/api"
 import type { LocalProduct } from "../../db/types"
 import { isNavigatorOnline } from "../../utils/network"
 import type { CatalogProduct } from "./types"
+import { backendQuantityToMilli } from "../../utils/quantity"
 
 export class LocalCatalogUnavailableError extends Error {
   constructor() {
@@ -25,27 +26,38 @@ export class LocalProductNotFoundError extends Error {
 }
 
 function fromApiProduct(product: Product): CatalogProduct {
-  return {
+  const base: CatalogProduct = {
     id: product.id,
     name: product.name,
     barcode: product.barcode,
     sellingPrice: Math.round(Number(product.selling_price)),
-    stock: product.stock,
+    stock: backendQuantityToMilli(product.stock) / 1000,
     isActive: product.is_active,
   }
+  if (product.sale_unit) {
+    base.saleUnit = product.sale_unit
+    base.stockMilli = backendQuantityToMilli(product.stock)
+  }
+  return base
 }
 
 function fromLocalProduct(product: LocalProduct): CatalogProduct {
-  const knownStock = product.serverKnownStock ?? 0
+  const knownStock = product.serverKnownStockMilli ?? (product.serverKnownStock ?? 0) * 1000
+  const pending = product.pendingSoldQuantityMilli ?? (product.pendingSoldQuantity ?? 0) * 1000
 
-  return {
+  const result: CatalogProduct = {
     id: product.id,
     name: product.name,
     barcode: product.barcode,
     sellingPrice: product.sellingPrice,
-    stock: Math.max(knownStock - product.pendingSoldQuantity, 0),
+    stock: Math.max(knownStock - pending, 0) / 1000,
     isActive: product.isActive,
   }
+  if (product.saleUnit) {
+    result.saleUnit = product.saleUnit
+    result.stockMilli = Math.max(knownStock - pending, 0)
+  }
+  return result
 }
 
 async function ensureLocalCatalog(storeId: string): Promise<void> {
