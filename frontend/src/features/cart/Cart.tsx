@@ -161,8 +161,10 @@ export function Cart({
 
       <footer className="cart-summary">
         <div className="cart-total-block">
-          <span>Total à payer</span>
-          <strong>{formatMoney(total)}</strong>
+          <div className="cart-total-amount">
+            <span>Total à payer</span>
+            <strong>{formatMoney(total)}</strong>
+          </div>
           {items.length > 0 ? (
             <small>{items.length} produit{items.length > 1 ? "s" : ""} dans la vente</small>
           ) : null}

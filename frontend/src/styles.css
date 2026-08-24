@@ -909,14 +909,17 @@ input::placeholder {
 }
 
 .counted-cash-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 1.25rem;
   margin-top: 1.25rem;
 }
 
-.counted-cash-form .button {
+.counted-cash-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 1.25rem;
+}
+
+.counted-cash-input-row .button {
   min-height: 3.5rem;
 }
 
@@ -1744,7 +1747,7 @@ input::placeholder {
 
   .closing-session-meta,
   .closing-summary,
-  .counted-cash-form {
+  .counted-cash-input-row {
     grid-template-columns: 1fr;
   }
 
@@ -2493,7 +2496,7 @@ input::placeholder {
 
 .cart-item-actions {
   display: grid;
-  grid-template-columns: minmax(10.5rem, 1.5fr) minmax(7rem, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.55rem;
 }
 
@@ -2576,6 +2579,7 @@ input::placeholder {
 }
 
 .quantity-control {
+  min-height: 2.75rem;
   display: grid;
   grid-template-columns: 2.75rem minmax(4.5rem, 1fr) 2.75rem;
   align-items: center;
@@ -2586,7 +2590,8 @@ input::placeholder {
 }
 
 .quantity-control button {
-  min-height: 2.6rem;
+  height: 100%;
+  min-height: 0;
   border: 0;
   background: #f1f6f3;
   color: #176b4d;
@@ -2623,6 +2628,7 @@ input::placeholder {
 
 .quantity-input-wrap {
   position: relative;
+  height: 100%;
   min-width: 0;
 }
 
@@ -2638,9 +2644,10 @@ input::placeholder {
 }
 
 .quantity-input {
+  height: 100%;
   width: 100%;
   min-width: 0;
-  min-height: 2.6rem;
+  min-height: 0;
   padding: 0 0.45rem;
   border: 0;
   border-inline: 1px solid #7c9b8e;
@@ -2722,12 +2729,20 @@ input::placeholder {
 
 .cart-summary {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(12rem, 1.2fr);
+  grid-template-columns: 1fr;
+  gap: 1rem;
   border-top: 2px solid #d5e1db;
   background: #f4f8f6;
 }
 
-.cart-summary > div {
+.cart-total-block {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.cart-total-amount {
   display: grid;
   gap: 0.2rem;
   font-size: 1.05rem;
@@ -2735,9 +2750,11 @@ input::placeholder {
 }
 
 .cart-total-block small {
+  padding-bottom: 0.25rem;
   color: #527064;
   font-size: 0.72rem;
   font-weight: 600;
+  text-align: right;
   text-transform: none;
 }
 
@@ -3314,7 +3331,6 @@ input::placeholder {
     display: none;
   }
 
-  .quantity-control button,
   .icon-button,
   .text-button,
   .cart-action-button,
@@ -3324,6 +3340,10 @@ input::placeholder {
 
   .cart-remove-corner {
     min-width: 3rem;
+  }
+
+  .quantity-control {
+    min-height: 3rem;
   }
 }
 
@@ -3412,7 +3432,6 @@ input::placeholder {
     margin-left: 0;
   }
 
-  .quantity-control button,
   .icon-button,
   .cart-action-button {
     min-height: 3rem;

@@ -238,19 +238,28 @@ export function CloseCashSessionPage() {
           <form className="counted-cash-form" onSubmit={handleContinue}>
             <div className="counted-cash-field">
               <label htmlFor="counted-cash">Montant compté</label>
-              <div className="money-input">
-                <input
-                  id="counted-cash"
-                  autoFocus
-                  inputMode="numeric"
-                  placeholder="29 500"
-                  value={countedCash}
-                  disabled={closeMutation.isPending}
-                  aria-describedby="counted-cash-help"
-                  aria-invalid={hasCountedCash && parsedCountedCash === null}
-                  onChange={(event) => setCountedCash(event.target.value)}
-                />
-                <span>FCFA</span>
+              <div className="counted-cash-input-row">
+                <div className="money-input">
+                  <input
+                    id="counted-cash"
+                    autoFocus
+                    inputMode="numeric"
+                    placeholder="29 500"
+                    value={countedCash}
+                    disabled={closeMutation.isPending}
+                    aria-describedby="counted-cash-help"
+                    aria-invalid={hasCountedCash && parsedCountedCash === null}
+                    onChange={(event) => setCountedCash(event.target.value)}
+                  />
+                  <span>FCFA</span>
+                </div>
+                <button
+                  className="button button-primary"
+                  type="submit"
+                  disabled={parsedCountedCash === null || closeMutation.isPending}
+                >
+                  Vérifier la clôture
+                </button>
               </div>
               <small
                 id="counted-cash-help"
@@ -264,13 +273,6 @@ export function CloseCashSessionPage() {
               </small>
             </div>
 
-            <button
-              className="button button-primary"
-              type="submit"
-              disabled={parsedCountedCash === null || closeMutation.isPending}
-            >
-              Vérifier la clôture
-            </button>
           </form>
         </section>
       </section>

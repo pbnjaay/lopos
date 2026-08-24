@@ -297,6 +297,13 @@ Ces problèmes sont identifiés mais délibérément non résolus ici :
 - La synchronisation elle-même (push/pull, retry, idempotence réseau,
   résolution de conflits, Background Sync) est entièrement hors scope ici.
 
+### TODO UX/UI
+
+- Centraliser les boutons dans un composant partagé avec les variantes
+  `primary`, `secondary`, `destructive`, `icon` et `small`. Remplacer notamment
+  `button-close-session`, supprimer l’ancien `button-return` et rapprocher les
+  boutons spécialisés du panier de ce système commun.
+
 ### Scénario manuel hors ligne
 
 1. ouvrir une session en ligne et laisser le catalogue se mettre en cache
