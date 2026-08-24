@@ -33,3 +33,7 @@ class InsufficientStock(Exception):
 
 class InvalidPayment(Exception):
     """Raised when payment details cannot settle a sale."""
+
+
+class InvalidReturn(Exception):
+    """Raised when a merchandise return violates a business invariant."""

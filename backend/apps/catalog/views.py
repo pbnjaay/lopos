@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from django.db.models import IntegerField, OuterRef, Q, Subquery, Value
+from django.db.models import DecimalField, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from rest_framework import mixins, serializers, viewsets
 
@@ -52,7 +52,7 @@ class ProductViewSet(
                 current_stock=Coalesce(
                     Subquery(stock_quantity),
                     Value(0),
-                    output_field=IntegerField(),
+                    output_field=DecimalField(max_digits=12, decimal_places=3),
                 )
             )
 

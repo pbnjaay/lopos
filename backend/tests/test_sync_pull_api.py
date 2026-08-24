@@ -39,6 +39,7 @@ def test_pull_without_cursor_returns_full_catalog(api_client: APIClient) -> None
         "name": "Coca 50cl",
         "barcode": None,
         "selling_price": "500.00",
+        "sale_unit": "UNIT",
         "is_active": True,
     }
     assert "cursor" in body

@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 from django.db import models
 from django.db.models import Q
@@ -21,7 +22,7 @@ class Stock(models.Model):
         related_name="stocks",
         verbose_name="produit",
     )
-    quantity = models.IntegerField("quantité", default=0)
+    quantity = models.DecimalField("quantité", max_digits=12, decimal_places=3, default=Decimal("0"))
     updated_at = models.DateTimeField("modifié le", auto_now=True)
 
     class Meta:
@@ -44,6 +45,7 @@ class InventoryMovement(models.Model):
         STOCK_IN = "STOCK_IN", "Entrée de stock"
         SALE = "SALE", "Vente"
         ADJUSTMENT = "ADJUSTMENT", "Ajustement"
+        RETURN_IN = "RETURN_IN", "Retour remis en stock"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     store = models.ForeignKey(
@@ -61,7 +63,7 @@ class InventoryMovement(models.Model):
     movement_type = models.CharField(
         "type de mouvement", max_length=16, choices=Type.choices
     )
-    quantity = models.IntegerField("quantité")
+    quantity = models.DecimalField("quantité", max_digits=12, decimal_places=3)
     reference = models.UUIDField("référence", blank=True, null=True, db_index=True)
     created_at = models.DateTimeField("créé le", auto_now_add=True)
 
@@ -77,4 +79,4 @@ class InventoryMovement(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.movement_type} {self.quantity:+d} — {self.product}"
+        return f"{self.movement_type} {self.quantity:+} — {self.product}"

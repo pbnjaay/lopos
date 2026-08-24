@@ -11,10 +11,13 @@ from .exceptions import (
     InvalidSaleItems,
     ProductInactive,
     ProductNotFound,
+    InvalidReturn,
 )
-from .models import Sale
-from .serializers import CompleteSaleSerializer, SaleSerializer
-from .services import complete_sale
+from .models import Sale, SaleReturn
+from .serializers import (
+    CompleteSaleSerializer, SaleSerializer, CreateSaleReturnSerializer, SaleReturnSerializer
+)
+from .services import complete_sale, create_sale_return
 
 
 class CompleteSaleView(APIView):
@@ -68,7 +71,7 @@ class CompleteSaleView(APIView):
             Sale.objects.select_related(
                 "payment", "cashier", "cash_session__cash_register__store"
             )
-            .prefetch_related("items")
+            .prefetch_related("items__return_items__sale_return", "returns")
             .get(pk=sale.pk)
         )
         return Response(SaleSerializer(sale).data, status=status.HTTP_201_CREATED)
@@ -79,7 +82,7 @@ class SaleDetailView(APIView):
         sale = get_object_or_404(
             Sale.objects.select_related(
                 "payment", "cashier", "cash_session__cash_register__store"
-            ).prefetch_related("items"),
+            ).prefetch_related("items__return_items__sale_return", "returns"),
             pk=pk,
         )
         if sale.cashier_id != request.user.pk and not request.user.is_staff:
@@ -92,3 +95,29 @@ class SaleDetailView(APIView):
             )
 
         return Response(SaleSerializer(sale).data, status=status.HTTP_200_OK)
+
+
+class SaleReturnListCreateView(APIView):
+    def post(self, request) -> Response:
+        serializer = CreateSaleReturnSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            sale_return = create_sale_return(**serializer.validated_data, created_by=request.user)
+        except CashSessionClosed as exc:
+            return Response({"code": "CASH_SESSION_CLOSED", "message": str(exc)}, status=status.HTTP_409_CONFLICT)
+        except InvalidReturn as exc:
+            return Response({"code": "INVALID_RETURN", "message": str(exc)}, status=status.HTTP_409_CONFLICT)
+        sale_return = SaleReturn.objects.select_related("created_by").prefetch_related(
+            "items__original_sale_item"
+        ).get(pk=sale_return.pk)
+        return Response(SaleReturnSerializer(sale_return).data, status=status.HTTP_201_CREATED)
+
+
+class SaleReturnDetailView(APIView):
+    def get(self, request, pk=None) -> Response:
+        sale_return = get_object_or_404(
+            SaleReturn.objects.select_related("created_by").prefetch_related("items__original_sale_item"), pk=pk
+        )
+        if sale_return.created_by_id != request.user.pk and not request.user.is_staff:
+            return Response({"code": "RETURN_NOT_OWNED", "message": "Ce retour appartient à un autre caissier."}, status=status.HTTP_403_FORBIDDEN)
+        return Response(SaleReturnSerializer(sale_return).data)

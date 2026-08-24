@@ -16,7 +16,12 @@ class SyncOfflineItemSerializer(serializers.Serializer):
     unit_price = serializers.DecimalField(
         max_digits=14, decimal_places=2, min_value=Decimal("0")
     )
-    quantity = serializers.IntegerField(min_value=1)
+    catalog_unit_price = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0.01"), required=False
+    )
+    quantity = serializers.DecimalField(
+        max_digits=12, decimal_places=3, min_value=Decimal("0.001")
+    )
 
 
 class SyncPaymentSerializer(serializers.Serializer):

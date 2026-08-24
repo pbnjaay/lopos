@@ -219,6 +219,7 @@ def pull_catalog_changes(*, since: datetime | None) -> PullPage:
                 "name": product.name,
                 "barcode": product.barcode,
                 "selling_price": str(product.selling_price),
+                "sale_unit": product.sale_unit,
                 "is_active": product.is_active,
             },
         }

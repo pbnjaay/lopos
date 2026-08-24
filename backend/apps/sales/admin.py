@@ -1,4 +1,5 @@
 from django.conf import settings
+from decimal import Decimal
 from django.contrib import admin
 from django.db.models import QuerySet
 from django.http import HttpRequest
@@ -9,7 +10,7 @@ from unfold.admin import ModelAdmin, TabularInline
 from apps.dashboard.formatting import format_fcfa
 from apps.dashboard.period import PERIOD_CHOICES, resolve_period_range
 
-from .models import Payment, Sale, SaleItem
+from .models import Payment, Sale, SaleItem, SaleReturn, SaleReturnItem
 
 
 class SalePeriodFilter(admin.SimpleListFilter):
@@ -53,9 +54,14 @@ class ReadOnlyTabularInline(TabularInline):
 
 class SaleItemInline(ReadOnlyTabularInline):
     model = SaleItem
-    fields = ("product_name", "unit_price", "quantity", "line_total")
+    fields = ("product_name", "sale_unit", "quantity", "catalog_unit_price", "unit_price", "line_total", "quantity_returned_display")
     verbose_name = "article vendu"
     verbose_name_plural = "articles vendus"
+    readonly_fields = ("quantity_returned_display",)
+
+    @admin.display(description="retourné")
+    def quantity_returned_display(self, obj):
+        return obj.quantity_returned
 
 
 class PaymentInline(ReadOnlyTabularInline):
@@ -64,6 +70,11 @@ class PaymentInline(ReadOnlyTabularInline):
     max_num = 1
     verbose_name = "paiement"
     verbose_name_plural = "paiement"
+
+
+class SaleReturnItemInline(ReadOnlyTabularInline):
+    model = SaleReturnItem
+    fields = ("original_sale_item", "quantity", "unit_price", "refund_amount", "restock")
 
 
 @admin.register(Sale)
@@ -98,6 +109,8 @@ class SaleAdmin(ReadOnlySalesAdmin):
         "occurred_at",
         "created_at",
         "ticket_link",
+        "returned_total_display",
+        "net_total_display",
     )
     fieldsets = (
         (
@@ -110,6 +123,8 @@ class SaleAdmin(ReadOnlySalesAdmin):
                     "subtotal",
                     "discount",
                     "total",
+                    "returned_total_display",
+                    "net_total_display",
                     "status",
                     "occurred_at",
                     "created_at",
@@ -125,6 +140,7 @@ class SaleAdmin(ReadOnlySalesAdmin):
             super()
             .get_queryset(request)
             .select_related("cash_session__cash_register", "cashier", "payment")
+            .prefetch_related("returns")
         )
 
     @admin.display(description=_("total"), ordering="total")
@@ -149,6 +165,16 @@ class SaleAdmin(ReadOnlySalesAdmin):
             _("Voir / imprimer le ticket"),
         )
 
+    @admin.display(description="montant retourné")
+    def returned_total_display(self, obj: Sale) -> str:
+        total = sum((value.total_refund for value in obj.returns.all()), Decimal("0.00"))
+        return format_fcfa(total)
+
+    @admin.display(description="montant net")
+    def net_total_display(self, obj: Sale) -> str:
+        returned = sum((value.total_refund for value in obj.returns.all()), Decimal("0.00"))
+        return format_fcfa(obj.total - returned)
+
 
 @admin.register(SaleItem)
 class SaleItemAdmin(ReadOnlySalesAdmin):
@@ -161,3 +187,16 @@ class PaymentAdmin(ReadOnlySalesAdmin):
     list_display = ("created_at", "sale", "method", "amount", "change_amount")
     list_filter = ("method",)
     search_fields = ("sale__id",)
+
+
+@admin.register(SaleReturn)
+class SaleReturnAdmin(ReadOnlySalesAdmin):
+    list_display = ("reference", "created_at", "original_sale", "cash_session", "created_by", "total_refund", "payment_method")
+    list_filter = ("payment_method", "cash_session__cash_register__store")
+    search_fields = ("reference", "original_sale__id", "created_by__username")
+    inlines = (SaleReturnItemInline,)
+
+
+@admin.register(SaleReturnItem)
+class SaleReturnItemAdmin(ReadOnlySalesAdmin):
+    list_display = ("sale_return", "original_sale_item", "quantity", "unit_price", "refund_amount", "restock")

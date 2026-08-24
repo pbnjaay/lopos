@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.db import models
 from django.db.models import F, Q
+from django.db.models.functions import Round
 from django.utils import timezone
 
 from apps.cash.models import CashSession
@@ -88,8 +89,15 @@ class SaleItem(models.Model):
         verbose_name="produit",
     )
     product_name = models.CharField("nom du produit", max_length=255)
+    sale_unit = models.CharField(
+        "unité de vente", max_length=8, choices=Product.SaleUnit.choices,
+        default=Product.SaleUnit.UNIT,
+    )
+    catalog_unit_price = models.DecimalField(
+        "prix catalogue", max_digits=14, decimal_places=2, default=Decimal("0")
+    )
     unit_price = models.DecimalField("prix unitaire", max_digits=14, decimal_places=2)
-    quantity = models.PositiveIntegerField("quantité")
+    quantity = models.DecimalField("quantité", max_digits=12, decimal_places=3)
     line_total = models.DecimalField("total de la ligne", max_digits=14, decimal_places=2)
 
     class Meta:
@@ -106,14 +114,29 @@ class SaleItem(models.Model):
                 name="sales_item_unit_price_nonnegative",
             ),
             models.CheckConstraint(
+                condition=Q(catalog_unit_price__gte=Decimal("0")),
+                name="sales_item_catalog_price_nonnegative",
+            ),
+            models.CheckConstraint(
                 condition=Q(line_total__gte=Decimal("0"))
-                & Q(line_total=F("unit_price") * F("quantity")),
+                & Q(line_total=Round(F("unit_price") * F("quantity"), precision=2)),
                 name="sales_item_line_total_consistent",
             ),
         ]
 
     def __str__(self) -> str:
         return f"{self.product_name} × {self.quantity}"
+
+    @property
+    def quantity_returned(self) -> Decimal:
+        value = self.return_items.filter(sale_return__status=SaleReturn.Status.COMPLETED).aggregate(
+            total=models.Sum("quantity")
+        )["total"]
+        return value or Decimal("0.000")
+
+    @property
+    def quantity_returnable(self) -> Decimal:
+        return self.quantity - self.quantity_returned
 
 
 class Payment(models.Model):
@@ -177,3 +200,70 @@ class Payment(models.Model):
 
     def __str__(self) -> str:
         return f"{self.method} — {self.amount}"
+
+
+class SaleReturn(models.Model):
+    class Status(models.TextChoices):
+        COMPLETED = "COMPLETED", "Terminé"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    reference = models.CharField("référence", max_length=16, unique=True, editable=False)
+    original_sale = models.ForeignKey(
+        Sale, on_delete=models.PROTECT, related_name="returns", verbose_name="vente originale"
+    )
+    cash_session = models.ForeignKey(
+        CashSession, on_delete=models.PROTECT, related_name="sale_returns",
+        verbose_name="session de caisse"
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="sale_returns",
+        verbose_name="créé par"
+    )
+    total_refund = models.DecimalField("total remboursé", max_digits=14, decimal_places=2)
+    payment_method = models.CharField(
+        "mode de remboursement", max_length=16, choices=Payment.Method.choices
+    )
+    status = models.CharField("statut", max_length=10, choices=Status.choices, default=Status.COMPLETED)
+    idempotency_key = models.UUIDField("clé d’idempotence", unique=True)
+    created_at = models.DateTimeField("créé le", auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "retour"
+        verbose_name_plural = "retours"
+        constraints = [
+            models.CheckConstraint(condition=Q(total_refund__gt=0), name="sales_return_total_positive")
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.reference:
+            self.reference = f"RET-{str(self.id).split('-')[0].upper()}"
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return self.reference
+
+
+class SaleReturnItem(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sale_return = models.ForeignKey(
+        SaleReturn, on_delete=models.PROTECT, related_name="items", verbose_name="retour"
+    )
+    original_sale_item = models.ForeignKey(
+        SaleItem, on_delete=models.PROTECT, related_name="return_items",
+        verbose_name="article vendu"
+    )
+    quantity = models.DecimalField("quantité", max_digits=12, decimal_places=3)
+    unit_price = models.DecimalField("prix remboursé", max_digits=14, decimal_places=2)
+    refund_amount = models.DecimalField("montant remboursé", max_digits=14, decimal_places=2)
+    restock = models.BooleanField("remis en stock", default=True)
+
+    class Meta:
+        ordering = ("id",)
+        verbose_name = "article retourné"
+        verbose_name_plural = "articles retournés"
+        constraints = [
+            models.CheckConstraint(condition=Q(quantity__gt=0), name="sales_return_item_quantity_positive"),
+            models.CheckConstraint(condition=Q(unit_price__gt=0), name="sales_return_item_price_positive"),
+            models.CheckConstraint(condition=Q(refund_amount__gt=0), name="sales_return_item_refund_positive"),
+        ]

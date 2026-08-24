@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 
 from django.db import IntegrityError, transaction
 
@@ -13,15 +14,30 @@ from .models import InventoryMovement, Stock
 class ReceiveStockResult:
     stock: Stock
     movement: InventoryMovement
-    quantity_added: int
+    quantity_added: Decimal
 
 
 @dataclass(frozen=True, slots=True)
 class AdjustStockResult:
     stock: Stock
     movement: InventoryMovement | None
-    previous_quantity: int
-    delta: int
+    previous_quantity: Decimal
+    delta: Decimal
+
+
+def _validate_quantity(value, *, product: Product, allow_zero: bool) -> Decimal:
+    if isinstance(value, bool):
+        raise InvalidStockQuantity("La quantité doit être un nombre valide.")
+    try:
+        quantity = Decimal(value)
+    except (InvalidOperation, TypeError, ValueError):
+        raise InvalidStockQuantity("La quantité doit être un nombre valide.")
+    if quantity < 0 or (not allow_zero and quantity == 0) or quantity.as_tuple().exponent < -3:
+        raise InvalidStockQuantity("La quantité doit être positive, avec au plus 3 décimales.")
+    quantity = quantity.quantize(Decimal("0.001"))
+    if product.sale_unit == Product.SaleUnit.UNIT and quantity != quantity.to_integral_value():
+        raise InvalidStockQuantity("La quantité d’un produit vendu à l’unité doit être entière.")
+    return quantity
 
 
 def _get_or_create_locked_stock(*, store: Store, product: Product) -> Stock:
@@ -41,10 +57,9 @@ def receive_stock(
     *,
     store: Store,
     product: Product,
-    quantity: int,
+    quantity: Decimal,
 ) -> ReceiveStockResult:
-    if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
-        raise InvalidStockQuantity("La quantité reçue doit être un entier positif.")
+    quantity = _validate_quantity(quantity, product=product, allow_zero=False)
 
     stock = _get_or_create_locked_stock(store=store, product=product)
 
@@ -70,12 +85,9 @@ def adjust_stock(
     *,
     store: Store,
     product: Product,
-    counted_quantity: int,
+    counted_quantity: Decimal,
 ) -> AdjustStockResult:
-    if isinstance(counted_quantity, bool) or not isinstance(counted_quantity, int) or counted_quantity < 0:
-        raise InvalidStockQuantity(
-            "Le stock physique compté doit être un entier positif ou nul."
-        )
+    counted_quantity = _validate_quantity(counted_quantity, product=product, allow_zero=True)
 
     stock = _get_or_create_locked_stock(store=store, product=product)
 

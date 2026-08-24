@@ -1,10 +1,10 @@
 from collections.abc import Sequence
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import NamedTuple, TypedDict
 from uuid import UUID, uuid4
 
-from django.db import transaction
+from django.db import models, transaction
 
 from apps.cash.exceptions import CashSessionClosed
 from apps.observability.sentry_context import tag_sale_scope
@@ -18,38 +18,70 @@ from .exceptions import (
     InvalidSaleItems,
     ProductInactive,
     ProductNotFound,
+    InvalidReturn,
 )
-from .models import Payment, Sale, SaleItem
+from .models import Payment, Sale, SaleItem, SaleReturn, SaleReturnItem
 
 
 class SaleItemInput(TypedDict):
     product_id: UUID
-    quantity: int
+    quantity: Decimal
+    unit_price: Decimal | None
 
 
 class OfflineSaleItemInput(TypedDict):
     product_id: UUID
     product_name: str
     unit_price: Decimal
-    quantity: int
+    catalog_unit_price: Decimal | None
+    quantity: Decimal
 
 
 class _LineSpec(NamedTuple):
     product: Product
-    quantity: int
+    quantity: Decimal
     unit_price: Decimal
+    catalog_unit_price: Decimal
     product_name: str
 
 
-def _aggregate_items(items: Sequence[SaleItemInput]) -> dict[UUID, int]:
+def _normalize_quantity(value, *, product: Product | None = None) -> Decimal:
+    try:
+        quantity = Decimal(value)
+    except (InvalidOperation, TypeError, ValueError):
+        raise InvalidSaleItems("La quantité vendue doit être un décimal positif.")
+    if quantity <= 0 or quantity.as_tuple().exponent < -3:
+        raise InvalidSaleItems("La quantité vendue doit être positive, avec au plus 3 décimales.")
+    quantity = quantity.quantize(Decimal("0.001"))
+    if product is not None and product.sale_unit == Product.SaleUnit.UNIT and quantity != quantity.to_integral_value():
+        raise InvalidSaleItems(f"La quantité de {product.name} doit être entière.")
+    return quantity
+
+
+def _normalize_price(value) -> Decimal:
+    try:
+        price = Decimal(value).quantize(Decimal("0.01"))
+    except (InvalidOperation, TypeError, ValueError):
+        raise InvalidSaleItems("Le prix unitaire doit être un montant valide.")
+    if price <= 0:
+        raise InvalidSaleItems("Le prix unitaire doit être strictement positif.")
+    return price
+
+
+def _money(value: Decimal) -> Decimal:
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _aggregate_items(items: Sequence[SaleItemInput]) -> dict[UUID, tuple[Decimal, Decimal | None]]:
     if not items:
         raise InvalidSaleItems("Une vente doit contenir au moins un article.")
 
-    quantities: dict[UUID, int] = {}
+    quantities: dict[UUID, tuple[Decimal, Decimal | None]] = {}
     for item in items:
         try:
             product_id = item["product_id"]
             quantity = item["quantity"]
+            unit_price = item.get("unit_price")
         except (KeyError, TypeError) as exc:
             raise InvalidSaleItems(
                 "Chaque article doit avoir un produit et une quantité."
@@ -57,27 +89,30 @@ def _aggregate_items(items: Sequence[SaleItemInput]) -> dict[UUID, int]:
 
         if not isinstance(product_id, UUID):
             raise InvalidSaleItems("L'identifiant produit doit être un UUID.")
-        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
-            raise InvalidSaleItems("La quantité vendue doit être un entier positif.")
-
-        quantities[product_id] = quantities.get(product_id, 0) + quantity
+        quantity = _normalize_quantity(quantity)
+        override = _normalize_price(unit_price) if unit_price is not None else None
+        existing = quantities.get(product_id)
+        if existing and existing[1] != override:
+            raise InvalidSaleItems("Un même produit ne peut pas avoir deux prix dans une vente.")
+        quantities[product_id] = ((existing[0] if existing else Decimal("0")) + quantity, override)
 
     return quantities
 
 
 def _aggregate_offline_items(
     items: Sequence[OfflineSaleItemInput],
-) -> dict[UUID, tuple[int, Decimal, str]]:
+) -> dict[UUID, tuple[Decimal, Decimal, str, Decimal | None]]:
     if not items:
         raise InvalidSaleItems("Une vente doit contenir au moins un article.")
 
-    aggregated: dict[UUID, tuple[int, Decimal, str]] = {}
+    aggregated: dict[UUID, tuple[Decimal, Decimal, str, Decimal | None]] = {}
     for item in items:
         try:
             product_id = item["product_id"]
             quantity = item["quantity"]
             unit_price = item["unit_price"]
             product_name = item["product_name"]
+            catalog_unit_price = item.get("catalog_unit_price")
         except (KeyError, TypeError) as exc:
             raise InvalidSaleItems(
                 "Chaque article doit avoir un produit, un prix et une quantité."
@@ -85,22 +120,24 @@ def _aggregate_offline_items(
 
         if not isinstance(product_id, UUID):
             raise InvalidSaleItems("L'identifiant produit doit être un UUID.")
-        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
-            raise InvalidSaleItems("La quantité vendue doit être un entier positif.")
-        if not isinstance(unit_price, Decimal) or unit_price < 0:
-            raise InvalidSaleItems("Le prix unitaire doit être un décimal positif.")
+        quantity = _normalize_quantity(quantity)
+        unit_price = _normalize_price(unit_price)
+        catalog_unit_price = _normalize_price(catalog_unit_price) if catalog_unit_price is not None else None
 
         existing = aggregated.get(product_id)
         if existing is None:
-            aggregated[product_id] = (quantity, unit_price, product_name)
+            aggregated[product_id] = (quantity, unit_price, product_name, catalog_unit_price)
         else:
-            existing_quantity, existing_price, existing_name = existing
-            # Le prix figé au moment de la vente hors-ligne fait foi : on garde
-            # celui de la première ligne rencontrée pour ce produit.
+            existing_quantity, existing_price, existing_name, existing_catalog_price = existing
+            if existing_price != unit_price:
+                raise InvalidSaleItems("Un même produit ne peut pas avoir deux prix dans une vente.")
+            if existing_catalog_price != catalog_unit_price:
+                raise InvalidSaleItems("Un même produit ne peut pas avoir deux prix catalogue dans une vente.")
             aggregated[product_id] = (
                 existing_quantity + quantity,
                 existing_price,
                 existing_name,
+                existing_catalog_price,
             )
 
     return aggregated
@@ -191,11 +228,11 @@ def _execute_sale(
             stock_discrepancy = True
 
     line_values = [
-        (spec.product, spec.quantity, spec.unit_price, spec.product_name)
+        (spec.product, spec.quantity, spec.unit_price, spec.catalog_unit_price, spec.product_name)
         for spec in line_specs
     ]
     subtotal = sum(
-        (unit_price * quantity for _, quantity, unit_price, _ in line_values),
+        (_money(unit_price * quantity) for _, quantity, unit_price, _, _ in line_values),
         Decimal("0.00"),
     )
     discount = Decimal("0.00")
@@ -226,11 +263,13 @@ def _execute_sale(
                 sale=sale,
                 product=product,
                 product_name=product_name,
+                sale_unit=product.sale_unit,
+                catalog_unit_price=catalog_unit_price,
                 unit_price=unit_price,
                 quantity=quantity,
-                line_total=unit_price * quantity,
+                line_total=_money(unit_price * quantity),
             )
-            for product, quantity, unit_price, product_name in line_values
+            for product, quantity, unit_price, catalog_unit_price, product_name in line_values
         ]
     )
 
@@ -292,12 +331,14 @@ def complete_sale(
             raise ProductNotFound(product_id)
         if not product.is_active:
             raise ProductInactive(product.name)
+        _normalize_quantity(quantities[product_id][0], product=product)
 
     line_specs = [
         _LineSpec(
             product=products[product_id],
-            quantity=quantities[product_id],
-            unit_price=products[product_id].selling_price,
+            quantity=quantities[product_id][0],
+            unit_price=_normalize_price(quantities[product_id][1] or products[product_id].selling_price),
+            catalog_unit_price=products[product_id].selling_price,
             product_name=products[product_id].name,
         )
         for product_id in product_ids
@@ -363,12 +404,14 @@ def complete_offline_sale(
     for product_id in product_ids:
         if product_id not in products:
             raise ProductNotFound(product_id)
+        _normalize_quantity(aggregated[product_id][0], product=products[product_id])
 
     line_specs = [
         _LineSpec(
             product=products[product_id],
             quantity=aggregated[product_id][0],
             unit_price=aggregated[product_id][1],
+            catalog_unit_price=aggregated[product_id][3] or products[product_id].selling_price,
             product_name=aggregated[product_id][2],
         )
         for product_id in product_ids
@@ -383,3 +426,100 @@ def complete_offline_sale(
         occurred_at=occurred_at,
         allow_negative_stock=True,
     )
+
+
+class ReturnItemInput(TypedDict):
+    sale_item_id: UUID
+    quantity: Decimal
+    restock: bool
+
+
+@transaction.atomic
+def create_sale_return(
+    *, original_sale: Sale, cash_session: CashSession, created_by,
+    payment_method: str, items: Sequence[ReturnItemInput], idempotency_key: UUID,
+) -> SaleReturn:
+    existing = SaleReturn.objects.filter(idempotency_key=idempotency_key).first()
+    if existing:
+        return existing
+    if not items:
+        raise InvalidReturn("Sélectionnez au moins un article à retourner.")
+    locked_session = CashSession.objects.select_for_update().select_related("cash_register").get(pk=cash_session.pk)
+    existing = SaleReturn.objects.filter(idempotency_key=idempotency_key).first()
+    if existing:
+        return existing
+    if locked_session.status != CashSession.Status.OPEN:
+        raise CashSessionClosed("La session de caisse est fermée.")
+    if locked_session.cashier_id != created_by.pk:
+        raise InvalidReturn("Cette session appartient à un autre caissier.")
+    sale = Sale.objects.select_for_update().get(pk=original_sale.pk)
+    if sale.status != Sale.Status.COMPLETED:
+        raise InvalidReturn("Seule une vente terminée peut être retournée.")
+    if sale.cash_session.cash_register.store_id != locked_session.cash_register.store_id:
+        raise InvalidReturn("Le retour doit être effectué dans le magasin de la vente.")
+    if payment_method not in Payment.Method.values:
+        raise InvalidReturn("Mode de remboursement invalide.")
+
+    requested: dict[UUID, tuple[Decimal, bool]] = {}
+    for raw in items:
+        item_id = raw["sale_item_id"]
+        if item_id in requested:
+            raise InvalidReturn("Un article ne peut apparaître qu’une fois dans un retour.")
+        try:
+            quantity = _normalize_quantity(raw["quantity"])
+        except InvalidSaleItems as exc:
+            raise InvalidReturn(str(exc)) from exc
+        requested[item_id] = (quantity, bool(raw["restock"]))
+
+    locked_items = {
+        item.id: item for item in SaleItem.objects.select_for_update().filter(
+            sale=sale, id__in=requested
+        ).select_related("product")
+    }
+    if len(locked_items) != len(requested):
+        raise InvalidReturn("Un article ne fait pas partie de cette vente.")
+
+    specs = []
+    total = Decimal("0.00")
+    for item_id, (quantity, restock) in requested.items():
+        item = locked_items[item_id]
+        try:
+            _normalize_quantity(quantity, product=item.product)
+        except InvalidSaleItems as exc:
+            raise InvalidReturn(str(exc)) from exc
+        already = SaleReturnItem.objects.filter(
+            original_sale_item=item, sale_return__status=SaleReturn.Status.COMPLETED
+        ).aggregate(total=models.Sum("quantity"))["total"] or Decimal("0.000")
+        if quantity > item.quantity - already:
+            raise InvalidReturn(f"La quantité retournée dépasse le reste disponible pour {item.product_name}.")
+        refund = _money(item.unit_price * quantity)
+        total += refund
+        specs.append((item, quantity, restock, refund))
+
+    sale_return = SaleReturn.objects.create(
+        original_sale=sale, cash_session=locked_session, created_by=created_by,
+        total_refund=total, payment_method=payment_method,
+        idempotency_key=idempotency_key,
+    )
+    SaleReturnItem.objects.bulk_create([
+        SaleReturnItem(sale_return=sale_return, original_sale_item=item,
+                       quantity=quantity, unit_price=item.unit_price,
+                       refund_amount=refund, restock=restock)
+        for item, quantity, restock, refund in specs
+    ])
+    store_id = locked_session.cash_register.store_id
+    for item, quantity, restock, _ in specs:
+        if not restock:
+            continue
+        stock, _ = Stock.objects.select_for_update().get_or_create(
+            store_id=store_id, product_id=item.product_id,
+            defaults={"quantity": Decimal("0.000")},
+        )
+        stock.quantity += quantity
+        stock.save(update_fields=("quantity", "updated_at"))
+        InventoryMovement.objects.create(
+            store_id=store_id, product_id=item.product_id,
+            movement_type=InventoryMovement.Type.RETURN_IN,
+            quantity=quantity, reference=sale_return.id,
+        )
+    return sale_return

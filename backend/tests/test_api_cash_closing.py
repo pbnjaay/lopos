@@ -298,11 +298,16 @@ def test_sale_detail_returns_full_ticket_data(api_client: APIClient) -> None:
     assert data["cashier"]["username"] == "cashier"
     assert data["items"] == [
         {
+            "id": data["items"][0]["id"],
             "product_id": context["product"]["id"],
             "product_name": "Coca 50cl",
+            "sale_unit": "UNIT",
+            "catalog_unit_price": "500.00",
             "unit_price": "500.00",
-            "quantity": 2,
+            "quantity": "2.000",
             "line_total": "1000.00",
+            "quantity_returned": "0.000",
+            "quantity_returnable": "2.000",
         }
     ]
     assert data["payment"]["method"] == "CASH"

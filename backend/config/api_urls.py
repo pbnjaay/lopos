@@ -9,7 +9,7 @@ from apps.cash.views import (
 )
 from apps.catalog.views import ProductViewSet
 from apps.inventory.views import StockInView
-from apps.sales.views import CompleteSaleView, SaleDetailView
+from apps.sales.views import CompleteSaleView, SaleDetailView, SaleReturnListCreateView, SaleReturnDetailView
 from apps.stores.views import CashRegisterViewSet, StoreViewSet
 from apps.sync.views import SyncPullView, SyncPushView
 
@@ -43,6 +43,8 @@ urlpatterns = [
     ),
     path("sales/", CompleteSaleView.as_view(), name="sale-complete"),
     path("sales/<uuid:pk>/", SaleDetailView.as_view(), name="sale-detail"),
+    path("returns/", SaleReturnListCreateView.as_view(), name="sale-return-list"),
+    path("returns/<uuid:pk>/", SaleReturnDetailView.as_view(), name="sale-return-detail"),
     path("sync/push/", SyncPushView.as_view(), name="sync-push"),
     path("sync/pull/", SyncPullView.as_view(), name="sync-pull"),
 ]

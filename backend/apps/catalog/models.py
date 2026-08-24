@@ -6,6 +6,10 @@ from django.db.models import Q
 
 
 class Product(models.Model):
+    class SaleUnit(models.TextChoices):
+        UNIT = "UNIT", "Unité"
+        KG = "KG", "Kilogramme"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField("nom", max_length=255)
     barcode = models.CharField("code-barres", max_length=64, blank=True, null=True)
@@ -16,6 +20,9 @@ class Product(models.Model):
         decimal_places=2,
         blank=True,
         null=True,
+    )
+    sale_unit = models.CharField(
+        "unité de vente", max_length=8, choices=SaleUnit.choices, default=SaleUnit.UNIT
     )
     is_active = models.BooleanField("actif", default=True)
     created_at = models.DateTimeField("créé le", auto_now_add=True)

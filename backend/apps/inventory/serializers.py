@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 
 from apps.catalog.models import Product
@@ -13,11 +14,11 @@ class StockInSerializer(serializers.Serializer):
         source="product",
         queryset=Product.objects.all(),
     )
-    quantity = serializers.IntegerField(min_value=1)
+    quantity = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal("0.001"))
 
 
 class StockInResultSerializer(serializers.Serializer):
     product_id = serializers.UUIDField()
     store_id = serializers.UUIDField()
-    quantity_added = serializers.IntegerField()
-    current_stock = serializers.IntegerField()
+    quantity_added = serializers.DecimalField(max_digits=12, decimal_places=3)
+    current_stock = serializers.DecimalField(max_digits=12, decimal_places=3)

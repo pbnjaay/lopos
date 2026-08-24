@@ -82,9 +82,14 @@ class CashSessionSummary:
     cash_session: CashSession
     sales_count: int
     gross_sales: Decimal
+    returns_total: Decimal
+    net_sales: Decimal
     cash_sales: Decimal
     wave_sales: Decimal
     orange_money_sales: Decimal
+    cash_refunds: Decimal
+    wave_refunds: Decimal
+    orange_money_refunds: Decimal
     opening_balance: Decimal
     expected_cash: Decimal
     counted_cash: Decimal | None
@@ -92,10 +97,8 @@ class CashSessionSummary:
     closed_at: datetime | None
 
 
-def _aggregate_totals(
-    cash_session: CashSession,
-) -> tuple[int, Decimal, Decimal, Decimal, Decimal]:
-    from apps.sales.models import Payment, Sale
+def _aggregate_totals(cash_session: CashSession):
+    from apps.sales.models import Payment, Sale, SaleReturn
 
     sale_totals = Sale.objects.filter(
         cash_session=cash_session,
@@ -112,6 +115,14 @@ def _aggregate_totals(
         wave=Sum("amount", filter=Q(method="WAVE")),
         orange_money=Sum("amount", filter=Q(method="ORANGE_MONEY")),
     )
+    refunds = SaleReturn.objects.filter(
+        cash_session=cash_session, status=SaleReturn.Status.COMPLETED
+    ).aggregate(
+        total=Sum("total_refund"),
+        cash=Sum("total_refund", filter=Q(payment_method="CASH")),
+        wave=Sum("total_refund", filter=Q(payment_method="WAVE")),
+        orange_money=Sum("total_refund", filter=Q(payment_method="ORANGE_MONEY")),
+    )
 
     return (
         sale_totals["sales_count"] or 0,
@@ -119,6 +130,10 @@ def _aggregate_totals(
         payment_totals["cash"] or ZERO,
         payment_totals["wave"] or ZERO,
         payment_totals["orange_money"] or ZERO,
+        refunds["total"] or ZERO,
+        refunds["cash"] or ZERO,
+        refunds["wave"] or ZERO,
+        refunds["orange_money"] or ZERO,
     )
 
 
@@ -129,17 +144,26 @@ def get_cash_session_summary(*, cash_session: CashSession) -> CashSessionSummary
         cash_sales,
         wave_sales,
         orange_money_sales,
+        returns_total,
+        cash_refunds,
+        wave_refunds,
+        orange_money_refunds,
     ) = _aggregate_totals(cash_session)
 
-    expected_cash = cash_session.opening_balance + cash_sales
+    expected_cash = cash_session.opening_balance + cash_sales - cash_refunds
 
     return CashSessionSummary(
         cash_session=cash_session,
         sales_count=sales_count,
         gross_sales=gross_sales,
+        returns_total=returns_total,
+        net_sales=gross_sales - returns_total,
         cash_sales=cash_sales,
         wave_sales=wave_sales,
         orange_money_sales=orange_money_sales,
+        cash_refunds=cash_refunds,
+        wave_refunds=wave_refunds,
+        orange_money_refunds=orange_money_refunds,
         opening_balance=cash_session.opening_balance,
         expected_cash=expected_cash,
         counted_cash=cash_session.closing_balance,
@@ -179,8 +203,8 @@ def close_cash_session(
         store_id=locked_session.cash_register.store_id,
     )
 
-    _, _, cash_sales, _, _ = _aggregate_totals(locked_session)
-    expected_cash = locked_session.opening_balance + cash_sales
+    _, _, cash_sales, _, _, _, cash_refunds, _, _ = _aggregate_totals(locked_session)
+    expected_cash = locked_session.opening_balance + cash_sales - cash_refunds
     difference = normalized_counted - expected_cash
 
     locked_session.closing_balance = normalized_counted

@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from apps.cash.models import CashSession
 from apps.inventory.models import Stock
-from apps.sales.models import Payment, Sale, SaleItem
+from apps.sales.models import Payment, Sale, SaleItem, SaleReturn
 from apps.stores.models import Store
 from apps.sync.models import ProcessedSyncEvent
 
@@ -25,7 +25,7 @@ ALERTS_LOOKBACK_DAYS = 7
 class TopProduct:
     product_id: str
     name: str
-    quantity: int
+    quantity: Decimal
     url: str
 
 
@@ -41,6 +41,8 @@ class ManagerDashboard:
     period: str
     store_id: str | None
     gross_sales: Decimal
+    returns_total: Decimal
+    net_sales: Decimal
     sales_count: int
     average_basket: Decimal
     payment_totals: dict[str, Decimal]
@@ -204,21 +206,32 @@ def get_manager_dashboard(
 
     totals = sales.aggregate(gross_sales=Sum("total"), sales_count=Count("id"))
     gross_sales = totals["gross_sales"] or ZERO
+    start, end = resolve_period_range(period)
+    returns_qs = SaleReturn.objects.filter(status=SaleReturn.Status.COMPLETED, created_at__gte=start, created_at__lt=end)
+    if store_id:
+        returns_qs = returns_qs.filter(cash_session__cash_register__store_id=store_id)
+    returns_total = returns_qs.aggregate(total=Sum("total_refund"))["total"] or ZERO
+    net_sales = gross_sales - returns_total
     sales_count = totals["sales_count"] or 0
-    average_basket = (gross_sales / sales_count) if sales_count else ZERO
+    average_basket = (net_sales / sales_count) if sales_count else ZERO
 
     payment_aggregates = Payment.objects.filter(sale__in=sales).aggregate(
         cash=Sum("amount", filter=Q(method=Payment.Method.CASH)),
         wave=Sum("amount", filter=Q(method=Payment.Method.WAVE)),
         orange_money=Sum("amount", filter=Q(method=Payment.Method.ORANGE_MONEY)),
     )
+    refund_aggregates = returns_qs.aggregate(
+        cash=Sum("total_refund", filter=Q(payment_method=Payment.Method.CASH)),
+        wave=Sum("total_refund", filter=Q(payment_method=Payment.Method.WAVE)),
+        orange_money=Sum("total_refund", filter=Q(payment_method=Payment.Method.ORANGE_MONEY)),
+    )
     payment_totals = {
-        "cash": payment_aggregates["cash"] or ZERO,
-        "wave": payment_aggregates["wave"] or ZERO,
-        "orange_money": payment_aggregates["orange_money"] or ZERO,
+        "cash": (payment_aggregates["cash"] or ZERO) - (refund_aggregates["cash"] or ZERO),
+        "wave": (payment_aggregates["wave"] or ZERO) - (refund_aggregates["wave"] or ZERO),
+        "orange_money": (payment_aggregates["orange_money"] or ZERO) - (refund_aggregates["orange_money"] or ZERO),
     }
     payment_percentages = {
-        method: round(total / gross_sales * 100) if gross_sales else 0
+        method: round(total / net_sales * 100) if net_sales else 0
         for method, total in payment_totals.items()
     }
 
@@ -266,6 +279,8 @@ def get_manager_dashboard(
         period=period,
         store_id=store_id,
         gross_sales=gross_sales,
+        returns_total=returns_total,
+        net_sales=net_sales,
         sales_count=sales_count,
         average_basket=average_basket,
         payment_totals=payment_totals,

@@ -71,7 +71,10 @@ class CashSessionSummarySerializer(serializers.Serializer):
     opened_at = serializers.DateTimeField()
     sales_count = serializers.IntegerField()
     gross_sales = serializers.DecimalField(max_digits=14, decimal_places=2)
+    returns_total = serializers.DecimalField(max_digits=14, decimal_places=2)
+    net_sales = serializers.DecimalField(max_digits=14, decimal_places=2)
     payments = _PaymentTotalsSerializer()
+    refunds = _PaymentTotalsSerializer()
     opening_balance = serializers.DecimalField(max_digits=14, decimal_places=2)
     expected_cash = serializers.DecimalField(max_digits=14, decimal_places=2)
     counted_cash = serializers.DecimalField(
@@ -99,10 +102,17 @@ def summary_to_payload(summary) -> dict:
         "opened_at": cash_session.opened_at,
         "sales_count": summary.sales_count,
         "gross_sales": summary.gross_sales,
+        "returns_total": summary.returns_total,
+        "net_sales": summary.net_sales,
         "payments": {
             "cash": summary.cash_sales,
             "wave": summary.wave_sales,
             "orange_money": summary.orange_money_sales,
+        },
+        "refunds": {
+            "cash": summary.cash_refunds,
+            "wave": summary.wave_refunds,
+            "orange_money": summary.orange_money_refunds,
         },
         "opening_balance": summary.opening_balance,
         "expected_cash": summary.expected_cash,

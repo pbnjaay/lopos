@@ -1,4 +1,5 @@
 from django import forms
+from decimal import Decimal
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -24,6 +25,13 @@ from .services import import_products_from_csv
 
 
 class ProductAdminForm(forms.ModelForm):
+    sale_unit = forms.ChoiceField(
+        choices=Product.SaleUnit.choices,
+        required=False,
+        initial=Product.SaleUnit.UNIT,
+        label="Unité de vente",
+        widget=UnfoldAdminSelectWidget(),
+    )
     initial_store = forms.ModelChoiceField(
         queryset=Store.objects.filter(is_active=True),
         required=False,
@@ -31,13 +39,14 @@ class ProductAdminForm(forms.ModelForm):
         help_text="Requis si une quantité initiale est saisie.",
         widget=UnfoldAdminSelectWidget(),
     )
-    initial_quantity = forms.IntegerField(
+    initial_quantity = forms.DecimalField(
         required=False,
         min_value=0,
+        decimal_places=3,
         initial=0,
         label="Quantité initiale",
         help_text="Laisser à 0 si vous n'ajoutez pas de stock maintenant.",
-        widget=UnfoldAdminIntegerFieldWidget(),
+        widget=forms.NumberInput(attrs={"step": "0.001", "inputmode": "decimal"}),
     )
 
     class Meta:
@@ -57,6 +66,9 @@ class ProductAdminForm(forms.ModelForm):
 
         return cleaned_data
 
+    def clean_sale_unit(self):
+        return self.cleaned_data.get("sale_unit") or Product.SaleUnit.UNIT
+
 
 class ReceiveStockForm(forms.Form):
     store = forms.ModelChoiceField(
@@ -64,10 +76,10 @@ class ReceiveStockForm(forms.Form):
         label="Magasin",
         widget=UnfoldAdminSelectWidget(),
     )
-    quantity = forms.IntegerField(
-        min_value=1,
+    quantity = forms.DecimalField(
+        min_value=Decimal("0.001"), decimal_places=3,
         label="Quantité reçue",
-        widget=UnfoldAdminIntegerFieldWidget(),
+        widget=forms.NumberInput(attrs={"step": "0.001", "inputmode": "decimal"}),
     )
 
 
@@ -77,11 +89,12 @@ class AdjustStockForm(forms.Form):
         label="Magasin",
         widget=UnfoldAdminSelectWidget(),
     )
-    counted_quantity = forms.IntegerField(
+    counted_quantity = forms.DecimalField(
         min_value=0,
+        decimal_places=3,
         label="Stock physique réel",
         help_text="Quantité réellement comptée en magasin.",
-        widget=UnfoldAdminIntegerFieldWidget(),
+        widget=forms.NumberInput(attrs={"step": "0.001", "inputmode": "decimal"}),
     )
 
 
@@ -101,8 +114,8 @@ class ImportProductsForm(forms.Form):
 class ProductAdmin(ModelAdmin):
     form = ProductAdminForm
     actions_list = ["import_products_view"]
-    list_display = ("name", "barcode", "selling_price", "is_active", "updated_at")
-    list_filter = ("is_active",)
+    list_display = ("name", "barcode", "sale_unit", "selling_price", "is_active", "updated_at")
+    list_filter = ("sale_unit", "is_active")
     search_fields = ("name", "barcode")
     readonly_fields = (
         "id",
@@ -114,7 +127,7 @@ class ProductAdmin(ModelAdmin):
 
     def get_fieldsets(self, request, obj=None):
         fieldsets = [
-            ("Informations générales", {"fields": ("name", "is_active")}),
+            ("Informations générales", {"fields": ("name", "sale_unit", "is_active")}),
             ("Prix", {"fields": ("purchase_price", "selling_price")}),
         ]
         if obj is None:
@@ -376,7 +389,7 @@ class ProductAdmin(ModelAdmin):
                         message = (
                             f"Stock de {product.name} ({store.name}) ajusté : "
                             f"{result.previous_quantity} → {counted_quantity} "
-                            f"({result.delta:+d})."
+                            f"({result.delta:+})."
                         )
                         posthog_client.capture(
                             str(request.user.pk),

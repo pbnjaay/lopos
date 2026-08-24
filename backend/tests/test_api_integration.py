@@ -102,8 +102,8 @@ def test_complete_pos_scenario_through_api(
     assert context["stock"] == {
         "product_id": context["product"]["id"],
         "store_id": context["store"]["id"],
-        "quantity_added": 20,
-        "current_stock": 20,
+        "quantity_added": "20.000",
+        "current_stock": "20.000",
     }
     assert context["cash_session"]["cashier_id"] == cashier.pk
     assert context["cash_session"]["opening_balance"] == "15000.00"
@@ -141,11 +141,16 @@ def test_complete_pos_scenario_through_api(
     }
     assert sale_data["items"] == [
         {
+            "id": sale_data["items"][0]["id"],
             "product_id": context["product"]["id"],
             "product_name": "Coca 50cl",
+            "sale_unit": "UNIT",
+            "catalog_unit_price": "500.00",
             "unit_price": "500.00",
-            "quantity": 2,
+            "quantity": "2.000",
             "line_total": "1000.00",
+            "quantity_returned": "0.000",
+            "quantity_returnable": "2.000",
         }
     ]
 
@@ -157,7 +162,7 @@ def test_complete_pos_scenario_through_api(
         },
     )
     assert product_response.status_code == status.HTTP_200_OK
-    assert product_response.json()[0]["stock"] == 18
+    assert product_response.json()[0]["stock"] == "18.000"
 
     session_response = api_client.get(
         reverse(
@@ -191,7 +196,7 @@ def test_product_search_returns_matching_product_and_store_stock(
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json()[0]["name"] == "Coca 50cl"
-    assert response.json()[0]["stock"] == 20
+    assert response.json()[0]["stock"] == "20.000"
 
 
 def test_double_cash_session_opening_returns_business_error(
