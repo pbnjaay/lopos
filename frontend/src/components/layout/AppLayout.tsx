@@ -70,48 +70,51 @@ export function AppLayout({ user }: AppLayoutProps) {
       <header className="app-header">
         <div className="app-header-status">
           <Link className="brand brand-link" to="/" aria-label="LoPOS — Accueil">LoPOS</Link>
-          <ConnectionStatus />
         </div>
-        <div ref={sessionMenuRef} className="user-menu">
-          <button
-            ref={sessionMenuButtonRef}
-            className="session-menu-trigger"
-            type="button"
-            aria-expanded={isSessionMenuOpen}
-            aria-controls="session-menu-panel"
-            aria-haspopup="true"
-            aria-label={`Menu de session — ${userName}`}
-            onClick={() => setIsSessionMenuOpen((isOpen) => !isOpen)}
-          >
-            <UserIcon className="session-menu-user-icon" />
-            <span className="header-user-name">{userName}</span>
-            <ChevronDownIcon className="session-menu-chevron" />
-          </button>
-          {isSessionMenuOpen ? (
-            <div id="session-menu-panel" className="session-menu-panel" aria-label="Actions de session">
-              {showCashSessionActions ? (
-                <>
-                  <Link className="session-menu-item" to="/cash/close" onClick={() => setIsSessionMenuOpen(false)}>
-                    <PowerIcon />
-                    <span>Clôturer la caisse</span>
-                  </Link>
-                  <div className="session-menu-separator" />
-                </>
-              ) : null}
-              <button
-                className="session-menu-item session-menu-logout"
-                type="button"
-                disabled={logoutMutation.isPending}
-                onClick={() => {
-                  setIsSessionMenuOpen(false)
-                  logoutMutation.mutate()
-                }}
-              >
-                <LogOutIcon />
-                <span>{logoutMutation.isPending ? "Déconnexion…" : "Se déconnecter"}</span>
-              </button>
-            </div>
-          ) : null}
+        <div className="app-header-right">
+          <ConnectionStatus />
+          <span className="app-header-divider" aria-hidden="true" />
+          <div ref={sessionMenuRef} className="user-menu">
+            <button
+              ref={sessionMenuButtonRef}
+              className="session-menu-trigger"
+              type="button"
+              aria-expanded={isSessionMenuOpen}
+              aria-controls="session-menu-panel"
+              aria-haspopup="true"
+              aria-label={`Menu de session — ${userName}`}
+              onClick={() => setIsSessionMenuOpen((isOpen) => !isOpen)}
+            >
+              <UserIcon className="session-menu-user-icon" />
+              <span className="header-user-name">{userName}</span>
+              <ChevronDownIcon className="session-menu-chevron" />
+            </button>
+            {isSessionMenuOpen ? (
+              <div id="session-menu-panel" className="session-menu-panel" aria-label="Actions de session">
+                {showCashSessionActions ? (
+                  <>
+                    <Link className="session-menu-item" to="/cash/close" onClick={() => setIsSessionMenuOpen(false)}>
+                      <PowerIcon />
+                      <span>Clôturer la caisse</span>
+                    </Link>
+                    <div className="session-menu-separator" />
+                  </>
+                ) : null}
+                <button
+                  className="session-menu-item session-menu-logout"
+                  type="button"
+                  disabled={logoutMutation.isPending}
+                  onClick={() => {
+                    setIsSessionMenuOpen(false)
+                    logoutMutation.mutate()
+                  }}
+                >
+                  <LogOutIcon />
+                  <span>{logoutMutation.isPending ? "Déconnexion…" : "Se déconnecter"}</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </header>
       {logoutMutation.error ? (
