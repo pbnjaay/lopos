@@ -60,6 +60,7 @@ export function SaleReceiptPage() {
       <article className="receipt" aria-labelledby="receipt-title">
         <header className="receipt-heading">
           <h1 id="receipt-title">{receipt.storeName}</h1>
+          <p><strong>N° ticket : {receipt.id.slice(0, 8).toUpperCase()}</strong></p>
           <p>{formatDateTime(receipt.createdAt)}</p>
           <p>Caisse : {receipt.cashRegisterName}</p>
           <p>Caissier : {receipt.cashierName}</p>

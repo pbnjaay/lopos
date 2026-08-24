@@ -75,6 +75,7 @@ describe("SaleReceiptPage", () => {
     renderReceipt(cashReceipt)
 
     expect(await screen.findByRole("heading", { name: "Supérette Test" })).toBeInTheDocument()
+    expect(screen.getByText("N° ticket : SALE-ID")).toBeInTheDocument()
     expect(screen.getByText("Coca 50cl")).toBeInTheDocument()
     expect(screen.getByText("2 × 500 FCFA")).toBeInTheDocument()
     expect(screen.getAllByText("1 000 FCFA")).toHaveLength(3)
@@ -152,6 +153,7 @@ describe("SaleReceiptPage", () => {
     )
 
     expect(await screen.findByText("Coca 50cl")).toBeInTheDocument()
+    expect(screen.getByText("N° ticket : 0F9E8D7C")).toBeInTheDocument()
     expect(screen.getByText(/référence locale/i)).toHaveTextContent("0F9E8D7C")
     expect(getSaleReceipt).not.toHaveBeenCalled()
   })
