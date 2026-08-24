@@ -2,6 +2,14 @@ class CashRegisterInactive(Exception):
     """Raised when an operation requires an active cash register."""
 
 
+class CashRegisterNotAllowed(Exception):
+    """Raised when a cashier is not assigned to a register's store."""
+
+
+class StoreInactive(Exception):
+    """Raised when an operation requires an active store."""
+
+
 class CashSessionAlreadyOpen(Exception):
     """Raised when a register already has an open session."""
 

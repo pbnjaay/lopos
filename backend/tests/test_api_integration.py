@@ -9,6 +9,7 @@ from rest_framework.test import APIClient
 from apps.catalog.models import Product
 from apps.inventory.models import InventoryMovement, Stock
 from apps.sales.models import Payment, Sale, SaleItem
+from apps.stores.models import StoreAssignment
 
 
 pytestmark = pytest.mark.django_db
@@ -39,6 +40,10 @@ def _bootstrap_pos(
     )
     assert store_response.status_code == status.HTTP_201_CREATED
     store = store_response.json()
+    StoreAssignment.objects.create(
+        user=User.objects.get(username="cashier"),
+        store_id=store["id"],
+    )
 
     product_response = client.post(
         reverse("product-list"),

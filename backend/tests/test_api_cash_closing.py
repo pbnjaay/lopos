@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 from apps.catalog.models import Product
 from apps.inventory.models import InventoryMovement
 from apps.sales.models import Payment, Sale, SaleItem
+from apps.stores.models import StoreAssignment
 
 
 pytestmark = pytest.mark.django_db
@@ -32,6 +33,10 @@ def _bootstrap_pos(client: APIClient, *, stock_quantity: int = 20) -> dict[str, 
     store = client.post(
         reverse("store-list"), {"name": "Supérette Test"}, format="json"
     ).json()
+    StoreAssignment.objects.create(
+        user=User.objects.get(username="cashier"),
+        store_id=store["id"],
+    )
     product = client.post(
         reverse("product-list"),
         {"name": "Coca 50cl", "barcode": "123456789", "selling_price": "500.00"},
@@ -239,6 +244,10 @@ def test_current_session_is_forbidden_for_another_cashier(
 ) -> None:
     context = _bootstrap_pos(api_client)
     other_cashier = User.objects.create_user(username="other-current-session-cashier")
+    StoreAssignment.objects.create(
+        user=other_cashier,
+        store_id=context["store"]["id"],
+    )
     api_client.force_authenticate(other_cashier)
 
     response = api_client.get(

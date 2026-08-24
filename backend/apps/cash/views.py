@@ -5,10 +5,12 @@ from rest_framework.views import APIView
 
 from .exceptions import (
     CashRegisterInactive,
+    CashRegisterNotAllowed,
     CashSessionAlreadyClosed,
     CashSessionAlreadyOpen,
     InvalidCountedCash,
     InvalidOpeningBalance,
+    StoreInactive,
 )
 from .models import CashSession
 from .serializers import (
@@ -52,6 +54,16 @@ class OpenCashSessionView(APIView):
             return Response(
                 {"code": "CASH_REGISTER_INACTIVE", "message": str(exc)},
                 status=status.HTTP_409_CONFLICT,
+            )
+        except StoreInactive as exc:
+            return Response(
+                {"code": "STORE_INACTIVE", "message": str(exc)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except CashRegisterNotAllowed as exc:
+            return Response(
+                {"code": "CASH_REGISTER_NOT_ALLOWED", "message": str(exc)},
+                status=status.HTTP_403_FORBIDDEN,
             )
         except InvalidOpeningBalance as exc:
             return Response(

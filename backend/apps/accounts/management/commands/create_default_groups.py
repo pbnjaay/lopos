@@ -10,6 +10,7 @@ MANAGER_PERMISSIONS = [
     ("catalog", "product", ("add", "change", "delete", "view")),
     ("stores", "store", ("add", "change", "view")),
     ("stores", "cashregister", ("add", "change", "view")),
+    ("stores", "storeassignment", ("add", "change", "delete", "view")),
     ("inventory", "stock", ("view",)),
     ("inventory", "inventorymovement", ("view",)),
     ("cash", "cashsession", ("view",)),

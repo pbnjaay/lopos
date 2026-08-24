@@ -10,7 +10,7 @@ from apps.cash.exceptions import (
 )
 from apps.cash.models import CashSession
 from apps.cash.services import open_cash_session
-from apps.stores.models import CashRegister, Store
+from apps.stores.models import CashRegister, Store, StoreAssignment
 
 
 pytestmark = pytest.mark.django_db
@@ -23,8 +23,9 @@ def cashier():
 
 
 @pytest.fixture
-def cash_register() -> CashRegister:
+def cash_register(cashier) -> CashRegister:
     store = Store.objects.create(name="Supérette Test")
+    StoreAssignment.objects.create(user=cashier, store=store)
     return CashRegister.objects.create(store=store, name="Caisse 01")
 
 

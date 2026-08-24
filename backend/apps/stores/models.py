@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
 
 
@@ -46,3 +47,35 @@ class CashRegister(models.Model):
 
     def __str__(self) -> str:
         return f"{self.store} — {self.name}"
+
+
+class StoreAssignment(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="store_assignments",
+        verbose_name="utilisateur",
+    )
+    store = models.ForeignKey(
+        Store,
+        on_delete=models.CASCADE,
+        related_name="user_assignments",
+        verbose_name="magasin",
+    )
+    is_active = models.BooleanField("active", default=True)
+    created_at = models.DateTimeField("créée le", auto_now_add=True)
+    updated_at = models.DateTimeField("modifiée le", auto_now=True)
+
+    class Meta:
+        ordering = ("store__name", "user__username")
+        verbose_name = "affectation à un magasin"
+        verbose_name_plural = "affectations aux magasins"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "store"),
+                name="stores_unique_user_assignment_per_store",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user} — {self.store}"

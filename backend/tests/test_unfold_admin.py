@@ -10,7 +10,8 @@ from apps.cash.models import CashSession
 from apps.catalog.models import Product
 from apps.inventory.models import InventoryMovement, Stock
 from apps.sales.models import Payment, Sale, SaleItem
-from apps.stores.models import CashRegister, Store
+from apps.accounts.admin import StoreAssignmentInline
+from apps.stores.models import CashRegister, Store, StoreAssignment
 
 
 def test_unfold_is_loaded_before_django_admin() -> None:
@@ -39,6 +40,7 @@ def test_application_labels_are_in_french(app_label, label) -> None:
     [
         (Store, "magasin", "magasins"),
         (CashRegister, "caisse", "caisses"),
+        (StoreAssignment, "affectation à un magasin", "affectations aux magasins"),
         (Product, "produit", "produits"),
         (Stock, "stock", "stocks"),
         (InventoryMovement, "mouvement de stock", "mouvements de stock"),
@@ -60,6 +62,7 @@ def test_model_labels_are_in_french(model, singular, plural) -> None:
         Group,
         Store,
         CashRegister,
+        StoreAssignment,
         Product,
         Stock,
         InventoryMovement,
@@ -71,6 +74,10 @@ def test_model_labels_are_in_french(model, singular, plural) -> None:
 )
 def test_registered_admins_use_unfold(model) -> None:
     assert isinstance(admin.site._registry[model], ModelAdmin)
+
+
+def test_store_assignments_are_managed_from_the_user_admin() -> None:
+    assert StoreAssignmentInline in admin.site._registry[User].inlines
 
 
 @pytest.mark.django_db

@@ -3,7 +3,7 @@ from django.db.models import Count, Q, QuerySet
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
 
-from .models import CashRegister, Store
+from .models import CashRegister, Store, StoreAssignment
 
 
 @admin.register(Store)
@@ -63,3 +63,12 @@ class CashRegisterAdmin(ModelAdmin):
     search_fields = ("name", "store__name")
     readonly_fields = ("id", "created_at", "updated_at")
     autocomplete_fields = ("store",)
+
+
+@admin.register(StoreAssignment)
+class StoreAssignmentAdmin(ModelAdmin):
+    list_display = ("user", "store", "is_active", "created_at")
+    list_filter = ("is_active", "store")
+    search_fields = ("user__username", "user__first_name", "user__last_name", "store__name")
+    autocomplete_fields = ("user", "store")
+    readonly_fields = ("created_at", "updated_at")

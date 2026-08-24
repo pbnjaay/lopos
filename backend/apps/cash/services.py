@@ -9,13 +9,16 @@ from django.utils import timezone
 
 from apps.observability.sentry_context import tag_cash_session_scope
 from apps.stores.models import CashRegister
+from apps.stores.access import user_can_access_store
 
 from .exceptions import (
     CashRegisterInactive,
+    CashRegisterNotAllowed,
     CashSessionAlreadyClosed,
     CashSessionAlreadyOpen,
     InvalidCountedCash,
     InvalidOpeningBalance,
+    StoreInactive,
 )
 from .models import CashSession
 
@@ -45,9 +48,19 @@ def open_cash_session(
             "Le fond de caisse doit être un montant exact positif ou nul."
         )
 
-    locked_register = CashRegister.objects.select_for_update().get(
-        pk=cash_register.pk
+    locked_register = (
+        CashRegister.objects.select_for_update()
+        .select_related("store")
+        .get(pk=cash_register.pk)
     )
+
+    if not user_can_access_store(cashier, locked_register.store):
+        raise CashRegisterNotAllowed(
+            "Vous n’êtes pas autorisé à travailler dans cette boutique."
+        )
+
+    if not locked_register.store.is_active:
+        raise StoreInactive("Cette boutique est inactive.")
 
     if not locked_register.is_active:
         raise CashRegisterInactive("Cette caisse est inactive.")

@@ -23,6 +23,12 @@ def test_manager_group_can_manage_catalog_but_only_view_audit_models() -> None:
     assert "change_cashsession" not in codenames
     assert "view_sale" in codenames
     assert "view_cashsession" in codenames
+    assert {
+        "add_storeassignment",
+        "change_storeassignment",
+        "delete_storeassignment",
+        "view_storeassignment",
+    } <= codenames
 
 
 def test_cashier_group_has_no_admin_permissions() -> None:

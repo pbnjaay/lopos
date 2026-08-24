@@ -11,7 +11,7 @@ from apps.cash.services import open_cash_session
 from apps.catalog.models import Product
 from apps.inventory.models import Stock
 from apps.inventory.services import receive_stock
-from apps.stores.models import CashRegister, Store
+from apps.stores.models import CashRegister, Store, StoreAssignment
 
 
 User = get_user_model()
@@ -93,6 +93,15 @@ class Command(BaseCommand):
                 cashier_created,
                 initial_password="password123",
             )
+            assignment, assignment_created = StoreAssignment.objects.get_or_create(
+                user=cashier,
+                store=store,
+                defaults={"is_active": True},
+            )
+            if not assignment.is_active:
+                assignment.is_active = True
+                assignment.save(update_fields=("is_active", "updated_at"))
+            self._report("Affectation", f"{cashier.username} → {store.name}", assignment_created)
 
             admin, admin_created = User.objects.get_or_create(
                 username="admin",
