@@ -92,7 +92,7 @@ describe("PendingSalesPage", () => {
     expect(await screen.findByText("3 500 FCFA")).toBeInTheDocument()
     expect(screen.getByText("8 000 FCFA")).toBeInTheDocument()
     const link = screen.getByText("3 500 FCFA").closest("a")
-    expect(link).toHaveAttribute("href", "/sales/sale-1/receipt")
+    expect(link).toHaveAttribute("href", "/sales/sale-1/receipt?from=pending")
   })
 
   it("shows an explicit empty state", async () => {

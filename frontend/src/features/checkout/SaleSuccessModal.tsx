@@ -8,9 +8,10 @@ type SaleSuccessModalProps = {
   sale: ReceiptView
   cashSessionId?: string
   onNewSale: () => void
+  onPrintTicket?: () => void
 }
 
-export function SaleSuccessModal({ sale, cashSessionId, onNewSale }: SaleSuccessModalProps) {
+export function SaleSuccessModal({ sale, cashSessionId, onNewSale, onPrintTicket }: SaleSuccessModalProps) {
   const dialogRef = useRef<HTMLElement>(null)
   useDialogFocusTrap(dialogRef)
   const paymentLabel = {
@@ -76,9 +77,8 @@ export function SaleSuccessModal({ sale, cashSessionId, onNewSale }: SaleSuccess
         <div className="sale-success-actions">
           <a
             className="button button-secondary receipt-link"
-            href={`/sales/${encodeURIComponent(sale.id)}/receipt${cashSessionId ? `?cash_session_id=${encodeURIComponent(cashSessionId)}` : ""}`}
-            target="_blank"
-            rel="noopener noreferrer"
+            href={`/sales/${encodeURIComponent(sale.id)}/receipt?${cashSessionId ? `cash_session_id=${encodeURIComponent(cashSessionId)}&` : ""}from=pos`}
+            onClick={onPrintTicket}
           >
             Imprimer le ticket
           </a>

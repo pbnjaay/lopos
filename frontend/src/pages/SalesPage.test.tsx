@@ -100,6 +100,7 @@ describe("SalesPage", () => {
 
     renderPage()
 
+    expect(screen.getByRole("link", { name: "Retour au point de vente" })).toHaveAttribute("href", "/pos")
     expect(await screen.findByRole("link", { name: /Ticket A12F0000/ })).toHaveAttribute(
       "href",
       "/sales/a12f0000-0000-0000-0000-000000000000",

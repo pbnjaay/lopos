@@ -343,6 +343,10 @@ export function PosPage() {
         <SaleSuccessModal
           sale={completedSale}
           cashSessionId={ownSession?.id}
+          onPrintTicket={() => {
+            setCompletedSale(null)
+            focusProductSearch()
+          }}
           onNewSale={() => {
             setCompletedSale(null)
             focusProductSearch()

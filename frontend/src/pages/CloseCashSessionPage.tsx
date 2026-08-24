@@ -1,9 +1,10 @@
 import { type FormEvent, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Link, useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 
 import { closeCashSession, getCashSessionSummary } from "../api/cashSessions"
 import { trackCashSessionClosed } from "../analytics/events"
+import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
 import { RouteState } from "../components/ui/RouteState"
 import { Dialog } from "../components/ui/Dialog"
 import { countPendingLocalSalesForSession } from "../db/sales"
@@ -32,7 +33,7 @@ function describeSyncOutcome(outcome: SyncOutcome): string {
 
 export function CloseCashSessionPage() {
   const user = useCurrentUser().data!
-  const { ownSession } = usePosSession(user)
+  const { ownSession, localSession } = usePosSession(user)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [countedCash, setCountedCash] = useState("")
@@ -129,6 +130,9 @@ export function CloseCashSessionPage() {
   }
 
   const pendingLocalSalesCount = pendingLocalSalesQuery.data ?? 0
+  const cashContext = localSession?.storeName
+    ? `${localSession.storeName} · ${summary.cash_register.name}`
+    : summary.cash_register.name
   if (pendingLocalSalesCount > 0) {
     async function handleSyncClick() {
       setSyncResultMessage(null)
@@ -138,17 +142,15 @@ export function CloseCashSessionPage() {
     }
 
     return (
-      <main className="closing-page">
-        <section className="closing-sheet" aria-labelledby="close-session-title">
-          <header className="closing-heading">
-            <div>
-              <p className="eyebrow">Fin de journée</p>
-              <h1 id="close-session-title">Clôturer la caisse</h1>
-            </div>
-            <Link className="text-button close-session-back-link" to="/pos">
-              Retour au point de vente
-            </Link>
-          </header>
+      <main className="operational-page operational-page-narrow">
+        <OperationalPageHeader
+          backTo="/pos"
+          backLabel="Retour au point de vente"
+          eyebrow="Fin de journée"
+          title="Clôturer la caisse"
+          context={cashContext}
+        />
+        <section className="operational-card closing-sheet" aria-label="Synchronisation avant clôture">
 
           <p className="form-error" role="alert">
             {pendingLocalSalesCount} vente{pendingLocalSalesCount > 1 ? "s" : ""} de cette
@@ -176,17 +178,15 @@ export function CloseCashSessionPage() {
   }
 
   return (
-    <main className="closing-page">
-      <section className="closing-sheet" aria-labelledby="close-session-title">
-        <header className="closing-heading">
-          <div>
-            <p className="eyebrow">Fin de journée</p>
-            <h1 id="close-session-title">Clôturer la caisse</h1>
-          </div>
-          <Link className="text-button close-session-back-link" to="/pos">
-            Retour au point de vente
-          </Link>
-        </header>
+    <main className="operational-page operational-page-narrow">
+      <OperationalPageHeader
+        backTo="/pos"
+        backLabel="Retour au point de vente"
+        eyebrow="Fin de journée"
+        title="Clôturer la caisse"
+        context={cashContext}
+      />
+      <section className="operational-card closing-sheet" aria-label="Résumé de clôture">
 
         <div className="closing-identity">
           <strong>{summary.cash_register.name}</strong>

@@ -38,12 +38,9 @@ describe("SaleSuccessModal", () => {
     expect(screen.getAllByText("1 000 FCFA")).toHaveLength(2)
     expect(screen.getByRole("link", { name: "Imprimer le ticket" })).toHaveAttribute(
       "href",
-      "/sales/sale-id/receipt",
+      "/sales/sale-id/receipt?from=pos",
     )
-    expect(screen.getByRole("link", { name: "Imprimer le ticket" })).toHaveAttribute(
-      "target",
-      "_blank",
-    )
+    expect(screen.getByRole("link", { name: "Imprimer le ticket" })).not.toHaveAttribute("target")
     await user.click(screen.getByRole("button", { name: "Nouvelle vente" }))
     expect(onNewSale).toHaveBeenCalledOnce()
   })
@@ -57,6 +54,17 @@ describe("SaleSuccessModal", () => {
     )
 
     expect(screen.getByText(/Vente enregistrée hors ligne/)).toHaveTextContent("0F9E8D7C")
+  })
+
+  it("clears the completed-sale state before opening the ticket", () => {
+    const onPrintTicket = vi.fn()
+    render(<SaleSuccessModal sale={sale} onNewSale={vi.fn()} onPrintTicket={onPrintTicket} />)
+    const link = screen.getByRole("link", { name: "Imprimer le ticket" })
+    link.addEventListener("click", (event) => event.preventDefault())
+
+    fireEvent.click(link)
+
+    expect(onPrintTicket).toHaveBeenCalledOnce()
   })
 
   it("starts a new sale with Enter", () => {

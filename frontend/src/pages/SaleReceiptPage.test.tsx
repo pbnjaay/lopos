@@ -75,6 +75,8 @@ describe("SaleReceiptPage", () => {
     renderReceipt(cashReceipt)
 
     expect(await screen.findByRole("heading", { name: "Supérette Test" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Ticket de vente" })).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Retour à la vente" })).toHaveAttribute("href", `/sales/${cashReceipt.id}`)
     expect(screen.getByText("N° ticket : SALE-ID")).toBeInTheDocument()
     expect(screen.getByText("Coca 50cl")).toBeInTheDocument()
     expect(screen.getByText("2 × 500 FCFA")).toBeInTheDocument()
@@ -84,7 +86,7 @@ describe("SaleReceiptPage", () => {
     expect(screen.getByText("2 000 FCFA")).toBeInTheDocument()
     expect(screen.getByText("Monnaie")).toBeInTheDocument()
 
-    await user.click(screen.getByRole("button", { name: "Imprimer" }))
+    await user.click(screen.getByRole("button", { name: "Imprimer le ticket" }))
     expect(printMock).toHaveBeenCalledOnce()
   })
 
@@ -153,6 +155,7 @@ describe("SaleReceiptPage", () => {
     )
 
     expect(await screen.findByText("Coca 50cl")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Retour aux ventes en attente" })).toHaveAttribute("href", "/sales/pending")
     expect(screen.getByText("N° ticket : 0F9E8D7C")).toBeInTheDocument()
     expect(screen.getByText(/référence locale/i)).toHaveTextContent("0F9E8D7C")
     expect(getSaleReceipt).not.toHaveBeenCalled()

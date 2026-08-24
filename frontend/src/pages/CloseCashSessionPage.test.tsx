@@ -115,6 +115,7 @@ describe("CloseCashSessionPage", () => {
   it("shows the session totals without revealing expected cash", () => {
     renderPage()
 
+    expect(screen.getByRole("link", { name: "Retour au point de vente" })).toHaveAttribute("href", "/pos")
     expect(screen.getByText("3")).toBeInTheDocument()
     expect(screen.getByText("43 000 FCFA")).toBeInTheDocument()
     expect(screen.getAllByText("15 000 FCFA")).toHaveLength(2)

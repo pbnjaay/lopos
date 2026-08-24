@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Outlet, useNavigate } from "react-router-dom"
+import { Link, Outlet, useNavigate } from "react-router-dom"
 
 import { logout } from "../../api/auth"
 import { resetAnalytics } from "../../analytics/posthog"
@@ -28,7 +28,7 @@ export function AppLayout({ user }: AppLayoutProps) {
     <div className="app-shell">
       <header className="app-header">
         <div className="app-header-status">
-          <span className="brand">LoPOS</span>
+          <Link className="brand brand-link" to="/" aria-label="LoPOS — Accueil">LoPOS</Link>
           <ConnectionStatus />
         </div>
         <div className="user-menu">

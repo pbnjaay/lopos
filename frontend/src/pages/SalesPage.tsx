@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
 
 import { listSales } from "../api/sales"
+import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
 import { RouteState } from "../components/ui/RouteState"
 import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
@@ -58,17 +59,14 @@ export function SalesPage() {
   const storeName = localSession?.storeName || "Boutique actuelle"
 
   return (
-    <main className="sales-page">
-      <header className="sales-heading">
-        <div>
-          <Link className="text-button" to="/pos">Retour au POS</Link>
-          <p className="eyebrow">Historique</p>
-          <h1>Ventes</h1>
-          <p className="sales-store-context">
-            {storeName} · {selectedRegister?.name ?? "Caisse"}
-          </p>
-        </div>
-      </header>
+    <main className="operational-page">
+      <OperationalPageHeader
+        backTo="/pos"
+        backLabel="Retour au point de vente"
+        eyebrow="Historique"
+        title="Ventes"
+        context={`${storeName} · ${selectedRegister?.name ?? "Caisse"}`}
+      />
 
       {!online ? (
         <section className="sales-empty" role="status">

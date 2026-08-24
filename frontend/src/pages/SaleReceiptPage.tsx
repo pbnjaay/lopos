@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query"
-import { Link, useParams, useSearchParams } from "react-router-dom"
+import { useParams, useSearchParams } from "react-router-dom"
 
 import { getSaleReceipt } from "../api/sales"
+import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
 import { RouteState } from "../components/ui/RouteState"
 import { getLocalSaleById } from "../db/sales"
 import { receiptViewFromApiReceipt, receiptViewFromLocalSale } from "../features/sales/receiptView"
@@ -45,17 +46,25 @@ export function SaleReceiptPage() {
   const receipt = receiptQuery.data
   if (!receipt) return <RouteState message="Chargement du ticket…" />
   const isCash = receipt.payment.method === "CASH"
+  const source = searchParams.get("from")
+  const backDestination = source === "pos"
+    ? { to: "/pos", label: "Retour au point de vente" }
+    : source === "pending" || receipt.isPendingSync
+      ? { to: "/sales/pending", label: "Retour aux ventes en attente" }
+      : { to: `/sales/${receipt.id}`, label: "Retour à la vente" }
 
   return (
-    <main className="receipt-page">
-      <nav className="receipt-actions no-print" aria-label="Actions du ticket">
-        <Link className="text-button" to="/pos">
-          Retour au POS
-        </Link>
-        <button className="button button-primary button-small" type="button" onClick={() => window.print()}>
-          Imprimer
-        </button>
-      </nav>
+    <main className="operational-page operational-page-narrow receipt-screen-page">
+      <div className="no-print">
+        <OperationalPageHeader
+          backTo={backDestination.to}
+          backLabel={backDestination.label}
+          eyebrow={`Ticket ${receipt.id.slice(0, 8).toUpperCase()}`}
+          title="Ticket de vente"
+          context={`${receipt.storeName} · ${receipt.cashRegisterName}`}
+          actions={<button className="button button-primary button-small" type="button" onClick={() => window.print()}>Imprimer le ticket</button>}
+        />
+      </div>
 
       <article className="receipt" aria-labelledby="receipt-title">
         <header className="receipt-heading">

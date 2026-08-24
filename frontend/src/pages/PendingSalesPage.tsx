@@ -92,7 +92,7 @@ export function PendingSalesPage() {
                 <li key={sale.id}>
                   <Link
                     className="pending-sale-row pending-sale-row-conflict"
-                    to={`/sales/${encodeURIComponent(sale.id)}/receipt`}
+                    to={`/sales/${encodeURIComponent(sale.id)}/receipt?from=pending`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -116,7 +116,7 @@ export function PendingSalesPage() {
               <li key={sale.id}>
                 <Link
                   className="pending-sale-row"
-                  to={`/sales/${encodeURIComponent(sale.id)}/receipt`}
+                  to={`/sales/${encodeURIComponent(sale.id)}/receipt?from=pending`}
                   target="_blank"
                   rel="noopener noreferrer"
                 >

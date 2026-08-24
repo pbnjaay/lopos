@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query"
 import { Link, useParams } from "react-router-dom"
 
 import { getSaleReceipt } from "../api/sales"
+import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
+import { ReceiptIcon, RotateCcwIcon } from "../components/ui/Icons"
 import { RouteState } from "../components/ui/RouteState"
 import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
@@ -30,22 +32,26 @@ export function SaleDetailPage() {
   const canReturn = sale.status === "COMPLETED" && sale.items.some((item) => Number(item.quantity_returnable ?? item.quantity) > 0)
 
   return (
-    <main className="sales-page">
-      <nav className="sale-detail-actions">
-        <Link className="text-button" to="/sales">Retour aux ventes</Link>
-        <div>
-          <Link className="button button-secondary button-small" to={`/sales/${sale.id}/receipt?cash_session_id=${ownSession!.id}`}>Voir le ticket</Link>
-          {canReturn ? <Link className="button button-primary button-small" to={`/sales/${sale.id}/return`}>Effectuer un retour</Link> : null}
-        </div>
-      </nav>
-      <section className="sale-detail-card">
-        <p className="eyebrow">Ticket {sale.id.slice(0, 8).toUpperCase()}</p>
-        <h1>Détail de la vente</h1>
-        <div className="sale-detail-meta">
-          <span>{formatDateTime(sale.created_at)}</span>
-          <span>{sale.store.name}</span>
-          <span>{sale.cash_register.name}</span>
-          <span>Caissier : {sale.cashier.username}</span>
+    <main className="operational-page">
+      <OperationalPageHeader
+        backTo="/sales"
+        backLabel="Retour aux ventes"
+        eyebrow={`Ticket ${sale.id.slice(0, 8).toUpperCase()}`}
+        title="Détail de la vente"
+        context={`${sale.store.name} · ${sale.cash_register.name}`}
+        actions={<>
+          <Link className="button button-secondary button-small button-with-icon" to={`/sales/${sale.id}/receipt?cash_session_id=${ownSession!.id}&from=detail`}>
+            <ReceiptIcon />
+            <span>Voir le ticket</span>
+          </Link>
+          {canReturn ? <Link className="button button-return button-small button-with-icon" to={`/sales/${sale.id}/return`}><RotateCcwIcon /><span>Effectuer un retour</span></Link> : null}
+        </>}
+      />
+      <section className="operational-card sale-detail-card">
+        <div className="sale-detail-meta" aria-label="Informations de la vente">
+          <div><span>Date</span><strong>{formatDateTime(sale.created_at)}</strong></div>
+          <div><span>Caissier</span><strong>{sale.cashier.username}</strong></div>
+          <div><span>Paiement</span><strong>{{ CASH: "Espèces", WAVE: "Wave", ORANGE_MONEY: "Orange Money" }[sale.payment.method]}</strong></div>
         </div>
         <ul className="sale-detail-items">
           {sale.items.map((item) => (
