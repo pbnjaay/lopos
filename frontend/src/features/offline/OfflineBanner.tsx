@@ -1,9 +1,25 @@
 import { useNetworkStatus } from "./useNetworkStatus"
+import { WifiIcon, WifiOffIcon } from "../../components/ui/Icons"
 
 type OfflineBannerProps = {
   pendingSalesCount?: number
   conflictSalesCount?: number
   isSyncing?: boolean
+}
+
+export function ConnectionStatus() {
+  const isOnline = useNetworkStatus()
+
+  return (
+    <div
+      className={`network-status app-network-status ${isOnline ? "network-status-online" : "network-status-offline"}`}
+      role="status"
+      aria-label={isOnline ? "Connexion Internet disponible" : "Sans connexion Internet"}
+    >
+      {isOnline ? <WifiIcon /> : <WifiOffIcon />}
+      <span>{isOnline ? "En ligne" : "Hors ligne"}</span>
+    </div>
+  )
 }
 
 export function OfflineBanner({
@@ -12,14 +28,15 @@ export function OfflineBanner({
   isSyncing = false,
 }: OfflineBannerProps) {
   const isOnline = useNetworkStatus()
+  const hasOperationalStatus = !isOnline || isSyncing || pendingSalesCount > 0 || conflictSalesCount > 0
+
+  if (!hasOperationalStatus) return null
 
   return (
     <div
-      className={`network-status ${isOnline ? "network-status-online" : "network-status-offline"}`}
+      className={`network-status network-operation-status ${isOnline ? "network-status-online" : "network-status-offline"}`}
       role="status"
     >
-      <span className="network-status-dot" aria-hidden="true" />
-      <span>{isOnline ? "En ligne" : "Hors ligne"}</span>
       {!isOnline ? (
         <span className="network-status-detail">Les ventes sont enregistrées localement.</span>
       ) : null}

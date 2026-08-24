@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { createSaleReturn, getSaleReceipt } from "../api/sales"
+import { Dialog } from "../components/ui/Dialog"
 import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
@@ -20,6 +21,7 @@ export function SaleReturnPage() {
   const [method, setMethod] = useState<PaymentMethod>("CASH")
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [isConfirming, setIsConfirming] = useState(false)
 
   const selected = sale?.items.flatMap((item) => {
     const milli = parseQuantityToMilli(quantities[item.id] ?? "")
@@ -36,7 +38,6 @@ export function SaleReturnPage() {
 
   async function submit() {
     if (!sale || !ownSession || selected.length === 0) return
-    if (!window.confirm(`Confirmer le retour de ${formatBackendMoney(`${total}.00`)} par ${method} ?`)) return
     setSubmitting(true); setError("")
     try {
       const result = await createSaleReturn({
@@ -64,8 +65,27 @@ export function SaleReturnPage() {
       </div>)}
       <div className="form-field"><label>Mode de remboursement</label><select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}><option value="CASH">Espèces</option><option value="WAVE">Wave</option><option value="ORANGE_MONEY">Orange Money</option></select></div>
       <p><strong>Montant à rembourser : {formatBackendMoney(`${total}.00`)}</strong></p>
-      <button className="button button-primary" type="button" disabled={submitting || selected.length === 0} onClick={() => void submit()}>CONFIRMER LE RETOUR</button>
+      <button className="button button-primary" type="button" disabled={submitting || selected.length === 0} onClick={() => setIsConfirming(true)}>CONFIRMER LE RETOUR</button>
     </> : null}
-    {error ? <p className="form-error" role="alert">{error}</p> : null}
-  </section></main>
+    {error && !isConfirming ? <p className="form-error" role="alert">{error}</p> : null}
+  </section>
+  {isConfirming ? (
+    <Dialog
+      eyebrow="Retour marchandise"
+      title="Confirmer le retour ?"
+      dismissible={!submitting}
+      onClose={() => setIsConfirming(false)}
+    >
+      <div className="pos-dialog-body">
+        <p>Vous allez rembourser <strong>{formatBackendMoney(`${total}.00`)}</strong> par {{ CASH: "espèces", WAVE: "Wave", ORANGE_MONEY: "Orange Money" }[method]}.</p>
+        <p className="muted">Les quantités sélectionnées seront enregistrées comme retournées.</p>
+        {error ? <p className="form-error" role="alert">{error}</p> : null}
+        <div className="modal-actions">
+          <button className="button button-secondary" type="button" disabled={submitting} onClick={() => setIsConfirming(false)}>Annuler</button>
+          <button className="button button-primary" type="button" disabled={submitting} onClick={() => void submit()}>{submitting ? "Traitement…" : "Confirmer le retour"}</button>
+        </div>
+      </div>
+    </Dialog>
+  ) : null}
+  </main>
 }

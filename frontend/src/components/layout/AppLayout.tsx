@@ -4,6 +4,7 @@ import { Outlet, useNavigate } from "react-router-dom"
 import { logout } from "../../api/auth"
 import { resetAnalytics } from "../../analytics/posthog"
 import { clearSentryUser } from "../../analytics/sentry"
+import { ConnectionStatus } from "../../features/offline/OfflineBanner"
 import type { CurrentUser } from "../../types/api"
 
 type AppLayoutProps = {
@@ -26,9 +27,12 @@ export function AppLayout({ user }: AppLayoutProps) {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <span className="brand">LoPOS</span>
+        <div className="app-header-status">
+          <span className="brand">LoPOS</span>
+          <ConnectionStatus />
+        </div>
         <div className="user-menu">
-          <span>{user.first_name || user.username}</span>
+          <span className="header-user-name">{user.first_name || user.username}</span>
           <button
             className="button button-secondary button-small"
             type="button"

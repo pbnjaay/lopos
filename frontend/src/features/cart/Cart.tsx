@@ -1,6 +1,11 @@
+import { useEffect, useState } from "react"
+
+import { MinusIcon, PencilIcon, PlusIcon, TrashIcon } from "../../components/ui/Icons"
+import { Dialog } from "../../components/ui/Dialog"
 import { formatMoney } from "../../utils/money"
 import type { CartItem } from "./cartState"
-import { formatQuantity, lineTotal, parseQuantityToMilli } from "../../utils/quantity"
+import { formatQuantity, lineTotal } from "../../utils/quantity"
+import { PriceDialog, QuantityDialog } from "./CartDialogs"
 
 type CartProps = {
   items: CartItem[]
@@ -12,6 +17,8 @@ type CartProps = {
   onRemove: (productId: string) => void
   onClear: () => void
   onCheckout: () => void
+  onDialogOpenChange?: (isOpen: boolean) => void
+  onInteractionComplete?: () => void
 }
 
 export function Cart({
@@ -24,8 +31,42 @@ export function Cart({
   onRemove,
   onClear,
   onCheckout,
+  onDialogOpenChange,
+  onInteractionComplete,
 }: CartProps) {
+  const [quantityProductId, setQuantityProductId] = useState<string | null>(null)
+  const [priceProductId, setPriceProductId] = useState<string | null>(null)
+  const [isClearConfirming, setIsClearConfirming] = useState(false)
+  const quantityItem = items.find((item) => item.productId === quantityProductId)
+  const priceItem = items.find((item) => item.productId === priceProductId)
+  const hasDialog = Boolean(quantityItem || priceItem || isClearConfirming)
+
+  function finishInteraction() {
+    onInteractionComplete?.()
+  }
+
+  function closeQuantityDialog() {
+    setQuantityProductId(null)
+    finishInteraction()
+  }
+
+  function closePriceDialog() {
+    setPriceProductId(null)
+    finishInteraction()
+  }
+
+  function closeClearDialog() {
+    setIsClearConfirming(false)
+    finishInteraction()
+  }
+
+  useEffect(() => {
+    onDialogOpenChange?.(hasDialog)
+    return () => onDialogOpenChange?.(false)
+  }, [hasDialog, onDialogOpenChange])
+
   return (
+    <>
     <section className="cart-panel" aria-labelledby="cart-title">
       <header className="cart-header">
         <div>
@@ -33,7 +74,13 @@ export function Cart({
           <h2 id="cart-title">Panier</h2>
         </div>
         {items.length > 0 ? (
-          <button className="text-button" type="button" onClick={onClear}>
+          <button
+            className="text-button danger-button clear-cart-button"
+            type="button"
+            title="Vider le panier"
+            onClick={() => setIsClearConfirming(true)}
+          >
+            <TrashIcon />
             Vider
           </button>
         ) : null}
@@ -70,44 +117,57 @@ export function Cart({
                     disabled={(item.quantityMilli ?? (item.quantity ?? 0) * 1000) <= (item.saleUnit === "KG" ? 100 : 1000)}
                     onClick={() => onDecrement(item.productId)}
                   >
-                    −
+                    <MinusIcon />
                   </button>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min={item.saleUnit === "UNIT" ? 1 : 0.001}
-                    step={item.saleUnit === "UNIT" ? 1 : 0.001}
-                    value={(item.quantityMilli ?? (item.quantity ?? 0) * 1000) / 1000}
+                  <button
+                    className="quantity-value"
+                    type="button"
                     aria-label={`Quantité de ${item.name}`}
-                    onChange={(event) => {
-                      const quantity = parseQuantityToMilli(event.currentTarget.value)
-                      if (quantity !== null && (item.saleUnit === "KG" || quantity % 1000 === 0)) onQuantityChange(item.productId, quantity)
-                    }}
-                  />
+                    title="Modifier la quantité"
+                    onClick={() => setQuantityProductId(item.productId)}
+                  >
+                    {formatQuantity(item.quantityMilli ?? (item.quantity ?? 0) * 1000, item.saleUnit ?? "UNIT")}
+                  </button>
                   <button
                     type="button"
                     aria-label={`Augmenter ${item.name}`}
                     disabled={(item.quantityMilli ?? (item.quantity ?? 0) * 1000) >= (item.stockMilli ?? (item.stock ?? 0) * 1000)}
                     onClick={() => onIncrement(item.productId)}
                   >
-                    +
+                    <PlusIcon />
                   </button>
                 </div>
-                <button className="text-button" type="button" onClick={() => {
-                  const raw = window.prompt(`Prix catalogue : ${formatMoney(item.catalogUnitPrice ?? item.unitPrice)}\nPrix pour cette vente`, String(item.unitPrice))
-                  if (raw && /^\d+$/.test(raw) && Number(raw) > 0) onPriceChange(item.productId, Number(raw))
-                }}>
-                  Modifier le prix
-                </button>
-                <button
-                  className="text-button danger-button"
-                  type="button"
-                  aria-label={`Supprimer ${item.name}`}
-                  onClick={() => onRemove(item.productId)}
-                >
-                  Supprimer
-                </button>
+                <div className="cart-item-secondary-actions">
+                  <button
+                    className="text-button cart-edit-price"
+                    type="button"
+                    aria-label="Modifier le prix"
+                    title="Modifier le prix"
+                    onClick={() => setPriceProductId(item.productId)}
+                  >
+                    <PencilIcon />
+                    Prix
+                  </button>
+                  <button
+                    className="icon-button danger-button"
+                    type="button"
+                    aria-label={`Supprimer ${item.name} du panier`}
+                    title="Supprimer l’article"
+                    onClick={() => {
+                      onRemove(item.productId)
+                      finishInteraction()
+                    }}
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
               </div>
+              {item.unitPrice !== (item.catalogUnitPrice ?? item.unitPrice) ? (
+                <p className="price-override-note">
+                  <span>{formatMoney(item.catalogUnitPrice!)}{item.saleUnit === "KG" ? "/kg" : ""}</span>
+                  Prix modifié
+                </p>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -133,5 +193,42 @@ export function Cart({
         </div>
       </footer>
     </section>
+
+    {quantityItem ? (
+      <QuantityDialog
+        item={quantityItem}
+        quantityMilli={quantityItem.quantityMilli ?? (quantityItem.quantity ?? 0) * 1000}
+        onClose={closeQuantityDialog}
+        onApply={(quantityMilli) => {
+          onQuantityChange(quantityItem.productId, quantityMilli)
+          closeQuantityDialog()
+        }}
+      />
+    ) : null}
+    {priceItem ? (
+      <PriceDialog
+        item={priceItem}
+        onClose={closePriceDialog}
+        onApply={(price) => {
+          onPriceChange(priceItem.productId, price)
+          closePriceDialog()
+        }}
+      />
+    ) : null}
+    {isClearConfirming ? (
+      <Dialog eyebrow="Vente en cours" title="Vider le panier ?" onClose={closeClearDialog}>
+        <div className="pos-dialog-body">
+          <p>Les {items.length} article{items.length > 1 ? "s" : ""} seront retirés de la vente en cours.</p>
+          <div className="modal-actions">
+            <button className="button button-secondary" type="button" onClick={closeClearDialog}>Annuler</button>
+            <button className="button button-destructive" type="button" onClick={() => {
+              onClear()
+              closeClearDialog()
+            }}>Vider le panier</button>
+          </div>
+        </div>
+      </Dialog>
+    ) : null}
+    </>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 
+import { useDialogFocusTrap } from "../../components/ui/useDialogFocusTrap"
 import type { PaymentMethod } from "../../types/api"
 import { formatMoney } from "../../utils/money"
 import { useSlowSubmitHint } from "./useSlowSubmitHint"
@@ -29,6 +30,8 @@ export function MobileMoneyConfirmation({
   onConfirm,
 }: MobileMoneyConfirmationProps) {
   const submissionLock = useRef(false)
+  const dialogRef = useRef<HTMLElement>(null)
+  useDialogFocusTrap(dialogRef)
   const isSlow = useSlowSubmitHint(isSubmitting)
   const label = labels[method]
 
@@ -66,6 +69,7 @@ export function MobileMoneyConfirmation({
   return (
     <div className="modal-backdrop">
       <section
+        ref={dialogRef}
         className="checkout-modal"
         role="dialog"
         aria-modal="true"

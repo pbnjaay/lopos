@@ -173,7 +173,7 @@ function renderPos(localSession?: LocalCashSession) {
 async function scanCoca(userEvents: ReturnType<typeof userEvent.setup>) {
   const scanner = screen.getByLabelText("Scanner un code-barres ou rechercher par nom")
   await userEvents.type(scanner, `${coca.barcode}{Enter}`)
-  await waitFor(() => expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveValue(1))
+  await waitFor(() => expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1"))
   return scanner
 }
 
@@ -205,7 +205,7 @@ describe("POS sale workflow", () => {
     renderPos()
     const scanner = await scanCoca(userEvents)
     await userEvents.type(scanner, `${coca.barcode}{Enter}`)
-    await waitFor(() => expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveValue(2))
+    await waitFor(() => expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("2"))
     await openCashPayment(userEvents)
     await userEvents.type(screen.getByLabelText("Montant reçu"), "2000")
     await userEvents.click(screen.getByRole("button", { name: "Valider" }))
@@ -252,7 +252,7 @@ describe("POS sale workflow", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Stock insuffisant pour Coca 50cl.",
     )
-    expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveValue(1)
+    expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1")
     expect(screen.queryByRole("heading", { name: "Vente validée" })).not.toBeInTheDocument()
   })
 })
@@ -327,7 +327,7 @@ describe("POS sale workflow offline", () => {
     renderPos(localSession)
     const scanner = await scanCoca(userEvents)
     await userEvents.type(scanner, `${coca.barcode}{Enter}`)
-    await waitFor(() => expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveValue(2))
+    await waitFor(() => expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("2"))
     await openCashPayment(userEvents)
     await userEvents.type(screen.getByLabelText("Montant reçu"), "2000")
     await userEvents.click(screen.getByRole("button", { name: "Valider" }))
@@ -411,12 +411,19 @@ describe("POS sale workflow offline", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Impossible d'enregistrer la vente localement.",
     )
-    expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveValue(1)
+    expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1")
     expect(screen.queryByRole("heading", { name: "Vente validée" })).not.toBeInTheDocument()
   })
 })
 
 describe("POS keyboard shortcuts", () => {
+  it("keeps return and closing actions clearly available", () => {
+    renderPos()
+
+    expect(screen.getByRole("link", { name: "Retour marchandise" })).toHaveAttribute("href", "/returns/new")
+    expect(screen.getByRole("link", { name: "Clôturer la caisse" })).toHaveAttribute("href", "/cash/close")
+  })
+
   it("completes a cash sale with scanner + keyboard only: F1, digits, Enter", async () => {
     const userEvents = userEvent.setup()
     document.cookie = "csrftoken=test-token; path=/"
@@ -430,7 +437,7 @@ describe("POS keyboard shortcuts", () => {
     renderPos()
     const scanner = await scanCoca(userEvents)
     await userEvents.type(scanner, `${coca.barcode}{Enter}`)
-    await waitFor(() => expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveValue(2))
+    await waitFor(() => expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("2"))
 
     await userEvents.keyboard("{F1}")
     await waitFor(() => expect(screen.getByLabelText("Montant reçu")).toHaveFocus())
@@ -519,6 +526,50 @@ describe("POS keyboard shortcuts", () => {
     fireEvent.keyDown(window, { key: "F1", repeat: true })
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+
+  it("suspends checkout shortcuts while a cart dialog is open", async () => {
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      throw new Error(`Unexpected request: ${url}`)
+    })
+    const userEvents = userEvent.setup()
+    renderPos()
+    await scanCoca(userEvents)
+    await userEvents.click(screen.getByRole("button", { name: "Modifier le prix" }))
+    expect(screen.getByRole("heading", { name: "Modifier le prix" })).toBeInTheDocument()
+
+    await userEvents.keyboard("{F1}")
+
+    expect(screen.queryByRole("heading", { name: "Paiement en espèces" })).not.toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Modifier le prix" })).toBeInTheDocument()
+  })
+
+  it("restores scanner focus after cart interactions", async () => {
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      throw new Error(`Unexpected request: ${url}`)
+    })
+    const userEvents = userEvent.setup()
+    renderPos()
+    const scanner = await scanCoca(userEvents)
+
+    await userEvents.click(screen.getByLabelText(`Quantité de ${coca.name}`))
+    await userEvents.keyboard("{Escape}")
+    await waitFor(() => expect(scanner).toHaveFocus())
+
+    await userEvents.click(screen.getByRole("button", { name: "Modifier le prix" }))
+    const priceInput = screen.getByLabelText("Prix pour cette vente")
+    await userEvents.clear(priceInput)
+    await userEvents.type(priceInput, "450{Enter}")
+    await waitFor(() => expect(scanner).toHaveFocus())
+
+    await userEvents.click(screen.getByRole("button", { name: `Supprimer ${coca.name} du panier` }))
+    await waitFor(() => expect(scanner).toHaveFocus())
   })
 
   it("backs out of checkout one Escape at a time, ending with scanner focus", async () => {

@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react"
 
+import { useDialogFocusTrap } from "../../components/ui/useDialogFocusTrap"
 import { formatMoney, parseMoneyInput } from "../../utils/money"
 import { getSuggestedCashAmounts } from "./cashSuggestions"
 import { useSlowSubmitHint } from "./useSlowSubmitHint"
@@ -22,7 +23,9 @@ export function CashPaymentModal({
   onBack,
 }: CashPaymentModalProps) {
   const submissionLock = useRef(false)
+  const dialogRef = useRef<HTMLElement>(null)
   const receivedInputRef = useRef<HTMLInputElement>(null)
+  useDialogFocusTrap(dialogRef)
   const isSlow = useSlowSubmitHint(isSubmitting)
   const [receivedInput, setReceivedInput] = useState("")
   const receivedAmount = parseMoneyInput(receivedInput)
@@ -104,6 +107,7 @@ export function CashPaymentModal({
   return (
     <div className="modal-backdrop">
       <section
+        ref={dialogRef}
         className="checkout-modal"
         role="dialog"
         aria-modal="true"

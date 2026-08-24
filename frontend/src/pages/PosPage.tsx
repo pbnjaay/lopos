@@ -5,6 +5,7 @@ import { Link } from "react-router-dom"
 import { completeSale } from "../api/sales"
 import { getStore } from "../api/stores"
 import { ApiError, isApiUnavailable } from "../api/client"
+import { PowerIcon, RotateCcwIcon } from "../components/ui/Icons"
 import {
   trackCheckoutOpened,
   trackPaymentMethodSelected,
@@ -15,6 +16,7 @@ import { InsufficientLocalStockError, createLocalSale } from "../db/sales"
 import { updateLocalCashSessionStoreName } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
 import { Cart } from "../features/cart/Cart"
+import { QuantityDialog } from "../features/cart/CartDialogs"
 import { useCart } from "../features/cart/useCart"
 import { usePosSession } from "../features/cash-session/queries"
 import { CashPaymentModal } from "../features/checkout/CashPaymentModal"
@@ -27,11 +29,12 @@ import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { pendingSalesCountQueryKey } from "../features/offline/usePendingSalesCount"
 import { ProductSearch } from "../features/products/ProductSearch"
 import { useProductCatalogCache } from "../features/products/queries"
+import type { CatalogProduct } from "../features/products/types"
 import { type ReceiptView, receiptViewFromApiSale, receiptViewFromLocalSale } from "../features/sales/receiptView"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
 import type { PaymentMethod } from "../types/api"
 import { toBackendMoney } from "../utils/money"
-import { milliToBackendQuantity, parseQuantityToMilli } from "../utils/quantity"
+import { milliToBackendQuantity } from "../utils/quantity"
 
 type CheckoutPayment = {
   method: PaymentMethod
@@ -53,6 +56,8 @@ export function PosPage() {
   const cart = useCart(ownSession?.id ?? null)
   const [checkoutStep, setCheckoutStep] = useState<"METHODS" | PaymentMethod | null>(null)
   const [completedSale, setCompletedSale] = useState<ReceiptView | null>(null)
+  const [weighedProduct, setWeighedProduct] = useState<CatalogProduct | null>(null)
+  const [isCartDialogOpen, setIsCartDialogOpen] = useState(false)
   const [lastPaymentMethod, setLastPaymentMethod] = useState<PaymentMethod | null>(
     getLastPaymentMethod,
   )
@@ -167,11 +172,7 @@ export function PosPage() {
 
   function handleAddProduct(product: Parameters<typeof cart.addItem>[0]) {
     if (product.saleUnit === "KG") {
-      const raw = window.prompt(`Quantité de ${product.name} en kg`, "0,300")
-      if (raw === null) return
-      const quantityMilli = parseQuantityToMilli(raw)
-      if (quantityMilli === null) return
-      cart.addItem(product, quantityMilli)
+      setWeighedProduct(product)
       return
     }
     cart.addItem(product, 1000)
@@ -213,7 +214,7 @@ export function PosPage() {
       const method = checkoutFKeyToMethod[event.key]
       if (!method) return
       event.preventDefault()
-      if (checkoutStep !== null || completedSale !== null) return
+      if (checkoutStep !== null || completedSale !== null || weighedProduct !== null || isCartDialogOpen) return
       if (!ownSession || cart.items.length === 0) return
       saleMutation.reset()
       setCheckoutStep(method)
@@ -222,7 +223,7 @@ export function PosPage() {
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [checkoutStep, completedSale, ownSession, cart.items.length, cart.total, saleMutation])
+  }, [checkoutStep, completedSale, weighedProduct, isCartDialogOpen, ownSession, cart.items.length, cart.total, saleMutation])
 
   return (
     <main className="pos-page">
@@ -232,13 +233,15 @@ export function PosPage() {
           <h1>{storeQuery.data?.name ?? localSession?.storeName ?? "Magasin"}</h1>
           <p className="pos-register-name">{selectedRegister?.name ?? "Caisse"}</p>
         </div>
-        <div className="session-summary">
-          <span className="session-badge">Session {ownSession?.status}</span>
-          <span>Caissier : {user.first_name || user.username}</span>
-          <Link className="close-session-link" to="/cash/close">
-            Clôturer la caisse
+        <div className="session-actions">
+          <Link className="session-action-link" to="/returns/new">
+            <RotateCcwIcon />
+            <span>Retour marchandise</span>
           </Link>
-          <Link className="close-session-link" to="/returns/new">Retour marchandise</Link>
+          <Link className="session-action-link" to="/cash/close">
+            <PowerIcon />
+            <span>Clôturer la caisse</span>
+          </Link>
         </div>
       </header>
 
@@ -276,6 +279,8 @@ export function PosPage() {
             onPriceChange={cart.setItemPrice}
             onRemove={cart.removeItem}
             onClear={cart.clearCart}
+            onDialogOpenChange={setIsCartDialogOpen}
+            onInteractionComplete={focusProductSearch}
             onCheckout={() => {
               saleMutation.reset()
               setCheckoutStep("METHODS")
@@ -339,6 +344,27 @@ export function PosPage() {
           sale={completedSale}
           onNewSale={() => {
             setCompletedSale(null)
+            focusProductSearch()
+          }}
+        />
+      ) : null}
+      {weighedProduct ? (
+        <QuantityDialog
+          item={{
+            name: weighedProduct.name,
+            unitPrice: weighedProduct.sellingPrice,
+            saleUnit: weighedProduct.saleUnit,
+            stockMilli: weighedProduct.stockMilli,
+            stock: weighedProduct.stock,
+          }}
+          quantityMilli={null}
+          onClose={() => {
+            setWeighedProduct(null)
+            focusProductSearch()
+          }}
+          onApply={(quantityMilli) => {
+            cart.addItem(weighedProduct, quantityMilli)
+            setWeighedProduct(null)
             focusProductSearch()
           }}
         />

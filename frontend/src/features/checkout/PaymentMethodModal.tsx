@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 
+import { useDialogFocusTrap } from "../../components/ui/useDialogFocusTrap"
 import type { PaymentMethod } from "../../types/api"
 import { formatMoney } from "../../utils/money"
 
@@ -52,6 +53,8 @@ export function PaymentMethodModal({
   onSelect,
 }: PaymentMethodModalProps) {
   const lastUsedButtonRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLElement>(null)
+  useDialogFocusTrap(dialogRef)
 
   useEffect(() => {
     lastUsedButtonRef.current?.focus()
@@ -77,6 +80,7 @@ export function PaymentMethodModal({
   return (
     <div className="modal-backdrop">
       <section
+        ref={dialogRef}
         className="checkout-modal"
         role="dialog"
         aria-modal="true"

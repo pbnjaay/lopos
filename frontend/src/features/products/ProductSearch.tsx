@@ -2,6 +2,7 @@ import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useRef, use
 import { useQuery } from "@tanstack/react-query"
 
 import { useDebouncedValue } from "../../hooks/useDebouncedValue"
+import { BarcodeIcon } from "../../components/ui/Icons"
 import { formatMoney } from "../../utils/money"
 import { getProductByBarcode, searchProducts } from "./productService"
 import type { CatalogProduct } from "./types"
@@ -113,6 +114,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
           onKeyDown={handleKeyDown}
         />
         <button className="button button-secondary" type="submit" disabled={!input.trim()}>
+          <BarcodeIcon />
           Code-barres
         </button>
       </form>

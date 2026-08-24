@@ -5,6 +5,7 @@ import { Link, useNavigate } from "react-router-dom"
 import { closeCashSession, getCashSessionSummary } from "../api/cashSessions"
 import { trackCashSessionClosed } from "../analytics/events"
 import { RouteState } from "../components/ui/RouteState"
+import { Dialog } from "../components/ui/Dialog"
 import { countPendingLocalSalesForSession } from "../db/sales"
 import { markLocalCashSessionClosed } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
@@ -264,15 +265,17 @@ export function CloseCashSessionPage() {
       </section>
 
       {isConfirming ? (
-        <div className="modal-backdrop">
-          <section
-            className="checkout-modal closing-confirmation"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="closing-confirmation-title"
-          >
-            <p className="eyebrow">Confirmation</p>
-            <h2 id="closing-confirmation-title">Clôturer {summary.cash_register.name} ?</h2>
+        <Dialog
+          eyebrow="Confirmation"
+          title={`Clôturer ${summary.cash_register.name} ?`}
+          className="closing-confirmation"
+          dismissible={!closeMutation.isPending}
+          onClose={() => {
+            closeMutation.reset()
+            setIsConfirming(false)
+          }}
+        >
+          <div className="pos-dialog-body">
             <p>
               Montant compté : <strong>{formatMoney(parsedCountedCash!)}</strong>
             </p>
@@ -308,8 +311,8 @@ export function CloseCashSessionPage() {
                 {closeMutation.isPending ? "Clôture…" : "Confirmer la clôture"}
               </button>
             </div>
-          </section>
-        </div>
+          </div>
+        </Dialog>
       ) : null}
     </main>
   )

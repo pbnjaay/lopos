@@ -1,5 +1,6 @@
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 
+import { useDialogFocusTrap } from "../../components/ui/useDialogFocusTrap"
 import type { ReceiptView } from "../sales/receiptView"
 import { formatMoney } from "../../utils/money"
 
@@ -9,6 +10,8 @@ type SaleSuccessModalProps = {
 }
 
 export function SaleSuccessModal({ sale, onNewSale }: SaleSuccessModalProps) {
+  const dialogRef = useRef<HTMLElement>(null)
+  useDialogFocusTrap(dialogRef)
   const paymentLabel = {
     CASH: "Espèces",
     WAVE: "Wave",
@@ -27,6 +30,7 @@ export function SaleSuccessModal({ sale, onNewSale }: SaleSuccessModalProps) {
   return (
     <div className="modal-backdrop">
       <section
+        ref={dialogRef}
         className="checkout-modal sale-success-modal"
         role="dialog"
         aria-modal="true"

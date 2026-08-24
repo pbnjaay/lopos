@@ -5,7 +5,7 @@ import "@testing-library/jest-dom/vitest"
 import { cleanup, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { OfflineBanner } from "./OfflineBanner"
+import { ConnectionStatus, OfflineBanner } from "./OfflineBanner"
 
 describe("OfflineBanner", () => {
   afterEach(() => {
@@ -13,19 +13,26 @@ describe("OfflineBanner", () => {
     vi.unstubAllGlobals()
   })
 
-  it("shows the online status without a pending detail when nothing is queued", () => {
+  it("shows the online status in the global connection indicator", () => {
     vi.stubGlobal("navigator", { onLine: true })
-    render(<OfflineBanner />)
+    render(<ConnectionStatus />)
 
     expect(screen.getByText("En ligne")).toBeInTheDocument()
-    expect(screen.queryByText(/en attente de synchronisation/)).not.toBeInTheDocument()
+    expect(screen.getByRole("status")).toHaveAccessibleName("Connexion Internet disponible")
   })
 
-  it("shows the offline status and instructions", () => {
+  it("shows the offline status in the global connection indicator", () => {
+    vi.stubGlobal("navigator", { onLine: false })
+    render(<ConnectionStatus />)
+
+    expect(screen.getByText("Hors ligne")).toBeInTheDocument()
+    expect(screen.getByRole("status")).toHaveAccessibleName("Sans connexion Internet")
+  })
+
+  it("keeps offline operational guidance close to the POS", () => {
     vi.stubGlobal("navigator", { onLine: false })
     render(<OfflineBanner />)
 
-    expect(screen.getByText("Hors ligne")).toBeInTheDocument()
     expect(screen.getByText("Les ventes sont enregistrées localement.")).toBeInTheDocument()
   })
 
@@ -40,7 +47,13 @@ describe("OfflineBanner", () => {
     vi.stubGlobal("navigator", { onLine: true })
     render(<OfflineBanner pendingSalesCount={1} />)
 
-    expect(screen.getByText("En ligne")).toBeInTheDocument()
     expect(screen.getByText("1 vente en attente de synchronisation")).toBeInTheDocument()
+  })
+
+  it("renders no duplicate status in the POS when everything is synchronized", () => {
+    vi.stubGlobal("navigator", { onLine: true })
+    const { container } = render(<OfflineBanner />)
+
+    expect(container).toBeEmptyDOMElement()
   })
 })
