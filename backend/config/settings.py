@@ -173,6 +173,11 @@ UNFOLD = {
                         "icon": "shopping_cart",
                         "link": reverse_lazy("admin:sales_sale_changelist"),
                     },
+                    {
+                        "title": _("Retours"),
+                        "icon": "keyboard_return",
+                        "link": reverse_lazy("admin:sales_salereturn_changelist"),
+                    },
                 ],
             },
             {

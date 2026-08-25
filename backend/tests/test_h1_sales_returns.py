@@ -86,7 +86,7 @@ def test_kg_override_and_partial_return_are_exact(context):
 def test_return_is_idempotent_and_prevents_over_return(context):
     cashier, store, session = context
     product = Product.objects.create(name="Coca", selling_price=Decimal("500"))
-    Stock.objects.create(store=store, product=product, quantity=Decimal("5.000"))
+    stock = Stock.objects.create(store=store, product=product, quantity=Decimal("5.000"))
     sale = complete_sale(
         cash_session=session,
         items=[{"product_id": product.id, "quantity": Decimal("2")}],
@@ -102,6 +102,12 @@ def test_return_is_idempotent_and_prevents_over_return(context):
     first = create_sale_return(**kwargs)
     assert create_sale_return(**kwargs).id == first.id
     assert SaleReturn.objects.count() == 1
+
+    # restock=False : le retour est tracé par SaleReturnItem, sans créer de
+    # faux mouvement ni modifier le stock disponible.
+    stock.refresh_from_db()
+    assert stock.quantity == Decimal("3.000")
+    assert not InventoryMovement.objects.filter(movement_type="RETURN_IN").exists()
     with pytest.raises(InvalidReturn):
         create_sale_return(**{**kwargs, "idempotency_key": uuid4(), "items": [{"sale_item_id": item.id, "quantity": Decimal("2"), "restock": False}]})
 

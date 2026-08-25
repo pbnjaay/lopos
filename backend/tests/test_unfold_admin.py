@@ -80,6 +80,19 @@ def test_store_assignments_are_managed_from_the_user_admin() -> None:
     assert StoreAssignmentInline in admin.site._registry[User].inlines
 
 
+def test_sales_sidebar_links_to_returns() -> None:
+    sales_section = next(
+        section
+        for section in settings.UNFOLD["SIDEBAR"]["navigation"]
+        if str(section["title"]) == "Ventes"
+    )
+    returns_item = next(
+        item for item in sales_section["items"] if str(item["title"]) == "Retours"
+    )
+
+    assert str(returns_item["link"]) == reverse("admin:sales_salereturn_changelist")
+
+
 @pytest.mark.django_db
 def test_admin_login_uses_unfold(client) -> None:
     response = client.get(reverse("admin:login"))
