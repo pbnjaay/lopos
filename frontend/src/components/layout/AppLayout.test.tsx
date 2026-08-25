@@ -69,10 +69,35 @@ describe("AppLayout", () => {
       "/cash/close",
     )
     expect(within(sessionMenu).getByRole("button", { name: "Se déconnecter" })).toBeInTheDocument()
+    expect(within(sessionMenu).queryByRole("link", { name: "Administration" })).not.toBeInTheDocument()
 
     fireEvent.keyDown(document, { key: "Escape" })
     expect(screen.queryByLabelText("Actions de session")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Menu de session — Awa" })).toHaveFocus()
+  })
+
+  it("shows the Django administration link only to staff users", async () => {
+    const userEvents = userEvent.setup()
+    const queryClient = new QueryClient()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/pos"]}>
+          <Routes>
+            <Route element={<AppLayout user={{ ...user, is_staff: true }} />}>
+              <Route path="/pos" element={<p>Point de vente</p>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    await userEvents.click(screen.getByRole("button", { name: "Menu de session — Awa" }))
+
+    expect(screen.getByRole("link", { name: "Administration" })).toHaveAttribute(
+      "href",
+      "http://localhost:8000/admin/",
+    )
+    expect(screen.getByRole("link", { name: "Administration" })).toHaveAttribute("target", "_blank")
   })
 
   it("keeps the same navigation visible on setup screens", () => {

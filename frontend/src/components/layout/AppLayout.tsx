@@ -3,15 +3,20 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom"
 
 import { logout } from "../../api/auth"
+import { API_BASE_URL } from "../../api/client"
 import { resetAnalytics } from "../../analytics/posthog"
 import { clearSentryUser } from "../../analytics/sentry"
-import { CashRegisterIcon, ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, UserIcon } from "../ui/Icons"
+import { CashRegisterIcon, ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, SettingsIcon, UserIcon } from "../ui/Icons"
 import { ConnectionStatus } from "../../features/offline/OfflineBanner"
 import type { CurrentUser } from "../../types/api"
 
 type AppLayoutProps = {
   user: CurrentUser
 }
+
+const ADMIN_URL = /^https?:\/\//.test(API_BASE_URL)
+  ? new URL("/admin/", API_BASE_URL).toString()
+  : "http://localhost:8000/admin/"
 
 export function AppLayout({ user }: AppLayoutProps) {
   const navigate = useNavigate()
@@ -97,6 +102,21 @@ export function AppLayout({ user }: AppLayoutProps) {
                       <PowerIcon />
                       <span>Clôturer la caisse</span>
                     </Link>
+                    <div className="session-menu-separator" />
+                  </>
+                ) : null}
+                {user.is_staff ? (
+                  <>
+                    <a
+                      className="session-menu-item"
+                      href={ADMIN_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => setIsSessionMenuOpen(false)}
+                    >
+                      <SettingsIcon />
+                      <span>Administration</span>
+                    </a>
                     <div className="session-menu-separator" />
                   </>
                 ) : null}
