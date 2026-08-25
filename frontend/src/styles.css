@@ -673,7 +673,7 @@ input::placeholder {
 }
 
 .pos-page {
-  width: min(100%, var(--content-max-width));
+  width: min(100%, 84rem);
   margin: 0 auto;
   padding: 2rem;
 }
@@ -2251,7 +2251,7 @@ input::placeholder {
 
 .pos-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(22rem, 0.85fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(24rem, 0.9fr);
   gap: 1.25rem;
   align-items: start;
 }
