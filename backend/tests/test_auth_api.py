@@ -149,3 +149,5 @@ def test_vite_origin_is_the_only_default_csrf_trusted_origin() -> None:
     assert settings.CSRF_COOKIE_HTTPONLY is False
     assert settings.CSRF_COOKIE_SAMESITE == "Lax"
     assert settings.SESSION_COOKIE_SAMESITE == "Lax"
+    assert settings.CSRF_COOKIE_DOMAIN is None
+    assert settings.SESSION_COOKIE_DOMAIN is None

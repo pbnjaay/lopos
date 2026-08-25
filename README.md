@@ -92,10 +92,14 @@ authentifié sur les routes métier. Le caissier d'une ouverture provient de
 peut être enregistrée que par le caissier propriétaire de la session.
 
 Le frontend doit d'abord appeler `GET /api/v1/auth/csrf/`, puis reprendre la
-valeur du cookie `csrftoken` dans l'en-tête `X-CSRFToken` du login et de toute
-requête mutante. Toutes les requêtes utilisent `credentials: "include"`. Django
-émet le cookie de session `sessionid` après un login réussi et renouvelle alors
-le token CSRF.
+valeur du cookie `csrftoken` (lu directement via `document.cookie`) dans
+l'en-tête `X-CSRFToken` du login et de toute requête mutante. Toutes les
+requêtes utilisent `credentials: "include"`. Django émet le cookie de session
+`sessionid` après un login réussi et renouvelle alors le token CSRF. En
+production, `DJANGO_CSRF_COOKIE_DOMAIN=.lopos.app` partage uniquement le cookie
+CSRF entre `lopos.app` et `api.lopos.app` pour qu'il reste lisible en JS malgré
+le sous-domaine différent. Le cookie de session reste limité à
+`api.lopos.app`.
 
 Le proxy Vite `/api` conserve les appels dans l'origine du frontend : aucune
 configuration CORS n'est nécessaire. `http://localhost:5173` est la seule
@@ -663,10 +667,11 @@ suit une vente offline est un event technique séparé — jamais un second
 
 ## Déploiement
 
-Backend sur Railway (Dockerfile), frontend sur Vercel (statique). Ce sont
-deux domaines différents en production : le CORS et les cookies de session
-cross-domain sont déjà configurés côté backend, il ne reste que des
-variables d'environnement à renseigner de chaque côté.
+Backend sur Railway (Dockerfile, domaine `api.lopos.app`), frontend sur
+Vercel (statique, domaine `lopos.app`). Ce sont deux sous-domaines du même
+site : le CORS et le partage cross-subdomain du cookie CSRF sont déjà
+configurés côté backend, il ne reste que des variables d'environnement à
+renseigner de chaque côté.
 
 ### Backend — Railway
 
@@ -685,11 +690,12 @@ variables d'environnement à renseigner de chaque côté.
    ```
    DJANGO_SECRET_KEY=<valeur aléatoire longue, ex: python -c "import secrets; print(secrets.token_urlsafe(50))">
    DJANGO_DEBUG=false
-   DJANGO_ALLOWED_HOSTS=<domaine-railway>.up.railway.app
-   DJANGO_CSRF_TRUSTED_ORIGINS=https://<domaine-vercel>.vercel.app
-   DJANGO_CORS_ALLOWED_ORIGINS=https://<domaine-vercel>.vercel.app
-   DJANGO_COOKIE_SAMESITE=None
+   DJANGO_ALLOWED_HOSTS=api.lopos.app
+   DJANGO_CSRF_TRUSTED_ORIGINS=https://lopos.app
+   DJANGO_CORS_ALLOWED_ORIGINS=https://lopos.app
+   DJANGO_COOKIE_SAMESITE=Lax
    DJANGO_COOKIE_SECURE=true
+   DJANGO_CSRF_COOKIE_DOMAIN=.lopos.app
    ```
    Le démarrage refuse volontairement de tourner avec `DJANGO_DEBUG=false`
    et la clé par défaut (`ImproperlyConfigured`) — c'est un garde-fou, pas
@@ -711,12 +717,12 @@ variables d'environnement à renseigner de chaque côté.
    fournit déjà la commande de build et le rewrite SPA pour react-router.
 2. Variable d'environnement à définir sur le projet Vercel :
    ```
-   VITE_API_BASE_URL=https://<domaine-railway>.up.railway.app/api/v1
+   VITE_API_BASE_URL=https://api.lopos.app/api/v1
    ```
    (le proxy `/api` de `vite.config.ts` ne sert qu'en dev local — en
-   production le frontend appelle directement le backend Railway, en
+   production le frontend appelle directement `api.lopos.app`, en
    cross-origin avec cookies, d'où la config CORS/CSRF ci-dessus.)
-3. Ordre recommandé : déployer le backend d'abord pour connaître son URL
-   Railway, la renseigner dans Vercel, déployer le frontend, puis mettre à
-   jour `DJANGO_CSRF_TRUSTED_ORIGINS`/`DJANGO_CORS_ALLOWED_ORIGINS` côté
-   Railway avec l'URL Vercel définitive et redéployer le backend.
+3. DNS : `api.lopos.app` pointe vers Railway via un enregistrement CNAME
+   (Railway ne fournit pas d'IP statique — cf. Settings → Networking →
+   Custom Domain du service backend pour la cible CNAME à utiliser) ;
+   `lopos.app` pointe vers Vercel selon leur documentation.

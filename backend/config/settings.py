@@ -210,7 +210,6 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "apps.accounts.middleware.ExposeCsrfTokenMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -310,28 +309,32 @@ CSRF_COOKIE_SECURE = os.getenv("DJANGO_COOKIE_SECURE", "false").lower() in {
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE
 CSRF_FAILURE_VIEW = "config.csrf.csrf_failure"
 
-# "Lax" en local (front et back sur le même site via le proxy Vite).
-# "None" en production (Vercel + Railway = domaines différents) : requiert
-# alors CSRF_COOKIE_SECURE/SESSION_COOKIE_SECURE=true (HTTPS obligatoire pour
-# qu'un navigateur accepte SameSite=None).
+# Frontend (lopos.app) et backend (api.lopos.app) sont deux sous-domaines du
+# même site : SameSite=Lax suffit (contrairement à deux domaines différents,
+# qui exigeraient SameSite=None). Un cookie émis par api.lopos.app reste par
+# défaut "host-only" (illisible en JS depuis lopos.app) ;
+# DJANGO_CSRF_COOKIE_DOMAIN le partage explicitement entre les sous-domaines.
+# Le cookie de session reste volontairement limité à api.lopos.app : le
+# navigateur l'envoie avec credentials="include" sans devoir l'exposer aux
+# autres sous-domaines.
 _COOKIE_SAMESITE = os.getenv("DJANGO_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = _COOKIE_SAMESITE
 SESSION_COOKIE_SAMESITE = _COOKIE_SAMESITE
 
-# CORS : le frontend (Vercel) et le backend (Railway) sont deux domaines
-# différents en production. IsAuthenticated + SessionAuthentication exigent
-# les cookies de session, donc CORS_ALLOW_CREDENTIALS=True et une allowlist
-# explicite (pas de wildcard, incompatible avec les credentials).
+CSRF_COOKIE_DOMAIN = os.getenv("DJANGO_CSRF_COOKIE_DOMAIN", "").strip() or None
+SESSION_COOKIE_DOMAIN = None
+
+# CORS : le frontend (lopos.app) et le backend (api.lopos.app) restent deux
+# origines distinctes même s'ils partagent le même site. IsAuthenticated +
+# SessionAuthentication exigent les cookies de session, donc
+# CORS_ALLOW_CREDENTIALS=True et une allowlist explicite (pas de wildcard,
+# incompatible avec les credentials).
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv("DJANGO_CORS_ALLOWED_ORIGINS", "").split(",")
     if origin.strip()
 ]
 CORS_ALLOW_CREDENTIALS = True
-# Sans ceci, le fetch() du frontend ne peut pas lire le header X-CSRFToken
-# ajouté par ExposeCsrfTokenMiddleware — les headers de réponse cross-origin
-# sont masqués par défaut au JS, même quand la requête réussit.
-CORS_EXPOSE_HEADERS = ["X-CSRFToken"]
 
 # Railway (comme la plupart des PaaS) termine le TLS à son edge proxy et
 # transmet en HTTP en interne : sans ceci, request.is_secure() est toujours
