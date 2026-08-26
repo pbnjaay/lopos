@@ -10,6 +10,14 @@ type ListRowProps = {
   trailing?: ReactNode
   footnote?: ReactNode
   tone?: "default" | "warning"
+  /**
+   * Ligne visée par la navigation au clavier, comme dans le catalogue du POS.
+   * Purement visuel : `aria-current` dirait « page courante », ce que cette
+   * ligne n'est pas. C'est à l'écran qui pilote le clavier d'annoncer la
+   * ligne visée, puisque le focus reste dans son champ de recherche.
+   */
+  highlighted?: boolean
+  onMouseEnter?: () => void
 }
 
 /**
@@ -24,8 +32,14 @@ export function ListRow({
   trailing,
   footnote,
   tone = "default",
+  highlighted = false,
+  onMouseEnter,
 }: ListRowProps) {
-  const className = ["list-row", tone === "warning" ? "list-row-warning" : ""]
+  const className = [
+    "list-row",
+    tone === "warning" ? "list-row-warning" : "",
+    highlighted ? "list-row-highlighted" : "",
+  ]
     .filter(Boolean)
     .join(" ")
 
@@ -43,7 +57,12 @@ export function ListRow({
 
   if (to) {
     return (
-      <Link className={className} to={to}>
+      <Link
+        className={className}
+        to={to}
+        data-highlighted={highlighted ? "true" : undefined}
+        onMouseEnter={onMouseEnter}
+      >
         {content}
       </Link>
     )

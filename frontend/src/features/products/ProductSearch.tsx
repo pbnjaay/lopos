@@ -170,7 +170,12 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
                       : "product-result"
                   }
                   type="button"
-                  aria-current={mode === "search" && index === highlightedIndex}
+                  // Surlignage purement visuel : `aria-current` annoncerait
+                  // « élément courant » alors que rien n'est encore choisi.
+                  // Le conteneur de résultats porte déjà `aria-live`.
+                  data-highlighted={
+                    mode === "search" && index === highlightedIndex ? "true" : undefined
+                  }
                   disabled={stockMilli(product) <= 0}
                   aria-label={
                     stockMilli(product) > 0

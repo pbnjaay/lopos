@@ -1182,6 +1182,13 @@ a.list-row:active {
   background: #eef2f0;
 }
 
+.list-row-highlighted,
+.list-row-highlighted:hover {
+  border-color: #1f9d63;
+  background: var(--color-surface-accent);
+  box-shadow: 0 0 0 2px rgb(31 157 99 / 25%);
+}
+
 .list-row-leading {
   flex: 0 0 auto;
   color: var(--color-text-muted);
@@ -1612,7 +1619,7 @@ a.list-row:active {
 
 .sales-filters {
   display: grid;
-  grid-template-columns: minmax(13rem, 2fr) repeat(3, minmax(9rem, 1fr)) auto;
+  grid-template-columns: minmax(13rem, 2fr) repeat(3, minmax(9rem, 1fr));
   align-items: end;
   gap: var(--space-3);
   padding: var(--space-5);
@@ -1620,10 +1627,6 @@ a.list-row:active {
   border-radius: var(--radius-card);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
-}
-
-.sales-filters .button {
-  min-height: var(--control-md);
 }
 
 .sales-filters input,
@@ -1637,10 +1640,37 @@ a.list-row:active {
   border-color: var(--color-border-strong);
 }
 
+.sales-summary {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-4);
+  padding: 0 var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-secondary);
+}
+
+.sales-summary strong {
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.sales-summary-total {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.sales-summary-total strong {
+  font-size: var(--text-card-title);
+}
+
 .sales-list {
   display: grid;
   gap: var(--space-2);
-  margin-top: var(--space-4);
+  margin-top: var(--space-2);
 }
 
 /* Rafraichissement en arriere-plan : le contenu reste lisible et
@@ -2024,8 +2054,7 @@ a.list-row:active {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .sales-search-field,
-  .sales-filters .button {
+  .sales-search-field {
     grid-column: 1 / -1;
   }
 
@@ -2048,8 +2077,7 @@ a.list-row:active {
     grid-template-columns: 1fr;
   }
 
-  .sales-search-field,
-  .sales-filters .button {
+  .sales-search-field {
     grid-column: 1;
   }
 
