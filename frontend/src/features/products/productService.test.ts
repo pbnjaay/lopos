@@ -12,7 +12,6 @@ import {
 import type { LocalProduct } from "../../db/types"
 import {
   LocalCatalogUnavailableError,
-  LocalProductNotFoundError,
   getProductByBarcode,
   searchProducts,
 } from "./productService"
@@ -37,18 +36,13 @@ const localCoca: LocalProduct = {
   cachedAt: "2026-08-17T00:01:00Z",
 }
 
-function setOnline(value: boolean) {
-  vi.spyOn(navigator, "onLine", "get").mockReturnValue(value)
-}
-
 afterEach(() => {
   vi.clearAllMocks()
   vi.restoreAllMocks()
 })
 
-describe("offline product service", () => {
-  it("looks up a barcode locally without calling the API when offline", async () => {
-    setOnline(false)
+describe("local-first product service", () => {
+  it("looks up a barcode in IndexedDB without calling the API once the catalog is ready", async () => {
     vi.mocked(hasLocalProductCatalog).mockResolvedValue(true)
     vi.mocked(findLocalProductByBarcode).mockResolvedValue(localCoca)
 
@@ -63,8 +57,7 @@ describe("offline product service", () => {
     expect(getProducts).not.toHaveBeenCalled()
   })
 
-  it("filters through the local repository when searching offline", async () => {
-    setOnline(false)
+  it("searches IndexedDB without calling the API once the catalog is ready", async () => {
     vi.mocked(hasLocalProductCatalog).mockResolvedValue(true)
     vi.mocked(searchLocalProducts).mockResolvedValue([localCoca])
 
@@ -75,35 +68,53 @@ describe("offline product service", () => {
     expect(getProducts).not.toHaveBeenCalled()
   })
 
-  it("falls back to IndexedDB when an online API request cannot connect", async () => {
-    setOnline(true)
-    vi.mocked(getProducts).mockRejectedValue(new NetworkError())
+  it("returns null for a barcode absent from the ready catalog without retrying the API", async () => {
     vi.mocked(hasLocalProductCatalog).mockResolvedValue(true)
-    vi.mocked(findLocalProductByBarcode).mockResolvedValue(localCoca)
+    vi.mocked(findLocalProductByBarcode).mockResolvedValue(null)
 
-    await expect(getProductByBarcode("store-id", "123456")).resolves.toMatchObject({
-      id: localCoca.id,
-      stock: 18,
-    })
+    await expect(getProductByBarcode("store-id", "999999")).resolves.toBeNull()
+    expect(getProducts).not.toHaveBeenCalled()
   })
 
-  it("reports a missing local catalog explicitly", async () => {
-    setOnline(false)
+  it("falls back to the API while the catalog has never been initialized", async () => {
     vi.mocked(hasLocalProductCatalog).mockResolvedValue(false)
+    vi.mocked(getProducts).mockResolvedValue([
+      {
+        id: localCoca.id,
+        name: localCoca.name,
+        barcode: localCoca.barcode,
+        selling_price: "500.00",
+        purchase_price: null,
+        is_active: true,
+        stock: 20,
+        created_at: "2026-08-17T00:00:00Z",
+        updated_at: "2026-08-17T00:00:00Z",
+      },
+    ])
+
+    await expect(searchProducts("store-id", "coca")).resolves.toMatchObject([
+      { name: "Coca 50cl", stock: 20 },
+    ])
+    expect(getProducts).toHaveBeenCalledWith({ storeId: "store-id", search: "coca" })
+  })
+
+  it("reports a missing local catalog explicitly when the API is unreachable", async () => {
+    vi.mocked(hasLocalProductCatalog).mockResolvedValue(false)
+    vi.mocked(getProducts).mockRejectedValue(new NetworkError())
 
     await expect(searchProducts("store-id", "coca")).rejects.toBeInstanceOf(
       LocalCatalogUnavailableError,
     )
+    await expect(getProductByBarcode("store-id", "123456")).rejects.toBeInstanceOf(
+      LocalCatalogUnavailableError,
+    )
   })
 
-  it("reports an unknown offline barcode without retrying the API", async () => {
-    setOnline(false)
-    vi.mocked(hasLocalProductCatalog).mockResolvedValue(true)
-    vi.mocked(findLocalProductByBarcode).mockResolvedValue(null)
+  it("surfaces non-network API errors while the catalog is not initialized", async () => {
+    vi.mocked(hasLocalProductCatalog).mockResolvedValue(false)
+    const validationError = new Error("Identifiant de magasin invalide.")
+    vi.mocked(getProducts).mockRejectedValue(validationError)
 
-    await expect(getProductByBarcode("store-id", "999999")).rejects.toBeInstanceOf(
-      LocalProductNotFoundError,
-    )
-    expect(getProducts).not.toHaveBeenCalled()
+    await expect(searchProducts("store-id", "coca")).rejects.toBe(validationError)
   })
 })

@@ -20,9 +20,14 @@ import type {
 } from "../types/api"
 import { CloseCashSessionPage } from "./CloseCashSessionPage"
 
-vi.mock("../db/sessions", () => ({
-  markLocalCashSessionClosed: vi.fn().mockResolvedValue(undefined),
-}))
+vi.mock("../db/sessions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../db/sessions")>()
+  return {
+    ...actual,
+    getLocalCashSessionForRegister: vi.fn().mockResolvedValue(null),
+    markLocalCashSessionClosed: vi.fn().mockResolvedValue(undefined),
+  }
+})
 
 const cashier: CurrentUser = {
   id: 7,

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 import { isApiUnavailable } from "../../api/client"
 import { getCashRegisters, getCurrentCashSession } from "../../api/cashRegisters"
 import {
+  buildLocalCashSession,
   getLocalCashSessionForRegister,
   localSessionToCashRegister,
   localSessionToCashSession,
@@ -44,9 +45,9 @@ export function usePosSession(
     queryFn: getCashRegisters,
     staleTime: 30_000,
   })
-  const localSession = localSessionQuery.data ?? null
-  const fallbackRegister = localSession
-    ? localSessionToCashRegister(localSession)
+  const storedLocalSession = localSessionQuery.data ?? null
+  const fallbackRegister = storedLocalSession
+    ? localSessionToCashRegister(storedLocalSession)
     : null
   const registers = registersQuery.data ?? (fallbackRegister ? [fallbackRegister] : [])
   const selectedRegister = resolveCashRegister(
@@ -83,6 +84,16 @@ export function usePosSession(
   })
   const currentSession = sessionQuery.data ?? null
   const ownSession = currentSession?.cashier_id === cashier.id ? currentSession : null
+  // La lecture Dexie est mise en cache avec staleTime: Infinity et peut donc
+  // dater d'avant l'ouverture de la session (elle valait alors null). Quand
+  // la session serveur est connue, on reconstruit l'équivalent local en
+  // mémoire plutôt que d'exposer ce null périmé — c'était la cause de la
+  // première vente hors ligne rejetée avant refresh.
+  const localSession =
+    storedLocalSession ??
+    (ownSession && selectedRegister
+      ? buildLocalCashSession(ownSession, selectedRegister, cashier)
+      : null)
   const hasUsableLocalSession =
     localSession !== null &&
     localSession.status === "OPEN" &&

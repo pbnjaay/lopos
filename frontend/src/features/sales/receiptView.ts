@@ -1,5 +1,5 @@
 import type { LocalSale } from "../../db/types"
-import type { PaymentMethod, SaleReceipt, SaleResponse } from "../../types/api"
+import type { PaymentMethod, SaleReceipt } from "../../types/api"
 import { backendQuantityToMilli } from "../../utils/quantity"
 
 export type ReceiptView = {
@@ -51,34 +51,6 @@ export function receiptViewFromApiReceipt(receipt: SaleReceipt): ReceiptView {
       method: receipt.payment.method,
       receivedAmount: toIntegerAmount(receipt.payment.received_amount),
       changeAmount: toIntegerAmount(receipt.payment.change_amount),
-    },
-  }
-}
-
-export function receiptViewFromApiSale(
-  sale: SaleResponse,
-  context: { storeName: string; cashRegisterName: string; cashierName: string },
-): ReceiptView {
-  return {
-    id: sale.id,
-    isPendingSync: false,
-    storeName: context.storeName,
-    cashRegisterName: context.cashRegisterName,
-    cashierName: context.cashierName,
-    createdAt: sale.created_at,
-    items: sale.items.map((item) => ({
-      productId: item.product_id,
-      productName: item.product_name,
-      unitPrice: Math.round(Number(item.unit_price)),
-      saleUnit: item.sale_unit ?? "UNIT",
-      quantityMilli: backendQuantityToMilli(item.quantity),
-      lineTotal: Math.round(Number(item.line_total)),
-    })),
-    total: Math.round(Number(sale.total)),
-    payment: {
-      method: sale.payment.method,
-      receivedAmount: toIntegerAmount(sale.payment.received_amount),
-      changeAmount: toIntegerAmount(sale.payment.change_amount),
     },
   }
 }

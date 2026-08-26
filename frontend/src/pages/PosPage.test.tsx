@@ -7,11 +7,19 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { db } from "../db/database"
-import { findLocalProductByBarcode, hasLocalProductCatalog } from "../db/products"
-import { createLocalSale } from "../db/sales"
+import {
+  findLocalProductByBarcode,
+  getProductCatalogMetadata,
+  hasLocalProductCatalog,
+} from "../db/products"
+import {
+  type CreateLocalSaleInput,
+  InsufficientLocalStockError,
+  createLocalSale,
+} from "../db/sales"
 import type { LocalCashSession, LocalProduct, LocalSale } from "../db/types"
 import { currentUserQueryKey } from "../features/auth/queries"
 import { SELECTED_CASH_REGISTER_KEY } from "../features/cash-session/queries"
@@ -20,14 +28,15 @@ import type {
   CashSession,
   CurrentUser,
   Product,
-  SaleResponse,
   Store,
 } from "../types/api"
 import { PosPage } from "./PosPage"
 
 vi.mock("../db/products", () => ({
   findLocalProductByBarcode: vi.fn(),
+  getProductCatalogMetadata: vi.fn(),
   hasLocalProductCatalog: vi.fn(),
+  saveProductCatalog: vi.fn(),
   searchLocalProducts: vi.fn(),
 }))
 vi.mock("../db/sales", async (importOriginal) => {
@@ -87,52 +96,52 @@ const coca: Product = {
   updated_at: "2026-08-17T00:00:00Z",
 }
 
-const completedSale: SaleResponse = {
-  id: "sale-id",
-  status: "COMPLETED",
-  subtotal: "1000.00",
-  discount: "0.00",
-  total: "1000.00",
-  payment: {
-    method: "CASH",
-    amount: "1000.00",
-    received_amount: "2000.00",
-    change_amount: "1000.00",
-  },
-  items: [
-    {
-      product_id: coca.id,
-      product_name: coca.name,
-      unit_price: "500.00",
-      quantity: 2,
-      line_total: "1000.00",
+/**
+ * Fake fidèle de createLocalSale : construit la LocalSale résultante à
+ * partir de l'input, comme le ferait la vraie transaction Dexie, sans
+ * dépendre du contenu réel de la table products.
+ */
+function buildLocalSaleResult(input: CreateLocalSaleInput): LocalSale {
+  const items = input.items.map((item) => {
+    const quantity = item.quantity ?? (item.quantityMilli ?? 0) / 1000
+    const unitPrice = item.unitPrice ?? 500
+    return {
+      productId: item.productId,
+      productName: coca.name,
+      unitPrice,
+      quantity,
+      lineTotal: Math.round(unitPrice * quantity),
+    }
+  })
+  const total = items.reduce((sum, item) => sum + item.lineTotal, 0)
+  const receivedAmount =
+    input.payment.method === "CASH" ? input.payment.receivedAmount ?? 0 : null
+  return {
+    id: "0f9e8d7c-1234-4a5b-9c6d-abcdef012345",
+    serverId: null,
+    syncEventId: "b1e0aa10-0000-4000-8000-000000000001",
+    cashSessionId: input.session.id,
+    storeId: input.session.storeId,
+    storeName: input.session.storeName ?? "",
+    cashRegisterId: input.session.cashRegisterId,
+    cashRegisterName: input.session.cashRegisterName,
+    cashierId: input.session.cashierId,
+    cashierName: input.session.cashierName,
+    createdAt: "2026-08-17T20:00:00Z",
+    status: "PENDING_SYNC",
+    conflictCode: null,
+    conflictMessage: null,
+    items,
+    payment: {
+      method: input.payment.method,
+      amount: total,
+      receivedAmount,
+      changeAmount: receivedAmount === null ? null : receivedAmount - total,
     },
-  ],
-  created_at: "2026-08-17T00:00:00Z",
-}
-
-const completedWaveSale: SaleResponse = {
-  id: "wave-sale-id",
-  status: "COMPLETED",
-  subtotal: "500.00",
-  discount: "0.00",
-  total: "500.00",
-  payment: {
-    method: "WAVE",
-    amount: "500.00",
-    received_amount: null,
-    change_amount: null,
-  },
-  items: [
-    {
-      product_id: coca.id,
-      product_name: coca.name,
-      unit_price: "500.00",
-      quantity: 1,
-      line_total: "500.00",
-    },
-  ],
-  created_at: "2026-08-17T00:00:00Z",
+    subtotal: total,
+    discount: 0,
+    total,
+  }
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -182,6 +191,17 @@ async function openCashPayment(userEvents: ReturnType<typeof userEvent.setup>) {
   await userEvents.click(screen.getByRole("button", { name: /Espèces/ }))
 }
 
+beforeEach(() => {
+  vi.mocked(getProductCatalogMetadata).mockResolvedValue({
+    storeId: store.id,
+    cachedAt: "2026-08-17T00:00:00Z",
+    productCount: 1,
+  })
+  vi.mocked(createLocalSale).mockImplementation(async (input) =>
+    buildLocalSaleResult(input),
+  )
+})
+
 afterEach(async () => {
   cleanup()
   vi.clearAllMocks()
@@ -189,16 +209,16 @@ afterEach(async () => {
   localStorage.clear()
   document.cookie = "csrftoken=; Max-Age=0; path=/"
   await db.localSales.clear()
+  await db.cashSessions.clear()
 })
 
 describe("POS sale workflow", () => {
-  it("completes a cash sale, clears the cart and restores scanner focus", async () => {
+  it("completes a cash sale locally, clears the cart and restores scanner focus", async () => {
     const userEvents = userEvent.setup()
     document.cookie = "csrftoken=test-token; path=/"
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input)
       if (url.includes("/products/")) return jsonResponse([coca])
-      if (url.endsWith("/sales/")) return jsonResponse(completedSale, 201)
       throw new Error(`Unexpected request: ${url}`)
     })
 
@@ -214,11 +234,13 @@ describe("POS sale workflow", () => {
     const changeRow = screen.getByText("Monnaie").parentElement!
     expect(within(changeRow).getByText("1 000 FCFA")).toBeInTheDocument()
     expect(screen.getByText("Panier vide")).toBeInTheDocument()
-    const saleCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/sales/"))
-    expect(JSON.parse(String(saleCall?.[1]?.body))).toEqual({
-      cash_session_id: cashSession.id,
-      items: [{ product_id: coca.id, quantity: 2 }],
-      payment: { method: "CASH", received_amount: "2000.00" },
+    // Local-first : aucune requête POST /sales/ pendant l'encaissement, la
+    // vente part dans l'outbox locale et sera poussée par le sync engine.
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/sales/"))).toBe(false)
+    expect(createLocalSale).toHaveBeenCalledWith({
+      session: expect.objectContaining({ id: cashSession.id, cashierId: user.id }),
+      items: [{ productId: coca.id, quantity: 2 }],
+      payment: { method: "CASH", receivedAmount: 2_000 },
     })
 
     await userEvents.click(screen.getByRole("button", { name: "Nouvelle vente" }))
@@ -231,17 +253,11 @@ describe("POS sale workflow", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input)
       if (url.includes("/products/")) return jsonResponse([coca])
-      if (url.endsWith("/sales/")) {
-        return jsonResponse(
-          {
-            code: "INSUFFICIENT_STOCK",
-            message: "Stock insuffisant pour Coca 50cl.",
-          },
-          409,
-        )
-      }
       throw new Error(`Unexpected request: ${url}`)
     })
+    vi.mocked(createLocalSale).mockRejectedValue(
+      new InsufficientLocalStockError("Coca 50cl", 0, 1),
+    )
 
     renderPos()
     await scanCoca(userEvents)
@@ -250,7 +266,7 @@ describe("POS sale workflow", () => {
     await userEvents.click(screen.getByRole("button", { name: "Valider" }))
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Stock insuffisant pour Coca 50cl.",
+      "Stock local insuffisant pour Coca 50cl",
     )
     expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1")
     expect(screen.queryByRole("heading", { name: "Vente validée" })).not.toBeInTheDocument()
@@ -333,10 +349,10 @@ describe("POS sale workflow offline", () => {
     await userEvents.click(screen.getByRole("button", { name: "Valider" }))
 
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
-    expect(screen.getByText(/Vente enregistrée hors ligne/)).toHaveTextContent("0F9E8D7C")
+    expect(screen.getByText(/Référence locale/)).toHaveTextContent("0F9E8D7C")
     expect(screen.getByText("Panier vide")).toBeInTheDocument()
     expect(createLocalSale).toHaveBeenCalledWith({
-      session: localSession,
+      session: expect.objectContaining({ id: localSession.id, cashierId: user.id }),
       items: [{ productId: coca.id, quantity: 2 }],
       payment: { method: "CASH", receivedAmount: 2_000 },
     })
@@ -385,9 +401,9 @@ describe("POS sale workflow offline", () => {
     await userEvents.click(screen.getByRole("button", { name: "Paiement reçu" }))
 
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
-    expect(screen.getByText(/Vente enregistrée hors ligne/)).toHaveTextContent("1A2B3C4D")
+    expect(screen.getByText(/Référence locale/)).toHaveTextContent("1A2B3C4D")
     expect(createLocalSale).toHaveBeenCalledWith({
-      session: localSession,
+      session: expect.objectContaining({ id: localSession.id, cashierId: user.id }),
       items: [{ productId: coca.id, quantity: 1 }],
       payment: { method: "WAVE", receivedAmount: null },
     })
@@ -420,10 +436,9 @@ describe("POS keyboard shortcuts", () => {
   it("completes a cash sale with scanner + keyboard only: F1, digits, Enter", async () => {
     const userEvents = userEvent.setup()
     document.cookie = "csrftoken=test-token; path=/"
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input)
       if (url.includes("/products/")) return jsonResponse([coca])
-      if (url.endsWith("/sales/")) return jsonResponse(completedSale, 201)
       throw new Error(`Unexpected request: ${url}`)
     })
 
@@ -439,9 +454,7 @@ describe("POS keyboard shortcuts", () => {
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
     const changeRow = screen.getByText("Monnaie").parentElement!
     expect(within(changeRow).getByText("1 000 FCFA")).toBeInTheDocument()
-    expect(
-      fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/sales/")),
-    ).toHaveLength(1)
+    expect(createLocalSale).toHaveBeenCalledTimes(1)
 
     await userEvents.keyboard("{Enter}")
     await waitFor(() => expect(scanner).toHaveFocus())
@@ -451,10 +464,9 @@ describe("POS keyboard shortcuts", () => {
   it("completes a Wave sale with scanner + keyboard only: F2, Enter", async () => {
     const userEvents = userEvent.setup()
     document.cookie = "csrftoken=test-token; path=/"
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input)
       if (url.includes("/products/")) return jsonResponse([coca])
-      if (url.endsWith("/sales/")) return jsonResponse(completedWaveSale, 201)
       throw new Error(`Unexpected request: ${url}`)
     })
 
@@ -466,9 +478,7 @@ describe("POS keyboard shortcuts", () => {
 
     await userEvents.keyboard("{Enter}")
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
-    expect(
-      fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/sales/")),
-    ).toHaveLength(1)
+    expect(createLocalSale).toHaveBeenCalledTimes(1)
 
     await userEvents.keyboard("{Enter}")
     await waitFor(() => expect(scanner).toHaveFocus())
@@ -476,7 +486,7 @@ describe("POS keyboard shortcuts", () => {
 
   it("never opens checkout or submits a sale from a barcode scan alone", async () => {
     document.cookie = "csrftoken=test-token; path=/"
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input)
       if (url.includes("/products/")) return jsonResponse([coca])
       throw new Error(`Unexpected request during a scan-only flow: ${url}`)
@@ -487,7 +497,7 @@ describe("POS keyboard shortcuts", () => {
     await scanCoca(userEvents)
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
-    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/sales/"))).toBe(false)
+    expect(createLocalSale).not.toHaveBeenCalled()
   })
 
   it("does not open checkout on F1 with an empty cart", async () => {

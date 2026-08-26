@@ -57,6 +57,10 @@ export function OpenCashSessionPage() {
         ["cash-registers", session.cash_register_id, "current-session"],
         session,
       )
+      // La lecture Dexie de la session locale est cachée avec staleTime
+      // Infinity : sans invalidation, elle resterait figée sur l'état
+      // d'avant l'ouverture pour toute la vie du SPA.
+      void queryClient.invalidateQueries({ queryKey: ["local-cash-session"] })
       trackCashSessionOpened({
         cash_session_id: session.id,
         store_id: openedRegister?.store_id ?? null,

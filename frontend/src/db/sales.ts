@@ -89,10 +89,12 @@ export async function createLocalSale(
           ? Number.POSITIVE_INFINITY
           : (product.serverKnownStockMilli ?? (product.serverKnownStock ?? 0) * 1000) - (product.pendingSoldQuantityMilli ?? (product.pendingSoldQuantity ?? 0) * 1000)
       if (availableStock < quantityMilli) {
+        // Les quantités internes sont en millièmes ; le message est destiné
+        // au caissier, donc en unités de vente.
         throw new InsufficientLocalStockError(
           product.name,
-          Math.max(availableStock, 0),
-          quantityMilli,
+          Math.max(availableStock, 0) / 1000,
+          quantityMilli / 1000,
         )
       }
 

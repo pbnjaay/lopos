@@ -94,6 +94,14 @@ export async function saveProductCatalog(
   )
 }
 
+export async function getProductCatalogMetadata(
+  storeId: string,
+  database: PosDatabase = db,
+): Promise<ProductCatalogMetadata | null> {
+  const metadata = await database.metadata.get(productCatalogMetadataKey(storeId))
+  return (metadata?.value as ProductCatalogMetadata | undefined) ?? null
+}
+
 export async function hasLocalProductCatalog(
   storeId: string,
   database: PosDatabase = db,

@@ -63,6 +63,7 @@ export function CloseCashSessionPage() {
       } catch {
         // The server session is already closed; do not invite a duplicate request.
       }
+      void queryClient.invalidateQueries({ queryKey: ["local-cash-session"] })
       setIsConfirming(false)
       queryClient.setQueryData(
         ["cash-sessions", closedSummary.id, "summary"],

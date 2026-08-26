@@ -2,17 +2,24 @@ import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
 
-import { completeSale } from "../api/sales"
 import { getStore } from "../api/stores"
-import { ApiError, isApiUnavailable } from "../api/client"
 import {
   trackCheckoutOpened,
   trackPaymentMethodSelected,
   trackSaleCompleted,
   trackSaleFailed,
 } from "../analytics/events"
-import { InsufficientLocalStockError, createLocalSale } from "../db/sales"
-import { updateLocalCashSessionStoreName } from "../db/sessions"
+import {
+  InsufficientLocalStockError,
+  LocalSaleProductNotFoundError,
+  createLocalSale,
+} from "../db/sales"
+import {
+  getLocalCashSessionForRegister,
+  saveLocalCashSession,
+  updateLocalCashSessionStoreName,
+} from "../db/sessions"
+import type { LocalCashSession } from "../db/types"
 import { useCurrentUser } from "../features/auth/queries"
 import { Cart } from "../features/cart/Cart"
 import { QuantityDialog } from "../features/cart/CartDialogs"
@@ -27,13 +34,11 @@ import { OfflineBanner } from "../features/offline/OfflineBanner"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { pendingSalesCountQueryKey } from "../features/offline/usePendingSalesCount"
 import { ProductSearch } from "../features/products/ProductSearch"
-import { useProductCatalogCache } from "../features/products/queries"
+import { useProductCatalog } from "../features/products/queries"
 import type { CatalogProduct } from "../features/products/types"
-import { type ReceiptView, receiptViewFromApiSale, receiptViewFromLocalSale } from "../features/sales/receiptView"
+import { type ReceiptView, receiptViewFromLocalSale } from "../features/sales/receiptView"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
 import type { PaymentMethod } from "../types/api"
-import { toBackendMoney } from "../utils/money"
-import { milliToBackendQuantity } from "../utils/quantity"
 
 type CheckoutPayment = {
   method: PaymentMethod
@@ -60,7 +65,7 @@ export function PosPage() {
   const [lastPaymentMethod, setLastPaymentMethod] = useState<PaymentMethod | null>(
     getLastPaymentMethod,
   )
-  useProductCatalogCache(selectedRegister?.store_id ?? null)
+  const catalog = useProductCatalog(selectedRegister?.store_id ?? null)
   const storeQuery = useQuery({
     queryKey: ["stores", selectedRegister?.store_id],
     queryFn: () => getStore(selectedRegister!.store_id),
@@ -75,43 +80,31 @@ export function PosPage() {
     )
   }, [ownSession, storeQuery.data])
 
+  // Lue depuis Dexie au moment du submit, jamais depuis un cache React Query
+  // potentiellement figé : c'était la cause de la « première vente hors
+  // ligne » rejetée avec « Aucune session de caisse locale disponible ».
+  async function resolveCheckoutSession(): Promise<LocalCashSession> {
+    if (selectedRegister) {
+      const stored = await getLocalCashSessionForRegister(selectedRegister.id)
+      if (stored && stored.cashierId === user.id) return stored
+      if (ownSession) return saveLocalCashSession(ownSession, selectedRegister, user)
+    }
+    if (localSession) return localSession
+    throw new Error(
+      "Aucune session de caisse disponible sur cet appareil. Reconnectez-vous pour rouvrir la caisse.",
+    )
+  }
+
   const saleMutation = useMutation({
     mutationFn: async (payment: CheckoutPayment): Promise<ReceiptView> => {
-      if (isOnline) {
-        try {
-          const sale = await completeSale({
-            cash_session_id: ownSession!.id,
-            items: cart.items.map((item) => item.saleUnit ? ({
-              product_id: item.productId,
-              quantity: milliToBackendQuantity(item.quantityMilli ?? (item.quantity ?? 0) * 1000),
-              ...(item.unitPrice !== (item.catalogUnitPrice ?? item.unitPrice) ? { unit_price: toBackendMoney(item.unitPrice) } : {}),
-            }) : ({ product_id: item.productId, quantity: item.quantity ?? 1 })),
-            payment:
-              payment.method === "CASH"
-                ? { method: "CASH", received_amount: toBackendMoney(payment.receivedAmount!) }
-                : { method: payment.method },
-          })
-          return receiptViewFromApiSale(sale, {
-            storeName: storeQuery.data?.name ?? localSession?.storeName ?? "",
-            cashRegisterName: selectedRegister?.name ?? "",
-            cashierName: user.first_name || user.username,
-          })
-        } catch (error) {
-          // navigator.onLine can report "online" while the server is
-          // actually unreachable (dropped packets, VPN gone stale...). Rather
-          // than leave the cashier stuck on a failed payment, treat this
-          // submission as offline: the sale still gets recorded locally and
-          // will sync once connectivity is genuinely restored.
-          if (!isApiUnavailable(error)) throw error
-        }
-      }
-
-      if (!localSession) {
-        throw new Error("Aucune session de caisse locale disponible hors ligne.")
-      }
-
+      // Encaissement local-first : la vente est durable dès que la
+      // transaction Dexie (vente + stock + statut PENDING_SYNC) a committé.
+      // La disponibilité du serveur n'entre jamais dans ce chemin — la
+      // synchronisation est opportuniste, déclenchée après le succès, et son
+      // échec ne peut pas transformer une vente enregistrée en erreur.
+      const session = await resolveCheckoutSession()
       const sale = await createLocalSale({
-        session: localSession,
+        session,
         items: cart.items.map((item) => item.saleUnit ? ({
           productId: item.productId,
           quantityMilli: item.quantityMilli ?? (item.quantity ?? 0) * 1000,
@@ -129,7 +122,7 @@ export function PosPage() {
       setLastPaymentMethod(sale.payment.method)
       void queryClient.invalidateQueries({ queryKey: ["products"] })
       void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })
-      if (sale.isPendingSync) void triggerSync()
+      void triggerSync()
       trackSaleCompleted({
         sale_id: sale.id,
         store_id: selectedRegister?.store_id ?? null,
@@ -138,31 +131,26 @@ export function PosPage() {
         payment_method: sale.payment.method,
         items_count: sale.items.length,
         total_amount: sale.total,
-        offline: sale.isPendingSync,
+        offline: !isOnline,
       })
     },
     onError: (error, payment) => {
+      // Seuls des échecs de persistance locale arrivent ici (stock local
+      // insuffisant, produit absent du catalogue local, écriture IndexedDB) :
+      // ils sont critiques et la vente n'est pas considérée comme terminée.
       if (
-        (error instanceof ApiError &&
-          ["INSUFFICIENT_STOCK", "PRODUCT_INACTIVE", "PRODUCT_NOT_FOUND"].includes(
-            error.code ?? "",
-          )) ||
-        error instanceof InsufficientLocalStockError
+        error instanceof InsufficientLocalStockError ||
+        error instanceof LocalSaleProductNotFoundError
       ) {
         void queryClient.invalidateQueries({ queryKey: ["products"] })
       }
-      if (error instanceof ApiError && error.code === "CASH_SESSION_CLOSED") {
-        void queryClient.invalidateQueries({
-          queryKey: ["cash-registers", selectedRegister?.id, "current-session"],
-        })
-      }
       trackSaleFailed({
         error_code:
-          error instanceof ApiError
-            ? error.code ?? "UNKNOWN"
-            : error instanceof InsufficientLocalStockError
-              ? "INSUFFICIENT_STOCK"
-              : "NETWORK_ERROR",
+          error instanceof InsufficientLocalStockError
+            ? "INSUFFICIENT_STOCK"
+            : error instanceof LocalSaleProductNotFoundError
+              ? "PRODUCT_NOT_FOUND"
+              : "LOCAL_PERSIST_FAILED",
         payment_method: payment.method,
         offline: !isOnline,
       })
@@ -251,6 +239,27 @@ export function PosPage() {
         <p className="form-error" role="alert">
           {storeQuery.error.message}
         </p>
+      ) : null}
+
+      {catalog.status === "catalogue_syncing" ? (
+        <p className="muted" role="status">
+          Préparation de la caisse — téléchargement du catalogue…
+        </p>
+      ) : null}
+      {catalog.status === "catalogue_error" || catalog.status === "catalogue_not_initialized" ? (
+        <div className="inline-error" role="alert">
+          <p>
+            Le catalogue n’a pas encore été téléchargé sur cette caisse : la
+            recherche hors ligne est indisponible.
+          </p>
+          <button
+            className="button button-secondary button-small"
+            type="button"
+            onClick={() => void catalog.retrySync()}
+          >
+            Réessayer
+          </button>
+        </div>
       ) : null}
 
       {selectedRegister ? (

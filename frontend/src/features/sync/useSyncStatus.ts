@@ -21,6 +21,12 @@ export function useSyncStatus() {
     setIsSyncing(true)
     try {
       return await syncPendingSales()
+    } catch {
+      // Un échec de synchronisation n'est jamais une erreur pour l'appelant
+      // (encaissement, montage, reconnexion) : les ventes restent
+      // PENDING_SYNC et seront repoussées. L'exception est déjà remontée à
+      // Sentry par le sync engine.
+      return { attempted: 0, synced: 0, conflicts: 0 }
     } finally {
       setIsSyncing(false)
       void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })

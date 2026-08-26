@@ -86,19 +86,6 @@ export type Product = {
 
 export type PaymentMethod = "CASH" | "WAVE" | "ORANGE_MONEY"
 
-export type CompleteSaleInput = {
-  cash_session_id: string
-  items: Array<{
-    product_id: string
-    quantity: string | number
-    unit_price?: string
-  }>
-  payment: {
-    method: PaymentMethod
-    received_amount?: string
-  }
-}
-
 export type SaleResponse = {
   id: string
   status: "COMPLETED"

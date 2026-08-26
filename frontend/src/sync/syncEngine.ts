@@ -14,7 +14,6 @@ import {
 } from "../db/sales"
 import { getOrCreateTerminalId } from "../db/terminal"
 import type { LocalSale } from "../db/types"
-import { isNavigatorOnline } from "../utils/network"
 import { toBackendMoney } from "../utils/money"
 import { milliToBackendQuantity } from "../utils/quantity"
 
@@ -107,8 +106,10 @@ function scheduleRetry(): void {
 }
 
 async function runSync(): Promise<SyncOutcome> {
-  if (!isNavigatorOnline()) return EMPTY_OUTCOME
-
+  // Pas de garde navigator.onLine ici : ce signal peut se tromper dans les
+  // deux sens. Si le réseau est réellement mort, le push échoue vite en
+  // NetworkError et le backoff s'en charge ; s'il est vivant malgré un
+  // navigateur qui se croit hors ligne, la synchronisation progresse.
   const pending = await listPendingLocalSales()
   if (pending.length === 0) {
     consecutiveFailures = 0

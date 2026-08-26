@@ -1,12 +1,5 @@
-import type { CompleteSaleInput, PaginatedSales, SaleReceipt, SaleResponse, SaleReturn, PaymentMethod } from "../types/api"
+import type { PaginatedSales, SaleReceipt, SaleReturn, PaymentMethod } from "../types/api"
 import { apiRequest, buildApiUrl } from "./client"
-
-export function completeSale(input: CompleteSaleInput): Promise<SaleResponse> {
-  return apiRequest<SaleResponse>("sales/", {
-    method: "POST",
-    body: input,
-  })
-}
 
 export function listSales(input: {
   cashSessionId: string

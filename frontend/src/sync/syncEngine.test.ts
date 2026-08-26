@@ -179,14 +179,18 @@ describe("syncPendingSales", () => {
     expect(rows[0]?.serverId).toBe("sale-6")
   })
 
-  it("does nothing while offline", async () => {
+  it("still pushes even when the browser claims to be offline", async () => {
+    // navigator.onLine peut se tromper dans les deux sens : ce n'est pas une
+    // porte du sync engine. Seul l'échec réseau réel (backoff) fait foi.
     vi.stubGlobal("navigator", { onLine: false })
     await db.localSales.add(buildPendingSale("sale-7", "event-7"))
+    vi.mocked(pushSyncEvents).mockResolvedValue({
+      results: [{ event_id: "event-7", status: "SYNCED", entity_id: "server-7" }],
+    })
 
     const outcome = await syncPendingSales()
 
-    expect(outcome).toEqual({ attempted: 0, synced: 0, conflicts: 0 })
-    expect(pushSyncEvents).not.toHaveBeenCalled()
-    expect((await db.localSales.get("sale-7"))?.status).toBe("PENDING_SYNC")
+    expect(outcome).toEqual({ attempted: 1, synced: 1, conflicts: 0 })
+    expect((await db.localSales.get("sale-7"))?.status).toBe("SYNCED")
   })
 })

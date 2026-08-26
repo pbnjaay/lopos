@@ -7,7 +7,6 @@ import {
 } from "../../db/products"
 import type { Product } from "../../types/api"
 import type { LocalProduct } from "../../db/types"
-import { isNavigatorOnline } from "../../utils/network"
 import type { CatalogProduct } from "./types"
 import { backendQuantityToMilli } from "../../utils/quantity"
 
@@ -15,13 +14,6 @@ export class LocalCatalogUnavailableError extends Error {
   constructor() {
     super("Catalogue indisponible hors ligne. Reconnectez-vous pour charger les produits.")
     this.name = "LocalCatalogUnavailableError"
-  }
-}
-
-export class LocalProductNotFoundError extends Error {
-  constructor() {
-    super("Produit introuvable dans le catalogue local.")
-    this.name = "LocalProductNotFoundError"
   }
 }
 
@@ -60,34 +52,29 @@ function fromLocalProduct(product: LocalProduct): CatalogProduct {
   return result
 }
 
-async function ensureLocalCatalog(storeId: string): Promise<void> {
-  if (!(await hasLocalProductCatalog(storeId))) {
-    throw new LocalCatalogUnavailableError()
-  }
-}
-
-async function getLocalProductByBarcode(
-  storeId: string,
-  barcode: string,
-): Promise<CatalogProduct> {
-  await ensureLocalCatalog(storeId)
-  const product = await findLocalProductByBarcode(storeId, barcode)
-  if (!product) throw new LocalProductNotFoundError()
-  return fromLocalProduct(product)
-}
-
+/**
+ * Recherche et scan sont local-first : dès que le catalogue du magasin a été
+ * synchronisé une fois dans IndexedDB, chaque lookup lit Dexie — que le
+ * réseau soit présent ou non. L'API n'est plus qu'un secours pour un
+ * terminal dont le catalogue n'a jamais été initialisé ; l'état du réseau
+ * navigateur n'est jamais consulté ici (c'est un signal d'UX, pas une
+ * source de vérité métier).
+ */
 export async function getProductByBarcode(
   storeId: string,
   barcode: string,
 ): Promise<CatalogProduct | null> {
-  if (!isNavigatorOnline()) return getLocalProductByBarcode(storeId, barcode)
+  if (await hasLocalProductCatalog(storeId)) {
+    const product = await findLocalProductByBarcode(storeId, barcode)
+    return product ? fromLocalProduct(product) : null
+  }
 
   try {
     const products = await getProducts({ storeId, barcode })
     return products[0] ? fromApiProduct(products[0]) : null
   } catch (error) {
     if (!isApiUnavailable(error)) throw error
-    return getLocalProductByBarcode(storeId, barcode)
+    throw new LocalCatalogUnavailableError()
   }
 }
 
@@ -95,8 +82,7 @@ export async function searchProducts(
   storeId: string,
   search: string,
 ): Promise<CatalogProduct[]> {
-  if (!isNavigatorOnline()) {
-    await ensureLocalCatalog(storeId)
+  if (await hasLocalProductCatalog(storeId)) {
     return (await searchLocalProducts(storeId, search)).map(fromLocalProduct)
   }
 
@@ -104,7 +90,6 @@ export async function searchProducts(
     return (await getProducts({ storeId, search })).map(fromApiProduct)
   } catch (error) {
     if (!isApiUnavailable(error)) throw error
-    await ensureLocalCatalog(storeId)
-    return (await searchLocalProducts(storeId, search)).map(fromLocalProduct)
+    throw new LocalCatalogUnavailableError()
   }
 }

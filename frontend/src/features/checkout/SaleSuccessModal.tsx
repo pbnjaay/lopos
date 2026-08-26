@@ -46,8 +46,8 @@ export function SaleSuccessModal({ sale, cashSessionId, onNewSale, onPrintTicket
 
         {sale.isPendingSync ? (
           <p className="sale-pending-note">
-            Vente enregistrée hors ligne. Référence locale :{" "}
-            {sale.id.slice(0, 8).toUpperCase()}
+            Vente enregistrée sur la caisse, synchronisation automatique.
+            Référence locale : {sale.id.slice(0, 8).toUpperCase()}
           </p>
         ) : null}
 

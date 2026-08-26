@@ -53,7 +53,7 @@ describe("SaleSuccessModal", () => {
       />,
     )
 
-    expect(screen.getByText(/Vente enregistrée hors ligne/)).toHaveTextContent("0F9E8D7C")
+    expect(screen.getByText(/Référence locale/)).toHaveTextContent("0F9E8D7C")
   })
 
   it("clears the completed-sale state before opening the ticket", () => {
