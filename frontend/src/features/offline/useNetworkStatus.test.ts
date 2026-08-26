@@ -3,7 +3,11 @@
 import { act, renderHook } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { useNetworkStatus } from "./useNetworkStatus"
+import {
+  API_AVAILABLE_EVENT,
+  API_UNAVAILABLE_EVENT,
+  useNetworkStatus,
+} from "./useNetworkStatus"
 
 describe("useNetworkStatus", () => {
   afterEach(() => {
@@ -35,6 +39,17 @@ describe("useNetworkStatus", () => {
     act(() => {
       window.dispatchEvent(new Event("online"))
     })
+    expect(result.current).toBe(true)
+  })
+
+  it("uses the offline UI state when the API is unreachable despite active Wi-Fi", () => {
+    vi.stubGlobal("navigator", { onLine: true })
+    const { result } = renderHook(() => useNetworkStatus())
+
+    act(() => window.dispatchEvent(new Event(API_UNAVAILABLE_EVENT)))
+    expect(result.current).toBe(false)
+
+    act(() => window.dispatchEvent(new Event(API_AVAILABLE_EVENT)))
     expect(result.current).toBe(true)
   })
 })

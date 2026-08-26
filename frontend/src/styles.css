@@ -2117,13 +2117,6 @@ input::placeholder {
   margin: 0.35rem 0 0;
 }
 
-.offline-status-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-}
-
 .pending-sales-list {
   list-style: none;
   margin: 1rem 0;
@@ -2196,19 +2189,16 @@ input::placeholder {
   flex-wrap: nowrap;
   padding: 0.4rem 0.7rem;
   white-space: nowrap;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .app-network-status.network-status-online {
-  width: 2.5rem;
   min-height: 2.5rem;
   justify-content: center;
-  padding: 0;
+  padding: 0.4rem 0.65rem;
   background: transparent;
   color: #527064;
-}
-
-.network-operation-status {
-  width: fit-content;
 }
 
 .network-status > svg {
@@ -2227,18 +2217,37 @@ input::placeholder {
   color: #8a4b0b;
 }
 
-.network-status-detail,
-.network-status-pending {
-  font-weight: 500;
-  opacity: 0.9;
+.network-status-attention {
+  background: #fdf1de;
+  color: #8a4b0b;
 }
 
-.network-status-conflict {
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  background: #f8d7da;
-  color: #842029;
-  font-weight: 700;
+.network-toast {
+  position: fixed;
+  z-index: 80;
+  top: 5.25rem;
+  left: 50%;
+  width: min(28rem, calc(100vw - 2rem));
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #d6b986;
+  border-radius: 0.75rem;
+  background: #fff9ed;
+  color: #704614;
+  box-shadow: var(--shadow-popover);
+  font-size: 0.875rem;
+  transform: translateX(-50%);
+}
+
+.network-toast span {
+  font-size: 0.8rem;
+}
+
+.network-toast-success {
+  border-color: #b8dfca;
+  background: #dff5e9;
+  color: #12563f;
 }
 
 .product-search {
@@ -3372,6 +3381,27 @@ input::placeholder {
 
   .app-header {
     padding-inline: 1rem;
+  }
+
+  .app-header-right {
+    gap: 0.45rem;
+  }
+
+  .app-header-divider {
+    display: none;
+  }
+
+  .app-network-status {
+    padding-inline: 0.55rem;
+    font-size: 0.72rem;
+  }
+
+  .network-pending-suffix {
+    display: none;
+  }
+
+  .network-toast {
+    top: 4.75rem;
   }
 
   .sales-pagination {

@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { ApiError, NetworkError, apiRequest, buildApiUrl } from "./client"
+import { API_UNAVAILABLE_EVENT } from "../utils/network"
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -75,7 +76,10 @@ describe("apiRequest", () => {
 
   it("turns fetch failures into a user-facing network error", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"))
+    const unavailableListener = vi.fn()
+    window.addEventListener(API_UNAVAILABLE_EVENT, unavailableListener, { once: true })
 
     await expect(apiRequest("products/")).rejects.toBeInstanceOf(NetworkError)
+    expect(unavailableListener).toHaveBeenCalledOnce()
   })
 })

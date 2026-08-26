@@ -7,7 +7,7 @@ import { API_BASE_URL } from "../../api/client"
 import { resetAnalytics } from "../../analytics/posthog"
 import { clearSentryUser } from "../../analytics/sentry"
 import { CashRegisterIcon, ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, SettingsIcon, UserIcon } from "../ui/Icons"
-import { ConnectionStatus } from "../../features/offline/OfflineBanner"
+import { ConnectionStatus, NetworkNotifications } from "../../features/offline/OfflineBanner"
 import type { CurrentUser } from "../../types/api"
 
 type AppLayoutProps = {
@@ -142,6 +142,7 @@ export function AppLayout({ user }: AppLayoutProps) {
           {logoutMutation.error.message}
         </p>
       ) : null}
+      <NetworkNotifications />
       <div className="app-frame">
         <nav className="app-navigation" aria-label="Navigation principale">
           <Link

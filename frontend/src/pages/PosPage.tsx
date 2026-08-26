@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Link } from "react-router-dom"
 
 import { getStore } from "../api/stores"
 import {
@@ -30,7 +29,6 @@ import { MobileMoneyConfirmation } from "../features/checkout/MobileMoneyConfirm
 import { PaymentMethodModal } from "../features/checkout/PaymentMethodModal"
 import { getLastPaymentMethod, storeLastPaymentMethod } from "../features/checkout/paymentMethodStorage"
 import { SaleSuccessModal } from "../features/checkout/SaleSuccessModal"
-import { OfflineBanner } from "../features/offline/OfflineBanner"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { pendingSalesCountQueryKey } from "../features/offline/usePendingSalesCount"
 import { ProductSearch } from "../features/products/ProductSearch"
@@ -51,11 +49,22 @@ const checkoutFKeyToMethod: Record<string, PaymentMethod> = {
   F3: "ORANGE_MONEY",
 }
 
+function getCheckoutErrorMessage(error: Error | null): string | undefined {
+  if (!error) return undefined
+  if (
+    error instanceof InsufficientLocalStockError ||
+    error instanceof LocalSaleProductNotFoundError
+  ) {
+    return error.message
+  }
+  return "Impossible d’enregistrer la vente sur cet appareil. Réessayez avant de poursuivre."
+}
+
 export function PosPage() {
   const user = useCurrentUser().data!
   const { ownSession, selectedRegister, localSession } = usePosSession(user)
   const isOnline = useNetworkStatus()
-  const { pendingCount, conflictCount, isSyncing, triggerSync } = useSyncStatus()
+  const { triggerSync } = useSyncStatus()
   const queryClient = useQueryClient()
   const cart = useCart(ownSession?.id ?? null)
   const [checkoutStep, setCheckoutStep] = useState<"METHODS" | PaymentMethod | null>(null)
@@ -122,7 +131,10 @@ export function PosPage() {
       setLastPaymentMethod(sale.payment.method)
       void queryClient.invalidateQueries({ queryKey: ["products"] })
       void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })
-      void triggerSync()
+      // Hors ligne, conserver la vente dans l’outbox et laisser le compteur
+      // global refléter toutes les ventes en attente. La reconnexion déclenche
+      // déjà une synchronisation groupée via SyncStatusProvider.
+      if (isOnline) void triggerSync()
       trackSaleCompleted({
         sale_id: sale.id,
         store_id: selectedRegister?.store_id ?? null,
@@ -222,25 +234,6 @@ export function PosPage() {
         </div>
       </header>
 
-      <div className="offline-status-row">
-        <OfflineBanner
-          pendingSalesCount={pendingCount}
-          conflictSalesCount={conflictCount}
-          isSyncing={isSyncing}
-        />
-        {pendingCount > 0 || conflictCount > 0 ? (
-          <Link className="text-button" to="/sales/pending">
-            Voir les ventes en attente
-          </Link>
-        ) : null}
-      </div>
-
-      {storeQuery.error && !localSession?.storeName ? (
-        <p className="form-error" role="alert">
-          {storeQuery.error.message}
-        </p>
-      ) : null}
-
       {catalog.status === "catalogue_syncing" ? (
         <p className="muted" role="status">
           Préparation de la caisse — téléchargement du catalogue…
@@ -248,10 +241,8 @@ export function PosPage() {
       ) : null}
       {catalog.status === "catalogue_error" || catalog.status === "catalogue_not_initialized" ? (
         <div className="inline-error" role="alert">
-          <p>
-            Le catalogue n’a pas encore été téléchargé sur cette caisse : la
-            recherche hors ligne est indisponible.
-          </p>
+          <strong>Catalogue indisponible hors ligne</strong>
+          <p>Connectez cet appareil à Internet une première fois pour préparer le catalogue.</p>
           <button
             className="button button-secondary button-small"
             type="button"
@@ -264,10 +255,12 @@ export function PosPage() {
 
       {selectedRegister ? (
         <div className="pos-grid">
-          <ProductSearch
-            storeId={selectedRegister.store_id}
-            onProductSelect={handleAddProduct}
-          />
+          {catalog.status !== "catalogue_error" && catalog.status !== "catalogue_not_initialized" ? (
+            <ProductSearch
+              storeId={selectedRegister.store_id}
+              onProductSelect={handleAddProduct}
+            />
+          ) : <div />}
           <Cart
             items={cart.items}
             total={cart.total}
@@ -310,7 +303,7 @@ export function PosPage() {
         <CashPaymentModal
           total={cart.total}
           isSubmitting={saleMutation.isPending}
-          errorMessage={saleMutation.error?.message}
+          errorMessage={getCheckoutErrorMessage(saleMutation.error)}
           onBack={() => {
             saleMutation.reset()
             setCheckoutStep("METHODS")
@@ -326,7 +319,7 @@ export function PosPage() {
           method={checkoutStep}
           total={cart.total}
           isSubmitting={saleMutation.isPending}
-          errorMessage={saleMutation.error?.message}
+          errorMessage={getCheckoutErrorMessage(saleMutation.error)}
           onBack={() => {
             saleMutation.reset()
             setCheckoutStep("METHODS")

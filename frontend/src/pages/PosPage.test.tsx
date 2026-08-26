@@ -425,10 +425,27 @@ describe("POS sale workflow offline", () => {
     await userEvents.click(screen.getByRole("button", { name: "Valider" }))
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Impossible d'enregistrer la vente localement.",
+      "Impossible d’enregistrer la vente sur cet appareil. Réessayez avant de poursuivre.",
     )
     expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1")
     expect(screen.queryByRole("heading", { name: "Vente validée" })).not.toBeInTheDocument()
+  })
+
+  it("shows one blocking message when no offline catalogue exists", async () => {
+    vi.mocked(getProductCatalogMetadata).mockResolvedValue(null)
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"))
+
+    renderPos(localSession)
+
+    const alert = await screen.findByRole("alert")
+    expect(alert).toHaveTextContent("Catalogue indisponible hors ligne")
+    expect(alert).toHaveTextContent(
+      "Connectez cet appareil à Internet une première fois pour préparer le catalogue.",
+    )
+    expect(
+      screen.queryByLabelText("Scanner un code-barres ou rechercher par nom"),
+    ).not.toBeInTheDocument()
+    expect(screen.getAllByRole("alert")).toHaveLength(1)
   })
 })
 

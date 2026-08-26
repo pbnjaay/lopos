@@ -182,6 +182,8 @@ describe("POS résilience hors ligne (reproduction pilote)", () => {
     const scanner = await screen.findByLabelText(
       "Scanner un code-barres ou rechercher par nom",
     )
+    await waitFor(() => expect(syncPendingSales).toHaveBeenCalled())
+    vi.mocked(syncPendingSales).mockClear()
     await userEvents.type(scanner, `${coca.barcode}{Enter}`)
     await waitFor(() =>
       expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1"),
@@ -204,17 +206,16 @@ describe("POS résilience hors ligne (reproduction pilote)", () => {
     })
     expect(sales[0]!.syncEventId).toBeTruthy()
 
-    // Et la synchronisation opportuniste a été déclenchée, sans passer par
-    // un POST /sales/ dans le chemin d'encaissement.
-    expect(syncPendingSales).toHaveBeenCalled()
+    // Hors ligne, l'encaissement alimente seulement l'outbox : les ventes
+    // seront regroupées lors du prochain événement de reconnexion.
+    expect(syncPendingSales).not.toHaveBeenCalled()
     expect(
       vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/sales/")),
     ).toBe(false)
 
-    // Le compteur de ventes en attente est visible pour le caissier.
-    expect(
-      await screen.findByText(/1 vente en attente de synchronisation/),
-    ).toBeInTheDocument()
+    // Le corps du POS ne duplique plus le statut réseau : le compteur est
+    // désormais porté par le badge global cliquable du layout.
+    expect(screen.queryByText(/vente en attente de synchronisation/)).not.toBeInTheDocument()
   })
 
   it("bug 2 : un produit jamais recherché est trouvé hors ligne par son nom", async () => {

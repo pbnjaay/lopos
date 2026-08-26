@@ -1,3 +1,5 @@
+import { API_AVAILABLE_EVENT, API_UNAVAILABLE_EVENT } from "../utils/network"
+
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
 
 export const API_BASE_URL = (configuredBaseUrl || "/api/v1").replace(/\/+$/, "")
@@ -13,6 +15,10 @@ export const API_BASE_URL = (configuredBaseUrl || "/api/v1").replace(/\/+$/, "")
  * the cashier staring at a frozen payment screen.
  */
 const REQUEST_TIMEOUT_MS = 5_000
+function reportApiAvailability(isAvailable: boolean): void {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new Event(isAvailable ? API_AVAILABLE_EVENT : API_UNAVAILABLE_EVENT))
+}
 
 export type ApiErrorBody = {
   code?: string
@@ -164,6 +170,7 @@ export async function apiRequest<T>(
       signal: options.signal ?? timeoutController.signal,
     })
   } catch {
+    reportApiAvailability(false)
     throw new NetworkError()
   } finally {
     clearTimeout(timeoutId)
@@ -171,8 +178,11 @@ export async function apiRequest<T>(
 
   const responseBody = await readResponseBody(response)
   if (!response.ok) {
+    reportApiAvailability(response.status < 500)
     throw new ApiError(response.status, toApiErrorBody(responseBody))
   }
+
+  reportApiAvailability(true)
 
   return responseBody as T
 }
