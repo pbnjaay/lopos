@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+import { ToastProvider } from "../../components/ui/Toast"
 import { ConnectionStatus, NetworkNotifications } from "./OfflineBanner"
 
 const syncState = vi.hoisted(() => ({
@@ -27,6 +28,16 @@ function renderStatus() {
     <MemoryRouter>
       <ConnectionStatus />
     </MemoryRouter>,
+  )
+}
+
+// Les notifications réseau passent par le système de toasts commun : elles
+// sont montées avec le même provider que dans l'application.
+function renderNotifications() {
+  return render(
+    <ToastProvider>
+      <NetworkNotifications />
+    </ToastProvider>,
   )
 }
 
@@ -95,36 +106,47 @@ describe("network feedback", () => {
   it("shows reassuring guidance only during an online-to-offline transition", () => {
     vi.useFakeTimers()
     vi.stubGlobal("navigator", { onLine: true })
-    render(<NetworkNotifications />)
+    renderNotifications()
 
     fireEvent(window, new Event("offline"))
-    expect(screen.getByText("Connexion perdue")).toBeInTheDocument()
+    expect(screen.getByText("Mode hors ligne activé")).toBeInTheDocument()
     expect(
-      screen.getByText("Les ventes continueront d’être enregistrées localement."),
+      screen.getByText(
+        "Vous pouvez continuer à vendre, les ventes sont enregistrées sur la caisse.",
+      ),
     ).toBeInTheDocument()
 
-    act(() => vi.advanceTimersByTime(5_000))
-    expect(screen.queryByText("Connexion perdue")).not.toBeInTheDocument()
+    act(() => vi.advanceTimersByTime(4_000))
+    expect(screen.queryByText("Mode hors ligne activé")).not.toBeInTheDocument()
   })
 
   it("does not announce an opportunistic sync after an online sale", () => {
     vi.stubGlobal("navigator", { onLine: true })
-    const view = render(<NetworkNotifications />)
+    const view = renderNotifications()
 
     syncState.lastOutcome = { attempted: 1, synced: 1, conflicts: 0 }
-    view.rerender(<NetworkNotifications />)
+    view.rerender(
+      <ToastProvider>
+        <NetworkNotifications />
+      </ToastProvider>,
+    )
 
-    expect(screen.queryByText(/vente.*synchronisée/)).not.toBeInTheDocument()
+    expect(screen.queryByText("Synchronisation terminée")).not.toBeInTheDocument()
   })
 
   it("confirms completed sales after reconnection", () => {
     vi.stubGlobal("navigator", { onLine: false })
-    const view = render(<NetworkNotifications />)
+    const view = renderNotifications()
 
     fireEvent(window, new Event("online"))
     syncState.lastOutcome = { attempted: 2, synced: 2, conflicts: 0 }
-    view.rerender(<NetworkNotifications />)
+    view.rerender(
+      <ToastProvider>
+        <NetworkNotifications />
+      </ToastProvider>,
+    )
 
-    expect(screen.getByText("2 ventes ont été synchronisées")).toBeInTheDocument()
+    expect(screen.getByText("Synchronisation terminée")).toBeInTheDocument()
+    expect(screen.getByText("2 ventes ont été envoyées au serveur.")).toBeInTheDocument()
   })
 })

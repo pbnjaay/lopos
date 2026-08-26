@@ -1,16 +1,27 @@
 import { useQuery } from "@tanstack/react-query"
-import { Link, useParams } from "react-router-dom"
+import { useParams } from "react-router-dom"
 
 import { getSaleReceipt } from "../api/sales"
-import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
+import { PageHeader } from "../components/layout/PageHeader"
+import { ButtonLink } from "../components/ui/Button"
+import { InlineAlert } from "../components/ui/InlineAlert"
 import { ReceiptIcon, RotateCcwIcon } from "../components/ui/Icons"
-import { RouteState } from "../components/ui/RouteState"
+import { MetaList } from "../components/ui/Metadata"
+import { Money } from "../components/ui/Money"
+import { RouteError, RouteLoading } from "../components/ui/RouteState"
+import { SectionHeader } from "../components/ui/SectionHeader"
 import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { formatDateTime } from "../utils/date"
 import { formatBackendMoney } from "../utils/money"
 import { backendQuantityToMilli, formatQuantity } from "../utils/quantity"
+
+const paymentLabels = {
+  CASH: "Espèces",
+  WAVE: "Wave",
+  ORANGE_MONEY: "Orange Money",
+} as const
 
 export function SaleDetailPage() {
   const { saleId } = useParams<{ saleId: string }>()
@@ -24,55 +35,123 @@ export function SaleDetailPage() {
     retry: false,
   })
 
-  if (!online) return <RouteState message="Le détail des ventes est indisponible hors connexion." />
-  if (saleQuery.isLoading) return <RouteState message="Chargement de la vente…" />
-  if (saleQuery.error || !saleQuery.data) return <RouteState message="Vente introuvable dans cette boutique." error={saleQuery.error} onRetry={() => void saleQuery.refetch()} />
+  if (!online) {
+    return (
+      <RouteError
+        context="vente"
+        title="Mode hors ligne"
+        description="Le détail des ventes redeviendra consultable dès le retour de la connexion. Vous pouvez continuer à vendre."
+      />
+    )
+  }
+  if (saleQuery.isLoading) return <RouteLoading message="Chargement de la vente…" />
+  if (saleQuery.error || !saleQuery.data) {
+    return (
+      <RouteError
+        error={saleQuery.error}
+        context="vente"
+        onRetry={() => void saleQuery.refetch()}
+      />
+    )
+  }
 
   const sale = saleQuery.data
   const canReturn = sale.status === "COMPLETED" && sale.items.some((item) => Number(item.quantity_returnable ?? item.quantity) > 0)
 
   return (
     <main className="operational-page">
-      <OperationalPageHeader
+      <PageHeader
         backTo="/sales"
         backLabel="Retour aux ventes"
         eyebrow="Vente"
         title={`Ticket ${sale.id.slice(0, 8).toUpperCase()}`}
         context={`${sale.store.name} · ${sale.cash_register.name}`}
         actions={<>
-          <Link className="button button-secondary button-small button-with-icon" to={`/sales/${sale.id}/receipt?cash_session_id=${ownSession!.id}&from=detail`}>
+          <ButtonLink
+            variant="secondary"
+            size="sm"
+            to={`/sales/${sale.id}/receipt?cash_session_id=${ownSession!.id}&from=detail`}
+          >
             <ReceiptIcon />
             <span>Voir le ticket</span>
-          </Link>
-          {canReturn ? <Link className="button button-primary button-small button-with-icon" to={`/sales/${sale.id}/return`}><RotateCcwIcon /><span>Effectuer un retour</span></Link> : null}
+          </ButtonLink>
+          {canReturn ? (
+            <ButtonLink variant="primary" size="sm" to={`/sales/${sale.id}/return`}>
+              <RotateCcwIcon />
+              <span>Effectuer un retour</span>
+            </ButtonLink>
+          ) : null}
         </>}
       />
       <section className="operational-card sale-detail-card">
-        <div className="sale-detail-meta" aria-label="Informations de la vente">
-          <div><span>Date et heure</span><strong>{formatDateTime(sale.created_at)}</strong></div>
-          <div><span>Caissier</span><strong>{sale.cashier.username}</strong></div>
-          <div><span>Mode de paiement</span><strong>{{ CASH: "Espèces", WAVE: "Wave", ORANGE_MONEY: "Orange Money" }[sale.payment.method]}</strong></div>
+        <MetaList
+          label="Informations de la vente"
+          items={[
+            { label: "Date et heure", value: formatDateTime(sale.created_at) },
+            { label: "Caissier", value: sale.cashier.username },
+            { label: "Mode de paiement", value: paymentLabels[sale.payment.method] },
+          ]}
+        />
+        <div className="card-section">
+          <SectionHeader
+            title="Articles vendus"
+            trailing={`${sale.items.length} article${sale.items.length > 1 ? "s" : ""}`}
+          />
+          <ul className="sale-detail-items">
+            {sale.items.map((item) => (
+              <li key={item.id}>
+                <div>
+                  <strong>{item.product_name}</strong>
+                  <span>
+                    {formatQuantity(backendQuantityToMilli(item.quantity), item.sale_unit ?? "UNIT")} × {formatBackendMoney(item.unit_price)}
+                  </span>
+                </div>
+                <div>
+                  <strong>
+                    <Money backend={item.line_total} />
+                  </strong>
+                  {Number(item.quantity_returned ?? 0) > 0 ? (
+                    <span>
+                      Retourné : {formatQuantity(backendQuantityToMilli(item.quantity_returned!), item.sale_unit ?? "UNIT")}
+                    </span>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
-        <div className="sale-detail-section-heading">
-          <h2>Articles vendus</h2>
-          <span>{sale.items.length} article{sale.items.length > 1 ? "s" : ""}</span>
-        </div>
-        <ul className="sale-detail-items">
-          {sale.items.map((item) => (
-            <li key={item.id}>
-              <div><strong>{item.product_name}</strong><span>{formatQuantity(backendQuantityToMilli(item.quantity), item.sale_unit ?? "UNIT")} × {formatBackendMoney(item.unit_price)}</span></div>
-              <div><strong>{formatBackendMoney(item.line_total)}</strong>{Number(item.quantity_returned ?? 0) > 0 ? <span>Retourné : {formatQuantity(backendQuantityToMilli(item.quantity_returned!), item.sale_unit ?? "UNIT")}</span> : null}</div>
-            </li>
-          ))}
-        </ul>
         <div className="sale-detail-summary">
           <p className="eyebrow">Récapitulatif</p>
           <dl className="sale-detail-totals">
-            <div><dt>Total vendu</dt><dd>{formatBackendMoney(sale.total)}</dd></div>
-            {Number(sale.returned_total ?? 0) > 0 ? <><div><dt>Déjà retourné</dt><dd>− {formatBackendMoney(sale.returned_total!)}</dd></div><div className="sale-detail-net"><dt>Total net</dt><dd>{formatBackendMoney(sale.net_total!)}</dd></div></> : null}
+            <div>
+              <dt>Total vendu</dt>
+              <dd>
+                <Money backend={sale.total} />
+              </dd>
+            </div>
+            {Number(sale.returned_total ?? 0) > 0 ? (
+              <>
+                <div>
+                  <dt>Déjà retourné</dt>
+                  <dd>
+                    <Money backend={sale.returned_total!} sign="minus" />
+                  </dd>
+                </div>
+                <div className="sale-detail-net">
+                  <dt>Total net</dt>
+                  <dd>
+                    <Money backend={sale.net_total!} />
+                  </dd>
+                </div>
+              </>
+            ) : null}
           </dl>
         </div>
-        {!canReturn ? <p className="sale-fully-returned">Aucun article de cette vente ne peut encore être retourné.</p> : null}
+        {!canReturn ? (
+          <InlineAlert className="sale-detail-note">
+            Aucun article de cette vente ne peut encore être retourné.
+          </InlineAlert>
+        ) : null}
       </section>
     </main>
   )

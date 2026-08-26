@@ -1,8 +1,10 @@
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react"
+import { type FormEvent, useMemo, useRef, useState } from "react"
 
-import { useDialogFocusTrap } from "../../components/ui/useDialogFocusTrap"
-import { XIcon } from "../../components/ui/Icons"
-import { formatMoney, parseMoneyInput } from "../../utils/money"
+import { Button } from "../../components/ui/Button"
+import { Dialog, DialogFooter } from "../../components/ui/Dialog"
+import { InlineAlert } from "../../components/ui/InlineAlert"
+import { Money } from "../../components/ui/Money"
+import { parseMoneyInput } from "../../utils/money"
 import { getSuggestedCashAmounts } from "./cashSuggestions"
 import { useSlowSubmitHint } from "./useSlowSubmitHint"
 
@@ -24,9 +26,7 @@ export function CashPaymentModal({
   onBack,
 }: CashPaymentModalProps) {
   const submissionLock = useRef(false)
-  const dialogRef = useRef<HTMLElement>(null)
   const receivedInputRef = useRef<HTMLInputElement>(null)
-  useDialogFocusTrap(dialogRef)
   const isSlow = useSlowSubmitHint(isSubmitting)
   const [receivedInput, setReceivedInput] = useState("")
   const receivedAmount = parseMoneyInput(receivedInput)
@@ -40,20 +40,6 @@ export function CashPaymentModal({
       ),
     [total],
   )
-
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.repeat || isSubmitting) return
-      if (event.key !== "Escape") return
-      // A CASH screen reached from payment-method selection backs out one
-      // step at a time; only a bare modal (no onBack) closes outright.
-      if (onBack) onBack()
-      else onClose()
-    }
-
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isSubmitting, onBack, onClose])
 
   // Keep focus on the amount field after every keypad/quick-amount tap, so
   // a physical Enter always submits the form instead of re-activating
@@ -106,158 +92,133 @@ export function CashPaymentModal({
   }
 
   return (
-    <div className="modal-backdrop">
-      <section
-        ref={dialogRef}
-        className="checkout-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="cash-payment-title"
-      >
-        <header className="checkout-modal-header">
-          <div>
-            <p className="eyebrow">Encaissement</p>
-            {onBack ? (
-              <button
-                className="payment-back-button"
-                type="button"
-                disabled={isSubmitting}
-                onClick={onBack}
-              >
-                ← Changer de moyen de paiement
-              </button>
-            ) : null}
-            <h2 id="cash-payment-title">Paiement en espèces</h2>
-          </div>
-          <button
-            className="modal-close"
-            type="button"
-            aria-label="Fermer"
-            disabled={isSubmitting}
-            onClick={onClose}
-          >
-            <XIcon />
-          </button>
-        </header>
+    <Dialog
+      eyebrow="Encaissement"
+      title="Paiement en espèces"
+      onClose={onClose}
+      // A CASH screen reached from payment-method selection backs out one
+      // step at a time; only a bare modal (no onBack) closes outright.
+      onBack={onBack}
+      backLabel="Changer de moyen de paiement"
+      backDisabled={isSubmitting}
+      dismissible={!isSubmitting}
+    >
+      <form className="dialog-body cash-payment-form" onSubmit={handleSubmit}>
+        <div className="payment-total">
+          <span>Total à payer</span>
+          <strong>
+            <Money value={total} />
+          </strong>
+        </div>
 
-        <form className="cash-payment-form" onSubmit={handleSubmit}>
-          <div className="payment-total">
-            <span>Total à payer</span>
-            <strong>{formatMoney(total)}</strong>
+        <div className="field">
+          <label htmlFor="received-amount">Montant reçu</label>
+          <div className="money-input payment-money-input">
+            <input
+              ref={receivedInputRef}
+              id="received-amount"
+              autoFocus
+              inputMode="numeric"
+              placeholder="2 000"
+              value={receivedInput}
+              disabled={isSubmitting}
+              onChange={(event) => handleInput(event.target.value)}
+            />
+            <span>FCFA</span>
           </div>
+        </div>
 
-          <div className="field">
-            <label htmlFor="received-amount">Montant reçu</label>
-            <div className="money-input payment-money-input">
-              <input
-                ref={receivedInputRef}
-                id="received-amount"
-                autoFocus
-                inputMode="numeric"
-                placeholder="2 000"
-                value={receivedInput}
-                disabled={isSubmitting}
-                onChange={(event) => handleInput(event.target.value)}
-              />
-              <span>FCFA</span>
-            </div>
-          </div>
-
-          <div className="numeric-keypad" aria-label="Pavé numérique">
-            {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
-              <button
-                key={digit}
-                className="numeric-keypad-key"
-                type="button"
-                disabled={isSubmitting}
-                aria-label={`Chiffre ${digit}`}
-                onClick={() => handleKeypadDigit(digit)}
-              >
-                {digit}
-              </button>
-            ))}
+        <div className="numeric-keypad" aria-label="Pavé numérique">
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
             <button
-              className="numeric-keypad-key numeric-keypad-clear"
-              type="button"
-              disabled={isSubmitting || receivedInput === ""}
-              aria-label="Effacer le montant"
-              onClick={handleKeypadClear}
-            >
-              C
-            </button>
-            <button
+              key={digit}
               className="numeric-keypad-key"
               type="button"
               disabled={isSubmitting}
-              aria-label="Chiffre 0"
-              onClick={() => handleKeypadDigit("0")}
+              aria-label={`Chiffre ${digit}`}
+              onClick={() => handleKeypadDigit(digit)}
             >
-              0
+              {digit}
             </button>
-            <button
-              className="numeric-keypad-key numeric-keypad-backspace"
-              type="button"
-              disabled={isSubmitting || receivedInput === ""}
-              aria-label="Supprimer le dernier chiffre"
-              onClick={handleKeypadBackspace}
-            >
-              ⌫
-            </button>
-          </div>
-
-          <div className="quick-amounts" aria-label="Montants rapides">
-            {quickAmounts.map((amount) => (
-              <button
-                key={amount}
-                className="button button-secondary quick-amount"
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => handleQuickAmount(amount)}
-              >
-                {amount === total ? "Montant exact" : formatMoney(amount)}
-              </button>
-            ))}
-          </div>
-
-          <div
-            className={isSufficient ? "change-preview" : "change-preview change-preview-pending"}
-            role={receivedAmount !== null && !isSufficient ? "alert" : undefined}
-            aria-live="polite"
+          ))}
+          <button
+            className="numeric-keypad-key numeric-keypad-clear"
+            type="button"
+            disabled={isSubmitting || receivedInput === ""}
+            aria-label="Effacer le montant"
+            onClick={handleKeypadClear}
           >
-            <span>{isSufficient ? "Monnaie à rendre" : "Reste à recevoir"}</span>
-            <strong>{formatMoney(isSufficient ? changeAmount : missingAmount)}</strong>
-          </div>
+            C
+          </button>
+          <button
+            className="numeric-keypad-key"
+            type="button"
+            disabled={isSubmitting}
+            aria-label="Chiffre 0"
+            onClick={() => handleKeypadDigit("0")}
+          >
+            0
+          </button>
+          <button
+            className="numeric-keypad-key numeric-keypad-backspace"
+            type="button"
+            disabled={isSubmitting || receivedInput === ""}
+            aria-label="Supprimer le dernier chiffre"
+            onClick={handleKeypadBackspace}
+          >
+            ⌫
+          </button>
+        </div>
 
-          {errorMessage ? (
-            <p className="form-error" role="alert">
-              {errorMessage}
-            </p>
-          ) : null}
-          {isSubmitting && isSlow ? (
-            <p className="muted" role="status">
-              Ça prend plus de temps que prévu, patientez encore un instant…
-            </p>
-          ) : null}
-
-          <div className="modal-actions">
-            <button
-              className="button button-secondary"
-              type="button"
+        <div className="quick-amounts" aria-label="Montants rapides">
+          {quickAmounts.map((amount) => (
+            <Button
+              key={amount}
+              variant="secondary"
+              className="quick-amount"
               disabled={isSubmitting}
-              onClick={onClose}
+              onClick={() => handleQuickAmount(amount)}
             >
-              Annuler
-            </button>
-            <button
-              className="button button-primary"
-              type="submit"
-              disabled={!isSufficient || isSubmitting}
-            >
-              {isSubmitting ? "Validation…" : "Valider"}
-            </button>
-          </div>
-        </form>
-      </section>
-    </div>
+              {amount === total ? "Montant exact" : <Money value={amount} />}
+            </Button>
+          ))}
+        </div>
+
+        {/* Information contextuelle, pas une notification : elle appartient à
+            l'écran de paiement et doit rester lisible tant qu'il est ouvert. */}
+        <div
+          className={isSufficient ? "change-preview" : "change-preview change-preview-pending"}
+          role={receivedAmount !== null && !isSufficient ? "alert" : undefined}
+          aria-live="polite"
+        >
+          <span>{isSufficient ? "Monnaie à rendre" : "Reste à recevoir"}</span>
+          <strong>
+            <Money value={isSufficient ? changeAmount : missingAmount} />
+          </strong>
+        </div>
+
+        {errorMessage ? <InlineAlert tone="error">{errorMessage}</InlineAlert> : null}
+        {isSubmitting && isSlow ? (
+          <p className="dialog-hint" role="status">
+            Ça prend plus de temps que prévu, patientez encore un instant…
+          </p>
+        ) : null}
+
+        <DialogFooter>
+          <Button variant="secondary" disabled={isSubmitting} onClick={onClose}>
+            Annuler
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={!isSufficient}
+            loading={isSubmitting}
+            loadingLabel="Validation…"
+          >
+            Valider
+          </Button>
+        </DialogFooter>
+      </form>
+    </Dialog>
   )
 }

@@ -1,21 +1,30 @@
-import { Link } from "react-router-dom"
-
-import { OperationalPageHeader } from "../../components/layout/OperationalPageHeader"
+import { Button, ButtonLink } from "../../components/ui/Button"
+import { MetaList } from "../../components/ui/Metadata"
+import { Money } from "../../components/ui/Money"
+import { PageHeader } from "../../components/layout/PageHeader"
+import { SectionHeader } from "../../components/ui/SectionHeader"
+import { useFocusOnMount } from "../../hooks/useFocusOnMount"
 import type { CashSessionSummary } from "../../types/api"
 import { formatDateTime } from "../../utils/date"
-import { describeCashDifference, formatBackendMoney } from "../../utils/money"
+import { describeCashDifference } from "../../utils/money"
 
 type CashClosingResultProps = {
   summary: CashSessionSummary
   onFinish: () => void
 }
 
+/**
+ * Succès de clôture. Même grammaire que la vente et le retour : marque de
+ * statut → titre → résultat clé (l'écart) → action primaire → secondaire.
+ */
 export function CashClosingResult({ summary, onFinish }: CashClosingResultProps) {
   const difference = describeCashDifference(summary.cash_difference ?? "0.00")
+  // Le focus repart du résultat, pas du haut du document.
+  const headingRef = useFocusOnMount<HTMLHeadingElement>()
 
   return (
     <main className="operational-page operational-page-narrow closing-result-page">
-      <OperationalPageHeader
+      <PageHeader
         eyebrow="Fin de journée"
         title="Caisse clôturée"
         context={summary.cash_register.name}
@@ -24,71 +33,82 @@ export function CashClosingResult({ summary, onFinish }: CashClosingResultProps)
         <div className="closing-result-intro">
           <div className="success-mark" aria-hidden="true">✓</div>
           <div>
-            <h2>Session terminée</h2>
-            <p className="muted">Les ventes et les montants de cette caisse ont été enregistrés.</p>
+            <h2 ref={headingRef} tabIndex={-1}>
+              Session terminée
+            </h2>
+            <p className="metadata">Les ventes et les montants de cette caisse ont été enregistrés.</p>
           </div>
-        </div>
-        <div className="closing-session-meta">
-          <div><span>Caissier</span><strong>{summary.cashier.username}</strong></div>
-          {summary.closed_at ? <div><span>Clôture</span><strong>{formatDateTime(summary.closed_at)}</strong></div> : null}
         </div>
 
-        <div className="closing-section-heading">
-          <div><p className="eyebrow">Résultat</p><h2>Résumé de clôture</h2></div>
+        {/* Résultat clé de cet écran : l'écart de caisse. */}
+        <div className={`closing-result-headline cash-difference-${difference.kind}`}>
+          <span>Écart de caisse</span>
+          <strong>{difference.label}</strong>
         </div>
-        <dl className="closing-summary closing-result-summary" aria-label="Résultat de clôture">
-          <div className="closing-summary-kpi">
-            <dt>Nombre de ventes</dt>
-            <dd>{summary.sales_count}</dd>
-          </div>
-          <div className="closing-summary-kpi">
-            <dt>CA net</dt>
-            <dd>{formatBackendMoney(summary.net_sales ?? summary.gross_sales)}</dd>
-          </div>
-          <div>
-            <dt>Retours</dt>
-            <dd>− {formatBackendMoney(summary.returns_total ?? "0.00")}</dd>
-          </div>
-          <div>
-            <dt>Espèces</dt>
-            <dd>{formatBackendMoney(summary.payments.cash)}</dd>
-          </div>
-          <div>
-            <dt>Wave</dt>
-            <dd>{formatBackendMoney(summary.payments.wave)}</dd>
-          </div>
-          <div>
-            <dt>Orange Money</dt>
-            <dd>{formatBackendMoney(summary.payments.orange_money)}</dd>
-          </div>
-          <div className="closing-summary-opening">
-            <dt>Fond initial</dt>
-            <dd>{formatBackendMoney(summary.opening_balance)}</dd>
-          </div>
-          <div>
-            <dt>Cash attendu</dt>
-            <dd>{formatBackendMoney(summary.expected_cash)}</dd>
-          </div>
-          <div>
-            <dt>Cash compté</dt>
-            <dd>{formatBackendMoney(summary.counted_cash ?? "0.00")}</dd>
-          </div>
-          <div className={`cash-difference cash-difference-${difference.kind}`}>
-            <dt>Écart</dt>
-            <dd>{difference.label}</dd>
-          </div>
-        </dl>
+
+        <MetaList
+          columns={2}
+          label="Informations de la session"
+          items={[
+            { label: "Caissier", value: summary.cashier.username },
+            ...(summary.closed_at
+              ? [{ label: "Clôture", value: formatDateTime(summary.closed_at) }]
+              : []),
+          ]}
+        />
+
+        <div className="card-section">
+          <SectionHeader eyebrow="Résultat" title="Résumé de clôture" />
+          <dl className="closing-summary closing-result-summary" aria-label="Résultat de clôture">
+            <div className="closing-summary-kpi">
+              <dt>Nombre de ventes</dt>
+              <dd>{summary.sales_count}</dd>
+            </div>
+            <div className="closing-summary-kpi">
+              <dt>CA net</dt>
+              <dd><Money backend={summary.net_sales ?? summary.gross_sales} /></dd>
+            </div>
+            <div>
+              <dt>Retours</dt>
+              <dd><Money backend={summary.returns_total ?? "0.00"} sign="minus" /></dd>
+            </div>
+            <div>
+              <dt>Espèces</dt>
+              <dd><Money backend={summary.payments.cash} /></dd>
+            </div>
+            <div>
+              <dt>Wave</dt>
+              <dd><Money backend={summary.payments.wave} /></dd>
+            </div>
+            <div>
+              <dt>Orange Money</dt>
+              <dd><Money backend={summary.payments.orange_money} /></dd>
+            </div>
+            <div className="closing-summary-opening">
+              <dt>Fond initial</dt>
+              <dd><Money backend={summary.opening_balance} /></dd>
+            </div>
+            <div>
+              <dt>Cash attendu</dt>
+              <dd><Money backend={summary.expected_cash} /></dd>
+            </div>
+            <div>
+              <dt>Cash compté</dt>
+              <dd><Money backend={summary.counted_cash ?? "0.00"} /></dd>
+            </div>
+          </dl>
+        </div>
 
         <div className="closing-result-actions">
-          <Link
-            className="button button-secondary"
+          <ButtonLink
+            variant="secondary"
             to={`/cash-sessions/${encodeURIComponent(summary.id)}/report`}
           >
             Voir le rapport Z
-          </Link>
-          <button className="button button-primary" type="button" onClick={onFinish}>
+          </ButtonLink>
+          <Button variant="primary" onClick={onFinish}>
             Terminer
-          </button>
+          </Button>
         </div>
       </section>
     </main>

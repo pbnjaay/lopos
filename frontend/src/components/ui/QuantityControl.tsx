@@ -78,7 +78,13 @@ export function QuantityControl({
   const increaseDisabled = disabled || (valueMilli ?? 0) >= maximumMilli
   return (
     <div className="quantity-control" role="group" aria-label={`Contrôles — ${quantityLabel}`}>
-      <button type="button" aria-label={decreaseLabel} disabled={decreaseDisabled} onClick={onDecrease}>
+      <button
+        className="quantity-step"
+        type="button"
+        aria-label={decreaseLabel}
+        disabled={decreaseDisabled}
+        onClick={onDecrease}
+      >
         <MinusIcon />
       </button>
       {isEditing ? (
@@ -121,7 +127,13 @@ export function QuantityControl({
           {valueMilli === null ? "0" : formatQuantity(valueMilli, saleUnit)}
         </button>
       )}
-      <button type="button" aria-label={increaseLabel} disabled={increaseDisabled} onClick={onIncrease}>
+      <button
+        className="quantity-step"
+        type="button"
+        aria-label={increaseLabel}
+        disabled={increaseDisabled}
+        onClick={onIncrease}
+      >
         <PlusIcon />
       </button>
     </div>

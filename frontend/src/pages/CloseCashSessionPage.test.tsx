@@ -9,6 +9,7 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+import { ToastProvider } from "../components/ui/Toast"
 import { db } from "../db/database"
 import { currentUserQueryKey } from "../features/auth/queries"
 import { SELECTED_CASH_REGISTER_KEY } from "../features/cash-session/queries"
@@ -100,7 +101,9 @@ function renderPage(pendingLocalSalesCount = 0) {
   render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <CloseCashSessionPage />
+        <ToastProvider>
+          <CloseCashSessionPage />
+        </ToastProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -226,7 +229,7 @@ describe("CloseCashSessionPage", () => {
     await user.click(screen.getByRole("button", { name: "Confirmer la clôture" }))
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Impossible de joindre le serveur. Vérifiez votre connexion Internet.",
+      "La clôture nécessite une connexion. Vous pouvez continuer à vendre.",
     )
     expect(globalThis.fetch).toHaveBeenCalledOnce()
   })
@@ -234,11 +237,8 @@ describe("CloseCashSessionPage", () => {
   it("blocks closing while sales from this session are still unsynced", async () => {
     renderPage(2)
 
-    expect(
-      await screen.findByText(
-        "2 ventes de cette session n'ont pas encore été synchronisées avec le serveur. Reconnectez-vous à Internet pour synchroniser avant de clôturer.",
-      ),
-    ).toBeInTheDocument()
+    expect(await screen.findByText("2 ventes en attente")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Synchroni/ })).toBeInTheDocument()
     expect(screen.queryByLabelText("Montant compté")).not.toBeInTheDocument()
   })
 })

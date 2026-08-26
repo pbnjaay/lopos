@@ -2,6 +2,9 @@ import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { getStore } from "../api/stores"
+import { Button } from "../components/ui/Button"
+import { ErrorState } from "../components/ui/ErrorState"
+import { InlineAlert } from "../components/ui/InlineAlert"
 import {
   trackCheckoutOpened,
   trackPaymentMethodSelected,
@@ -49,6 +52,9 @@ const checkoutFKeyToMethod: Record<string, PaymentMethod> = {
   F3: "ORANGE_MONEY",
 }
 
+// Erreur bloquante d'encaissement : seuls des échecs de persistance locale
+// arrivent ici. Le message dit ce qui s'est passé et ce qu'il faut faire,
+// jamais le nom de l'exception.
 function getCheckoutErrorMessage(error: Error | null): string | undefined {
   if (!error) return undefined
   if (
@@ -230,27 +236,29 @@ export function PosPage() {
         <div>
           <p className="eyebrow">Point de vente</p>
           <h1>{storeQuery.data?.name ?? localSession?.storeName ?? "Magasin"}</h1>
-          <p className="pos-register-name">{selectedRegister?.name ?? "Caisse"}</p>
+          <p className="metadata">{selectedRegister?.name ?? "Caisse"}</p>
         </div>
       </header>
 
       {catalog.status === "catalogue_syncing" ? (
-        <p className="muted" role="status">
+        <InlineAlert className="pos-notice">
           Préparation de la caisse — téléchargement du catalogue…
-        </p>
+        </InlineAlert>
       ) : null}
       {catalog.status === "catalogue_error" || catalog.status === "catalogue_not_initialized" ? (
-        <div className="inline-error" role="alert">
-          <strong>Catalogue indisponible hors ligne</strong>
-          <p>Connectez cet appareil à Internet une première fois pour préparer le catalogue.</p>
-          <button
-            className="button button-secondary button-small"
-            type="button"
-            onClick={() => void catalog.retrySync()}
-          >
-            Réessayer
-          </button>
-        </div>
+        <InlineAlert
+          className="pos-notice"
+          tone="warning"
+          assertive
+          title="Catalogue indisponible hors ligne"
+          action={
+            <Button variant="secondary" size="sm" onClick={() => void catalog.retrySync()}>
+              Réessayer
+            </Button>
+          }
+        >
+          Connectez cet appareil à Internet une première fois pour préparer le catalogue.
+        </InlineAlert>
       ) : null}
 
       {selectedRegister ? (
@@ -283,9 +291,10 @@ export function PosPage() {
           />
         </div>
       ) : (
-        <p className="form-error" role="alert">
-          Impossible de déterminer le magasin de cette caisse.
-        </p>
+        <ErrorState
+          title="Caisse non rattachée à une boutique"
+          description="Cette caisse n’est associée à aucune boutique. Contactez un responsable pour la reconfigurer."
+        />
       )}
       {checkoutStep === "METHODS" ? (
         <PaymentMethodModal

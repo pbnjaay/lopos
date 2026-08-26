@@ -7,8 +7,10 @@ import { API_BASE_URL } from "../../api/client"
 import { resetAnalytics } from "../../analytics/posthog"
 import { clearSentryUser } from "../../analytics/sentry"
 import { CashRegisterIcon, ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, SettingsIcon, UserIcon } from "../ui/Icons"
+import { ToastProvider, useToast } from "../ui/Toast"
 import { ConnectionStatus, NetworkNotifications } from "../../features/offline/OfflineBanner"
 import type { CurrentUser } from "../../types/api"
+import { describeErrorShort } from "../../utils/errorCopy"
 
 type AppLayoutProps = {
   user: CurrentUser
@@ -19,7 +21,16 @@ const ADMIN_URL = /^https?:\/\//.test(API_BASE_URL)
   : "http://localhost:8000/admin/"
 
 export function AppLayout({ user }: AppLayoutProps) {
+  return (
+    <ToastProvider>
+      <AppShell user={user} />
+    </ToastProvider>
+  )
+}
+
+function AppShell({ user }: AppLayoutProps) {
   const navigate = useNavigate()
+  const toast = useToast()
   const location = useLocation()
   const queryClient = useQueryClient()
   const [isSessionMenuOpen, setIsSessionMenuOpen] = useState(false)
@@ -39,6 +50,11 @@ export function AppLayout({ user }: AppLayoutProps) {
     location.pathname.startsWith("/returns")
   const logoutMutation = useMutation({
     mutationFn: logout,
+    onError: (error) => {
+      // Une déconnexion qui échoue n'empêche pas de vendre : un toast, pas
+      // un bandeau rouge en travers de l'application.
+      toast.error("Déconnexion impossible", { description: describeErrorShort(error, "session") })
+    },
     onSuccess: () => {
       queryClient.clear()
       resetAnalytics()
@@ -137,11 +153,6 @@ export function AppLayout({ user }: AppLayoutProps) {
           </div>
         </div>
       </header>
-      {logoutMutation.error ? (
-        <p className="global-error" role="alert">
-          {logoutMutation.error.message}
-        </p>
-      ) : null}
       <NetworkNotifications />
       <div className="app-frame">
         <nav className="app-navigation" aria-label="Navigation principale">

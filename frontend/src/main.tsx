@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query"
 import { RouterProvider } from "react-router-dom"
 
 import { Sentry, initSentry } from "./analytics/sentry"
+import { AppErrorFallback } from "./components/ui/AppErrorBoundary"
 import { initPostHog } from "./analytics/posthog"
 import { createQueryClient } from "./queryClient"
 import { router } from "./router"
@@ -16,7 +17,7 @@ const queryClient = createQueryClient()
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Sentry.ErrorBoundary fallback={<p role="alert">Une erreur est survenue. Rechargez la page.</p>}>
+    <Sentry.ErrorBoundary fallback={<AppErrorFallback />}>
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
       </QueryClientProvider>

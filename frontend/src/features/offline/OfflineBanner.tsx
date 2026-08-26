@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
 import { Link } from "react-router-dom"
 
+import { useToast } from "../../components/ui/Toast"
 import { useSyncStatus } from "../sync/useSyncStatus"
 import { useNetworkStatus } from "./useNetworkStatus"
 import { WifiIcon, WifiOffIcon } from "../../components/ui/Icons"
 
+/**
+ * Statut permanent du réseau — jamais un toast, jamais une bannière rouge :
+ * le POS fonctionne hors ligne, l'état réseau est une information de fond.
+ */
 export function ConnectionStatus() {
   const isOnline = useNetworkStatus()
   const { pendingCount, conflictCount, isSyncing } = useSyncStatus()
@@ -61,65 +66,52 @@ export function ConnectionStatus() {
   )
 }
 
+/**
+ * Événements réseau et synchronisation — servis par le système de toasts
+ * commun, donc empilés, dédupliqués et expirés selon les mêmes règles que
+ * le reste de l'application.
+ */
 export function NetworkNotifications() {
   const isOnline = useNetworkStatus()
   const { lastOutcome } = useSyncStatus()
+  const toast = useToast()
   const previousOnline = useRef(isOnline)
   const previousOutcome = useRef(lastOutcome)
   const wasOffline = useRef(!isOnline)
-  const [message, setMessage] = useState<{
-    title: string
-    detail?: string
-    tone: "warning" | "success"
-  } | null>(null)
 
   useEffect(() => {
     if (previousOnline.current && !isOnline) {
       wasOffline.current = true
-      setMessage({
-        title: "Connexion perdue",
-        detail: "Les ventes continueront d’être enregistrées localement.",
-        tone: "warning",
+      // Le POS continue de vendre : ce n'est pas une erreur, c'est un
+      // changement de mode, et le message dit ce qui reste possible.
+      toast.info("Mode hors ligne activé", {
+        description: "Vous pouvez continuer à vendre, les ventes sont enregistrées sur la caisse.",
       })
     }
     previousOnline.current = isOnline
-  }, [isOnline])
+  }, [isOnline, toast])
 
   useEffect(() => {
     if (lastOutcome && lastOutcome !== previousOutcome.current) {
       if (lastOutcome.conflicts > 0) {
-        setMessage({
-          title: `${lastOutcome.synced} synchronisée${lastOutcome.synced !== 1 ? "s" : ""}`,
-          detail: `${lastOutcome.conflicts} vente${lastOutcome.conflicts > 1 ? "s" : ""} à vérifier.`,
-          tone: "warning",
-        })
+        toast.warning(
+          `${lastOutcome.conflicts} vente${lastOutcome.conflicts > 1 ? "s" : ""} à vérifier`,
+          {
+            description: `${lastOutcome.synced} vente${lastOutcome.synced !== 1 ? "s" : ""} synchronisée${lastOutcome.synced !== 1 ? "s" : ""}.`,
+          },
+        )
       } else if (isOnline && wasOffline.current) {
-        setMessage({
-          title: lastOutcome.synced === 1
-            ? "1 vente a été synchronisée"
-            : `${lastOutcome.synced} ventes ont été synchronisées`,
-          tone: "success",
+        toast.success("Synchronisation terminée", {
+          description:
+            lastOutcome.synced === 1
+              ? "1 vente a été envoyée au serveur."
+              : `${lastOutcome.synced} ventes ont été envoyées au serveur.`,
         })
         wasOffline.current = false
-      } else if (!isOnline && wasOffline.current) {
-        return
       }
     }
     previousOutcome.current = lastOutcome
-  }, [isOnline, lastOutcome])
+  }, [isOnline, lastOutcome, toast])
 
-  useEffect(() => {
-    if (!message) return
-    const timeoutId = window.setTimeout(() => setMessage(null), 5_000)
-    return () => window.clearTimeout(timeoutId)
-  }, [message])
-
-  if (!message) return null
-
-  return (
-    <div className={`network-toast network-toast-${message.tone}`} role="status" aria-live="polite">
-      <strong>{message.title}</strong>
-      {message.detail ? <span>{message.detail}</span> : null}
-    </div>
-  )
+  return null
 }

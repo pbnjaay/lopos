@@ -2,8 +2,14 @@ import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useRef, use
 import { useQuery } from "@tanstack/react-query"
 
 import { useDebouncedValue } from "../../hooks/useDebouncedValue"
+import { Button } from "../../components/ui/Button"
+import { EmptyState } from "../../components/ui/EmptyState"
+import { InlineAlert } from "../../components/ui/InlineAlert"
+import { Money } from "../../components/ui/Money"
+import { SectionHeader } from "../../components/ui/SectionHeader"
+import { Skeleton } from "../../components/ui/Skeleton"
 import { BarcodeIcon } from "../../components/ui/Icons"
-import { formatMoney } from "../../utils/money"
+import { describeErrorShort } from "../../utils/errorCopy"
 import { getProductByBarcode, searchProducts } from "./productService"
 import type { CatalogProduct } from "./types"
 import { formatQuantity } from "../../utils/quantity"
@@ -93,10 +99,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
 
   return (
     <section className="product-search" aria-labelledby="product-search-title">
-      <div>
-        <p className="eyebrow">Catalogue</p>
-        <h2 id="product-search-title">Rechercher un produit</h2>
-      </div>
+      <SectionHeader eyebrow="Catalogue" title="Rechercher un produit" titleId="product-search-title" />
 
       <form role="search" onSubmit={handleSubmit}>
         <label className="visually-hidden" htmlFor="product-search-input">
@@ -113,10 +116,10 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
           onChange={(event) => handleChange(event.target.value)}
           onKeyDown={handleKeyDown}
         />
-        <button className="button button-secondary" type="submit" disabled={!input.trim()}>
+        <Button variant="secondary" size="lg" type="submit" disabled={!input.trim()}>
           <BarcodeIcon />
-          Code-barres
-        </button>
+          Chercher le code
+        </Button>
       </form>
 
       <p className="search-hint">
@@ -124,21 +127,37 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
       </p>
 
       <div className="search-results" aria-live="polite">
-        {productsQuery.isFetching ? <p>Recherche…</p> : null}
-        {productsQuery.error ? (
-          <div className="inline-error" role="alert">
-            <p>{productsQuery.error.message}</p>
-            <button
-              className="button button-secondary button-small"
-              type="button"
-              onClick={() => void productsQuery.refetch()}
-            >
-              Réessayer
-            </button>
+        {/* Squelettes plutôt qu'un « Recherche… » : la structure des
+            résultats reste en place, sans clignotement. */}
+        {productsQuery.isFetching ? (
+          <div className="product-list" aria-hidden="true">
+            {[0, 1, 2].map((index) => (
+              <span className="product-result product-result-skeleton" key={index}>
+                <Skeleton width="45%" height="0.95rem" />
+                <Skeleton width="5.5rem" height="0.95rem" />
+              </span>
+            ))}
           </div>
         ) : null}
+        {productsQuery.error ? (
+          <InlineAlert
+            tone="warning"
+            title="Recherche indisponible"
+            action={
+              <Button variant="secondary" size="sm" onClick={() => void productsQuery.refetch()}>
+                Réessayer
+              </Button>
+            }
+          >
+            {describeErrorShort(productsQuery.error, "catalogue")}
+          </InlineAlert>
+        ) : null}
         {!productsQuery.isFetching && !productsQuery.error && term && products.length === 0 ? (
-          <p>Aucun produit trouvé.</p>
+          <EmptyState
+            compact
+            title="Aucun produit trouvé."
+            description="Vérifiez le nom saisi ou scannez le code-barres de l’article."
+          />
         ) : null}
         {!productsQuery.isFetching && !productsQuery.error && products.length > 0 ? (
           <ul className="product-list">
@@ -168,7 +187,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
                     </span>
                   </div>
                   <div className="product-numbers">
-                    <strong>{formatMoney(product.sellingPrice)}</strong>
+                    <strong><Money value={product.sellingPrice} /></strong>
                     <span className={stockMilli(product) === 0 ? "stock-empty" : undefined}>
                       Stock : {formatQuantity(stockMilli(product), product.saleUnit ?? "UNIT")}
                     </span>
@@ -178,7 +197,9 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
             ))}
           </ul>
         ) : null}
-        {!term ? <p className="empty-search">Les résultats apparaîtront ici.</p> : null}
+        {!term && !productsQuery.isFetching ? (
+          <p className="empty-search">Les résultats apparaîtront ici.</p>
+        ) : null}
       </div>
     </section>
   )

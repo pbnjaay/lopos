@@ -2,8 +2,13 @@ import { useQuery } from "@tanstack/react-query"
 import { useParams } from "react-router-dom"
 
 import { getSaleReceipt, getSaleReturn } from "../api/sales"
-import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
-import { RouteState } from "../components/ui/RouteState"
+import { PageHeader } from "../components/layout/PageHeader"
+import { Button } from "../components/ui/Button"
+import { MetaList } from "../components/ui/Metadata"
+import { Money } from "../components/ui/Money"
+import { RouteError, RouteLoading } from "../components/ui/RouteState"
+import { SectionHeader } from "../components/ui/SectionHeader"
+import { useFocusOnMount } from "../hooks/useFocusOnMount"
 import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
 import type { PaymentMethod } from "../types/api"
@@ -19,6 +24,8 @@ const paymentLabels: Record<PaymentMethod, string> = {
 
 export function SaleReturnReceiptPage() {
   const { returnId } = useParams<{ returnId: string }>()
+  // Le focus repart du résultat du retour, pas du haut du document.
+  const headingRef = useFocusOnMount<HTMLHeadingElement>()
   const user = useCurrentUser().data!
   const { ownSession } = usePosSession(user)
   const receiptQuery = useQuery({
@@ -32,35 +39,35 @@ export function SaleReturnReceiptPage() {
     retry: false,
   })
 
-  if (!returnId) return <RouteState message="Ticket de retour introuvable." />
-  if (receiptQuery.isLoading) return <RouteState message="Chargement du ticket de retour…" />
+  if (!returnId) return <RouteError context="ticket" title="Ticket de retour introuvable" description="Ce retour n’existe pas ou n’est plus accessible." />
+  if (receiptQuery.isLoading) return <RouteLoading message="Chargement du ticket de retour…" />
   if (receiptQuery.error) {
     return (
-      <RouteState
-        message=""
+      <RouteError
         error={receiptQuery.error}
+        context="ticket"
         onRetry={() => void receiptQuery.refetch()}
       />
     )
   }
 
   const receipt = receiptQuery.data
-  if (!receipt) return <RouteState message="Ticket de retour introuvable." />
+  if (!receipt) return <RouteLoading message="Chargement du ticket de retour…" />
   const { saleReturn, originalSale } = receipt
 
   return (
     <main className="operational-page operational-page-narrow receipt-screen-page">
       <div className="no-print">
-        <OperationalPageHeader
+        <PageHeader
           backTo={`/sales/${saleReturn.original_sale_id}`}
           backLabel="Retour à la vente"
           eyebrow={`Retour ${saleReturn.reference}`}
           title="Ticket de retour"
           context={`${originalSale.store.name} · ${originalSale.cash_register.name}`}
           actions={(
-            <button className="button button-primary button-small" type="button" onClick={() => window.print()}>
+            <Button variant="primary" size="sm" onClick={() => window.print()}>
               Imprimer le ticket
-            </button>
+            </Button>
           )}
         />
       </div>
@@ -70,14 +77,21 @@ export function SaleReturnReceiptPage() {
           <div className="success-mark" aria-hidden="true">✓</div>
           <div>
             <p className="eyebrow">Retour enregistré</p>
-            <h2 id="return-receipt-title">Remboursement effectué</h2>
+            <h2 id="return-receipt-title" ref={headingRef} tabIndex={-1}>
+              Remboursement effectué
+            </h2>
             <p>Le stock et les montants de la vente ont été mis à jour.</p>
           </div>
         </div>
-        <div className="return-detail-meta no-print" aria-label="Informations du retour">
-          <div><span>Référence</span><strong>{saleReturn.reference}</strong></div>
-          <div><span>Ticket d’origine</span><strong>{saleReturn.original_sale_id.slice(0, 8).toUpperCase()}</strong></div>
-          <div><span>Date et heure</span><strong>{formatDateTime(saleReturn.created_at)}</strong></div>
+        <div className="no-print return-detail-meta">
+          <MetaList
+            label="Informations du retour"
+            items={[
+              { label: "Référence", value: saleReturn.reference },
+              { label: "Ticket d’origine", value: saleReturn.original_sale_id.slice(0, 8).toUpperCase() },
+              { label: "Date et heure", value: formatDateTime(saleReturn.created_at) },
+            ]}
+          />
         </div>
 
         <header className="receipt-heading print-only">
@@ -89,9 +103,11 @@ export function SaleReturnReceiptPage() {
           <p>Caissier : {originalSale.cashier.username}</p>
         </header>
 
-        <div className="return-detail-section-heading no-print">
-          <h2>Articles retournés</h2>
-          <span>{saleReturn.items.length} article{saleReturn.items.length > 1 ? "s" : ""}</span>
+        <div className="no-print return-detail-section">
+          <SectionHeader
+            title="Articles retournés"
+            trailing={`${saleReturn.items.length} article${saleReturn.items.length > 1 ? "s" : ""}`}
+          />
         </div>
         <ul className="receipt-items return-detail-items" aria-label="Articles retournés">
           {saleReturn.items.map((item) => (
@@ -101,7 +117,7 @@ export function SaleReturnReceiptPage() {
                 <span>
                   {formatQuantity(backendQuantityToMilli(item.quantity), item.sale_unit)} × {formatBackendMoney(item.unit_price)}{item.sale_unit === "KG" ? "/kg" : ""}
                 </span>
-                <span>{formatBackendMoney(item.refund_amount)}</span>
+                <span><Money backend={item.refund_amount} /></span>
               </div>
               <small>Remis en stock : {item.restock ? "Oui" : "Non"}</small>
             </li>
@@ -111,7 +127,7 @@ export function SaleReturnReceiptPage() {
         <dl className="receipt-totals">
           <div className="receipt-total">
             <dt>Total remboursé</dt>
-            <dd>{formatBackendMoney(saleReturn.total_refund)}</dd>
+            <dd><Money backend={saleReturn.total_refund} /></dd>
           </div>
           <div>
             <dt>Remboursement</dt>

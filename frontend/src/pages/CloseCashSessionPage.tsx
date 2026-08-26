@@ -1,12 +1,18 @@
-import { type FormEvent, useState } from "react"
+import { type FormEvent, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 
 import { closeCashSession, getCashSessionSummary } from "../api/cashSessions"
 import { trackCashSessionClosed } from "../analytics/events"
-import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
-import { RouteState } from "../components/ui/RouteState"
-import { Dialog } from "../components/ui/Dialog"
+import { PageHeader } from "../components/layout/PageHeader"
+import { Button } from "../components/ui/Button"
+import { Dialog, DialogBody, DialogFooter } from "../components/ui/Dialog"
+import { InlineAlert } from "../components/ui/InlineAlert"
+import { MetaList } from "../components/ui/Metadata"
+import { Money } from "../components/ui/Money"
+import { RouteError, RouteLoading } from "../components/ui/RouteState"
+import { SectionHeader } from "../components/ui/SectionHeader"
+import { useToast } from "../components/ui/Toast"
 import { countPendingLocalSalesForSession } from "../db/sales"
 import { markLocalCashSessionClosed } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
@@ -14,33 +20,23 @@ import { CashClosingResult } from "../features/cash-session/CashClosingResult"
 import { usePosSession } from "../features/cash-session/queries"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
-import type { SyncOutcome } from "../sync/syncEngine"
+import { describeSyncOutcome } from "../features/sync/syncCopy"
 import { formatDateTime } from "../utils/date"
-import {
-  formatBackendMoney,
-  formatMoney,
-  parseMoneyInput,
-  toBackendMoney,
-} from "../utils/money"
-
-function describeSyncOutcome(outcome: SyncOutcome): string {
-  if (outcome.attempted === 0) return "Aucune vente à synchroniser."
-  if (outcome.conflicts > 0) {
-    return `${outcome.synced} vente${outcome.synced > 1 ? "s" : ""} synchronisée${outcome.synced > 1 ? "s" : ""}, ${outcome.conflicts} en conflit.`
-  }
-  return `${outcome.synced} vente${outcome.synced > 1 ? "s" : ""} synchronisée${outcome.synced > 1 ? "s" : ""}.`
-}
+import { describeErrorShort } from "../utils/errorCopy"
+import { formatMoney, parseMoneyInput, toBackendMoney } from "../utils/money"
 
 export function CloseCashSessionPage() {
   const user = useCurrentUser().data!
   const { ownSession, localSession } = usePosSession(user)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const toast = useToast()
+  const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const [countedCash, setCountedCash] = useState("")
   const [isConfirming, setIsConfirming] = useState(false)
-  const [syncResultMessage, setSyncResultMessage] = useState<string | null>(null)
   const parsedCountedCash = parseMoneyInput(countedCash)
   const hasCountedCash = countedCash.trim().length > 0
+  const isInvalidCountedCash = hasCountedCash && parsedCountedCash === null
   const isOnline = useNetworkStatus()
   const { isSyncing, triggerSync } = useSyncStatus()
   const summaryQuery = useQuery({
@@ -91,20 +87,20 @@ export function CloseCashSessionPage() {
   }
 
   if (!ownSession || summaryQuery.isLoading) {
-    return <RouteState message="Chargement du résumé de caisse…" />
+    return <RouteLoading message="Chargement du résumé de caisse…" />
   }
   if (summaryQuery.error) {
     return (
-      <RouteState
-        message=""
+      <RouteError
         error={summaryQuery.error}
+        context="cloture"
         onRetry={() => void summaryQuery.refetch()}
       />
     )
   }
 
   const summary = summaryQuery.data
-  if (!summary) return <RouteState message="Chargement du résumé de caisse…" />
+  if (!summary) return <RouteLoading message="Chargement du résumé de caisse…" />
   const cashRegisterId = ownSession.cash_register_id
 
   function clearCurrentSessionCache() {
@@ -127,24 +123,25 @@ export function CloseCashSessionPage() {
   }
 
   if (pendingLocalSalesQuery.isLoading) {
-    return <RouteState message="Vérification des ventes en attente…" />
+    return <RouteLoading message="Vérification des ventes en attente…" />
   }
 
   const pendingLocalSalesCount = pendingLocalSalesQuery.data ?? 0
   const cashContext = localSession?.storeName
     ? `${localSession.storeName} · ${summary.cash_register.name}`
     : summary.cash_register.name
+
   if (pendingLocalSalesCount > 0) {
     async function handleSyncClick() {
-      setSyncResultMessage(null)
       const outcome = await triggerSync()
       void queryClient.invalidateQueries({ queryKey: pendingLocalSalesQueryKey })
-      setSyncResultMessage(describeSyncOutcome(outcome))
+      // Événement court : un toast, pas un message figé dans la page.
+      toast.success("Synchronisation terminée", { description: describeSyncOutcome(outcome) })
     }
 
     return (
       <main className="operational-page operational-page-narrow">
-        <OperationalPageHeader
+        <PageHeader
           backTo="/pos"
           backLabel="Retour au point de vente"
           eyebrow="Fin de journée"
@@ -152,27 +149,36 @@ export function CloseCashSessionPage() {
           context={cashContext}
         />
         <section className="operational-card closing-sheet" aria-label="Synchronisation avant clôture">
-
-          <p className="form-error" role="alert">
-            {pendingLocalSalesCount} vente{pendingLocalSalesCount > 1 ? "s" : ""} de cette
-            session {pendingLocalSalesCount > 1 ? "n'ont" : "n'a"} pas encore été synchronisée
-            {pendingLocalSalesCount > 1 ? "s" : ""} avec le serveur. Reconnectez-vous à Internet
-            pour synchroniser avant de clôturer.
-          </p>
-
-          <button
-            className="button button-primary"
-            type="button"
-            disabled={!isOnline || isSyncing}
-            onClick={() => void handleSyncClick()}
-          >
-            {isSyncing ? "Synchronisation…" : "Synchroniser maintenant"}
-          </button>
-          {syncResultMessage ? (
-            <p className="form-success" role="status">
-              {syncResultMessage}
-            </p>
-          ) : null}
+          <div className="card-section">
+            <SectionHeader
+              eyebrow="Avant de clôturer"
+              title="Ventes en attente"
+              description="La clôture attend que toutes les ventes de cette session soient parvenues au serveur."
+            />
+            {/* Blocage réel : la clôture est impossible tant que des ventes
+                locales n'ont pas été envoyées. Le message dit quoi faire et
+                porte l'action de reprise. */}
+            <InlineAlert
+              tone="warning"
+              title={`${pendingLocalSalesCount} vente${pendingLocalSalesCount > 1 ? "s" : ""} en attente`}
+              action={
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={!isOnline}
+                  loading={isSyncing}
+                  loadingLabel="Synchronisation…"
+                  onClick={() => void handleSyncClick()}
+                >
+                  Synchroniser maintenant
+                </Button>
+              }
+            >
+              {isOnline
+                ? "Lancez la synchronisation, puis reprenez la clôture."
+                : "Reconnectez cet appareil à Internet pour lancer la synchronisation."}
+            </InlineAlert>
+          </div>
         </section>
       </main>
     )
@@ -180,7 +186,7 @@ export function CloseCashSessionPage() {
 
   return (
     <main className="operational-page operational-page-narrow">
-      <OperationalPageHeader
+      <PageHeader
         backTo="/pos"
         backLabel="Retour au point de vente"
         eyebrow="Fin de journée"
@@ -188,56 +194,59 @@ export function CloseCashSessionPage() {
         context={cashContext}
       />
       <section className="operational-card closing-sheet" aria-label="Résumé de clôture">
-        <div className="closing-session-meta" aria-label="Informations de la session">
-          <div><span>Caissier</span><strong>{summary.cashier.username}</strong></div>
-          <div><span>Ouverture</span><strong>{formatDateTime(summary.opened_at)}</strong></div>
-        </div>
+        <MetaList
+          columns={2}
+          label="Informations de la session"
+          items={[
+            { label: "Caissier", value: summary.cashier.username },
+            { label: "Ouverture", value: formatDateTime(summary.opened_at) },
+          ]}
+        />
 
-        <div className="closing-section-heading">
-          <div>
-            <p className="eyebrow">Activité</p>
-            <h2>Résumé de la session</h2>
-          </div>
-          <span>Depuis l’ouverture de la caisse</span>
+        <div className="card-section">
+          <SectionHeader
+            eyebrow="Activité"
+            title="Résumé de la session"
+            trailing="Depuis l’ouverture de la caisse"
+          />
+          <dl className="closing-summary" aria-label="Résumé de la session">
+            <div className="closing-summary-kpi">
+              <dt>Nombre de ventes</dt>
+              <dd>{summary.sales_count}</dd>
+            </div>
+            <div className="closing-summary-kpi">
+              <dt>Chiffre d’affaires</dt>
+              <dd><Money backend={summary.gross_sales} /></dd>
+            </div>
+            <div className="closing-summary-payment">
+              <dt>Espèces</dt>
+              <dd><Money backend={summary.payments.cash} /></dd>
+            </div>
+            <div className="closing-summary-payment">
+              <dt>Wave</dt>
+              <dd><Money backend={summary.payments.wave} /></dd>
+            </div>
+            <div className="closing-summary-payment">
+              <dt>Orange Money</dt>
+              <dd><Money backend={summary.payments.orange_money} /></dd>
+            </div>
+            <div className="closing-summary-opening">
+              <dt>Fond initial</dt>
+              <dd><Money backend={summary.opening_balance} /></dd>
+            </div>
+          </dl>
         </div>
-        <dl className="closing-summary" aria-label="Résumé de la session">
-          <div className="closing-summary-kpi">
-            <dt>Nombre de ventes</dt>
-            <dd>{summary.sales_count}</dd>
-          </div>
-          <div className="closing-summary-kpi">
-            <dt>Chiffre d’affaires</dt>
-            <dd>{formatBackendMoney(summary.gross_sales)}</dd>
-          </div>
-          <div className="closing-summary-payment">
-            <dt>Espèces</dt>
-            <dd>{formatBackendMoney(summary.payments.cash)}</dd>
-          </div>
-          <div className="closing-summary-payment">
-            <dt>Wave</dt>
-            <dd>{formatBackendMoney(summary.payments.wave)}</dd>
-          </div>
-          <div className="closing-summary-payment">
-            <dt>Orange Money</dt>
-            <dd>{formatBackendMoney(summary.payments.orange_money)}</dd>
-          </div>
-          <div className="closing-summary-opening">
-            <dt>Fond initial</dt>
-            <dd>{formatBackendMoney(summary.opening_balance)}</dd>
-          </div>
-        </dl>
 
         <section className="closing-count-section" aria-labelledby="closing-count-title">
-          <div className="closing-count-heading">
-            <div>
-              <p className="eyebrow">Dernière étape</p>
-              <h2 id="closing-count-title">Comptage des espèces</h2>
-            </div>
-            <p>Comptez uniquement l’argent présent dans le tiroir-caisse.</p>
-          </div>
+          <SectionHeader
+            eyebrow="Dernière étape"
+            title="Comptage des espèces"
+            titleId="closing-count-title"
+            trailing="Comptez uniquement l’argent présent dans le tiroir-caisse."
+          />
 
           <form className="counted-cash-form" onSubmit={handleContinue}>
-            <div className="counted-cash-field">
+            <div className="field field-lg counted-cash-field">
               <label htmlFor="counted-cash">Montant compté</label>
               <div className="counted-cash-input-row">
                 <div className="money-input">
@@ -249,23 +258,22 @@ export function CloseCashSessionPage() {
                     value={countedCash}
                     disabled={closeMutation.isPending}
                     aria-describedby="counted-cash-help"
-                    aria-invalid={hasCountedCash && parsedCountedCash === null}
+                    aria-invalid={isInvalidCountedCash}
                     onChange={(event) => setCountedCash(event.target.value)}
                   />
                   <span>FCFA</span>
                 </div>
-                <button
-                  className="button button-primary"
+                <Button
+                  variant="primary"
+                  size="lg"
                   type="submit"
                   disabled={parsedCountedCash === null || closeMutation.isPending}
                 >
                   Vérifier la clôture
-                </button>
+                </Button>
               </div>
-              <small
-                id="counted-cash-help"
-                className={hasCountedCash && parsedCountedCash === null ? "field-error" : undefined}
-              >
+              {/* Validation de champ : au plus près du champ, jamais en toast. */}
+              <small id="counted-cash-help" className={isInvalidCountedCash ? "field-error" : undefined}>
                 {parsedCountedCash !== null
                   ? formatMoney(parsedCountedCash)
                   : hasCountedCash
@@ -273,7 +281,6 @@ export function CloseCashSessionPage() {
                     : "Montant entier, sans décimales"}
               </small>
             </div>
-
           </form>
         </section>
       </section>
@@ -282,32 +289,35 @@ export function CloseCashSessionPage() {
         <Dialog
           eyebrow="Confirmation"
           title={`Clôturer ${summary.cash_register.name} ?`}
-          className="closing-confirmation checkout-modal-sm"
+          size="sm"
           dismissible={!closeMutation.isPending}
+          // Action irréversible : le focus reste sur « Annuler », Entrée ne
+          // clôture jamais par inadvertance.
+          initialFocusRef={confirmButtonRef}
           onClose={() => {
             closeMutation.reset()
             setIsConfirming(false)
           }}
         >
-          <div className="pos-dialog-body">
+          <DialogBody>
             <p>
               Montant compté : <strong>{formatMoney(parsedCountedCash!)}</strong>
             </p>
-            <p className="confirmation-warning">
+            <InlineAlert tone="warning">
               Après cette opération, aucune nouvelle vente ne pourra être enregistrée sur cette
               session.
-            </p>
+            </InlineAlert>
 
             {closeMutation.error ? (
-              <p className="form-error" role="alert">
-                {closeMutation.error.message}
-              </p>
+              <InlineAlert tone="error">
+                {describeErrorShort(closeMutation.error, "cloture")}
+              </InlineAlert>
             ) : null}
 
-            <div className="confirmation-actions">
-              <button
-                className="button button-secondary"
-                type="button"
+            <DialogFooter>
+              <Button
+                ref={confirmButtonRef}
+                variant="secondary"
                 disabled={closeMutation.isPending}
                 onClick={() => {
                   closeMutation.reset()
@@ -315,17 +325,17 @@ export function CloseCashSessionPage() {
                 }}
               >
                 Annuler
-              </button>
-              <button
-                className="button button-close-session"
-                type="button"
-                disabled={closeMutation.isPending}
+              </Button>
+              <Button
+                variant="destructive"
+                loading={closeMutation.isPending}
+                loadingLabel="Clôture…"
                 onClick={() => closeMutation.mutate(parsedCountedCash!)}
               >
-                {closeMutation.isPending ? "Clôture…" : "Confirmer la clôture"}
-              </button>
-            </div>
-          </div>
+                Confirmer la clôture
+              </Button>
+            </DialogFooter>
+          </DialogBody>
         </Dialog>
       ) : null}
     </main>

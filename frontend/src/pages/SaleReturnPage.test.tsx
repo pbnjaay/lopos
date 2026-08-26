@@ -105,7 +105,7 @@ describe("SaleReturnPage", () => {
     expect(quantity).toHaveTextContent("0")
     await actor.click(screen.getByRole("button", { name: "Augmenter la quantité de Riz" }))
     expect(quantity).toHaveTextContent("0,1 kg")
-    expect(screen.getByText("100 FCFA", { selector: ".return-total strong" })).toBeInTheDocument()
+    expect(screen.getByText("100 FCFA", { selector: ".return-total .money" })).toBeInTheDocument()
 
     await actor.click(screen.getByRole("button", { name: "Diminuer la quantité de Riz" }))
     expect(quantity).toHaveTextContent("0")

@@ -5,10 +5,12 @@ import { useParams } from "react-router-dom"
 import { getCashRegister } from "../api/cashRegisters"
 import { getCashSessionSummary } from "../api/cashSessions"
 import { getStore } from "../api/stores"
-import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
-import { RouteState } from "../components/ui/RouteState"
+import { PageHeader } from "../components/layout/PageHeader"
+import { Button } from "../components/ui/Button"
+import { Money } from "../components/ui/Money"
+import { RouteError, RouteLoading } from "../components/ui/RouteState"
 import { formatDateTime } from "../utils/date"
-import { describeCashDifference, formatBackendMoney } from "../utils/money"
+import { describeCashDifference } from "../utils/money"
 
 export function CashSessionReportPage() {
   const { sessionId } = useParams<{ sessionId: string }>()
@@ -40,16 +42,16 @@ export function CashSessionReportPage() {
     )
   }, [queryClient, summaryQuery.data])
 
-  if (!sessionId) return <RouteState message="Rapport de caisse introuvable." />
+  if (!sessionId) return <RouteError context="rapport" title="Rapport introuvable" description="Cette session de caisse n’existe pas ou n’est plus accessible." />
   if (summaryQuery.isLoading || registerQuery.isLoading || storeQuery.isLoading) {
-    return <RouteState message="Chargement du rapport Z…" />
+    return <RouteLoading message="Chargement du rapport Z…" />
   }
   const error = summaryQuery.error ?? registerQuery.error ?? storeQuery.error
   if (error) {
     return (
-      <RouteState
-        message=""
+      <RouteError
         error={error}
+        context="rapport"
         onRetry={() => {
           void summaryQuery.refetch()
           if (summaryQuery.data) void registerQuery.refetch()
@@ -61,22 +63,22 @@ export function CashSessionReportPage() {
 
   const summary = summaryQuery.data
   const store = storeQuery.data
-  if (!summary || !store) return <RouteState message="Chargement du rapport Z…" />
+  if (!summary || !store) return <RouteLoading message="Chargement du rapport Z…" />
   const difference = describeCashDifference(summary.cash_difference ?? "0.00")
 
   return (
     <main className="operational-page operational-page-narrow report-page">
       <div className="no-print">
-        <OperationalPageHeader
+        <PageHeader
           backTo="/cash/open"
           backLabel="Retour à l’ouverture de caisse"
           eyebrow="Fin de journée"
           title="Rapport Z"
           context={`${store.name} · ${summary.cash_register.name}`}
           actions={(
-            <button className="button button-primary button-small" type="button" onClick={() => window.print()}>
-              Imprimer
-            </button>
+            <Button variant="primary" size="sm" onClick={() => window.print()}>
+              Imprimer le rapport
+            </Button>
           )}
         />
       </div>
@@ -103,45 +105,45 @@ export function CashSessionReportPage() {
           </div>
           <div className="closing-summary-total">
             <dt>Ventes brutes</dt>
-            <dd>{formatBackendMoney(summary.gross_sales)}</dd>
+            <dd><Money backend={summary.gross_sales} /></dd>
           </div>
           {summary.returns_total !== undefined ? <div>
             <dt>Retours</dt>
-            <dd>− {formatBackendMoney(summary.returns_total ?? "0.00")}</dd>
+            <dd><Money backend={summary.returns_total ?? "0.00"} sign="minus" /></dd>
           </div> : null}
           {summary.net_sales !== undefined ? <div className="closing-summary-total">
             <dt>CA net</dt>
-            <dd>{formatBackendMoney(summary.net_sales ?? summary.gross_sales)}</dd>
+            <dd><Money backend={summary.net_sales ?? summary.gross_sales} /></dd>
           </div> : null}
           <div>
             <dt>Espèces</dt>
-            <dd>{formatBackendMoney(summary.payments.cash)}</dd>
+            <dd><Money backend={summary.payments.cash} /></dd>
           </div>
           <div>
             <dt>Wave</dt>
-            <dd>{formatBackendMoney(summary.payments.wave)}</dd>
+            <dd><Money backend={summary.payments.wave} /></dd>
           </div>
           <div>
             <dt>Orange Money</dt>
-            <dd>{formatBackendMoney(summary.payments.orange_money)}</dd>
+            <dd><Money backend={summary.payments.orange_money} /></dd>
           </div>
-          {summary.refunds ? <><div><dt>Remboursements espèces</dt><dd>− {formatBackendMoney(summary.refunds.cash)}</dd></div>
-          <div><dt>Remboursements Wave</dt><dd>− {formatBackendMoney(summary.refunds.wave)}</dd></div>
-          <div><dt>Remboursements Orange Money</dt><dd>− {formatBackendMoney(summary.refunds.orange_money)}</dd></div></> : null}
+          {summary.refunds ? <><div><dt>Remboursements espèces</dt><dd><Money backend={summary.refunds.cash} sign="minus" /></dd></div>
+          <div><dt>Remboursements Wave</dt><dd><Money backend={summary.refunds.wave} sign="minus" /></dd></div>
+          <div><dt>Remboursements Orange Money</dt><dd><Money backend={summary.refunds.orange_money} sign="minus" /></dd></div></> : null}
           <div className="closing-summary-opening">
             <dt>Fond initial</dt>
-            <dd>{formatBackendMoney(summary.opening_balance)}</dd>
+            <dd><Money backend={summary.opening_balance} /></dd>
           </div>
           <div>
             <dt>Cash attendu</dt>
-            <dd>{formatBackendMoney(summary.expected_cash)}</dd>
+            <dd><Money backend={summary.expected_cash} /></dd>
           </div>
           <div>
             <dt>Cash compté</dt>
             <dd>
               {summary.counted_cash === null
                 ? "Non compté"
-                : formatBackendMoney(summary.counted_cash)}
+                : <Money backend={summary.counted_cash} />}
             </dd>
           </div>
           <div className={`cash-difference cash-difference-${difference.kind}`}>

@@ -1,17 +1,30 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate, useParams } from "react-router-dom"
+
 import { createSaleReturn, getSaleReceipt } from "../api/sales"
-import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
-import { Dialog } from "../components/ui/Dialog"
+import { PageHeader } from "../components/layout/PageHeader"
+import { Badge } from "../components/ui/Badge"
+import { Button } from "../components/ui/Button"
+import { Dialog, DialogBody, DialogFooter } from "../components/ui/Dialog"
+import { InlineAlert } from "../components/ui/InlineAlert"
+import { Money } from "../components/ui/Money"
 import { QuantityControl } from "../components/ui/QuantityControl"
-import { RouteState } from "../components/ui/RouteState"
+import { RouteError, RouteLoading } from "../components/ui/RouteState"
+import { SectionHeader } from "../components/ui/SectionHeader"
 import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import type { PaymentMethod, SaleReceipt } from "../types/api"
+import { describeErrorShort } from "../utils/errorCopy"
 import { formatBackendMoney } from "../utils/money"
 import { formatQuantity, milliToBackendQuantity, milliToDisplayQuantity, parseQuantityToMilli, backendQuantityToMilli, lineTotal } from "../utils/quantity"
+
+const refundLabels: Record<PaymentMethod, string> = {
+  CASH: "espèces",
+  WAVE: "Wave",
+  ORANGE_MONEY: "Orange Money",
+}
 
 export function SaleReturnPage() {
   const { saleId } = useParams<{ saleId: string }>()
@@ -19,6 +32,7 @@ export function SaleReturnPage() {
   const { ownSession } = usePosSession(user)
   const online = useNetworkStatus()
   const navigate = useNavigate()
+  const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const [quantities, setQuantities] = useState<Record<string, string>>({})
   const [restocks, setRestocks] = useState<Record<string, boolean>>({})
   const [method, setMethod] = useState<PaymentMethod>("CASH")
@@ -64,15 +78,31 @@ export function SaleReturnPage() {
         items: selected.map(({ item, milli }) => ({ sale_item_id: item.id, quantity: milliToBackendQuantity(milli), restock: restocks[item.id] ?? true })),
       })
       navigate(`/returns/${result.id}/receipt`)
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Retour impossible.") } finally { setSubmitting(false) }
+    } catch (caught) {
+      setError(describeErrorShort(caught, "retour"))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  if (!online) return <RouteState message="Retour indisponible hors connexion. Reconnectez-vous pour effectuer un retour." />
-  if (saleQuery.isLoading) return <RouteState message="Chargement de la vente…" />
-  if (saleQuery.error || !sale) return <RouteState message="Vente introuvable dans cette boutique." error={saleQuery.error} onRetry={() => void saleQuery.refetch()} />
+  if (!online) {
+    return (
+      <RouteError
+        context="retour"
+        title="Mode hors ligne"
+        description="Un retour marchandise nécessite une connexion. Vous pouvez continuer à vendre."
+      />
+    )
+  }
+  if (saleQuery.isLoading) return <RouteLoading message="Chargement de la vente…" />
+  if (saleQuery.error || !sale) {
+    return (
+      <RouteError error={saleQuery.error} context="retour" onRetry={() => void saleQuery.refetch()} />
+    )
+  }
 
   return <main className="operational-page">
-  <OperationalPageHeader
+  <PageHeader
     backTo={`/sales/${sale.id}`}
     backLabel="Retour à la vente"
     eyebrow="Retour marchandise"
@@ -80,12 +110,13 @@ export function SaleReturnPage() {
     context={`${sale.store.name} · ${sale.cash_register.name}`}
   />
   <section className="operational-card return-sheet">
-    <div className="section-introduction">
-      <h2>Articles à retourner</h2>
-      <p>Saisissez uniquement les quantités réellement rapportées par le client.</p>
-    </div>
+    <div className="card-section">
+      <SectionHeader
+        title="Articles à retourner"
+        description="Saisissez uniquement les quantités réellement rapportées par le client."
+      />
 
-    <div className="return-workspace">
+      <div className="return-workspace">
       <div className="return-items">
         {sale.items.map((item) => {
         const saleUnit = item.sale_unit ?? "UNIT"
@@ -95,10 +126,12 @@ export function SaleReturnPage() {
         return <article className={`return-item${isUnavailable ? " return-item-disabled" : ""}`} key={item.id}>
           <header>
             <div><strong>{item.product_name}</strong><span>Acheté : {formatQuantity(backendQuantityToMilli(item.quantity), saleUnit)}</span></div>
-            <span className={`returnable-badge${isUnavailable ? " returnable-badge-disabled" : ""}`}>{isUnavailable ? "Entièrement retourné" : `${formatQuantity(returnableMilli, saleUnit)} disponible${saleUnit === "UNIT" && returnableMilli > 1000 ? "s" : ""}`}</span>
+            <Badge tone={isUnavailable ? "neutral" : "accent"}>
+              {isUnavailable ? "Entièrement retourné" : `${formatQuantity(returnableMilli, saleUnit)} disponible${saleUnit === "UNIT" && returnableMilli > 1000 ? "s" : ""}`}
+            </Badge>
           </header>
           <div className="return-item-controls">
-            <div className="form-field">
+            <div className="field">
               <label htmlFor={`return-quantity-${item.id}`}>Quantité à retourner</label>
               <QuantityControl
                 valueMilli={enteredMilli}
@@ -124,12 +157,9 @@ export function SaleReturnPage() {
         })}
       </div>
       <aside className="return-summary" aria-label="Résumé du remboursement">
-        <div>
-          <p className="eyebrow">Remboursement</p>
-          <h2>Résumé du retour</h2>
-        </div>
+        <SectionHeader eyebrow="Remboursement" title="Résumé du retour" />
         <div className="return-selection-count"><span>Articles sélectionnés</span><strong>{selected.length}</strong></div>
-        <div className="form-field">
+        <div className="field">
           <label htmlFor="return-payment-method">Mode de remboursement</label>
           <select id="return-payment-method" value={method} onChange={(event) => setMethod(event.target.value as PaymentMethod)}>
             <option value="CASH">Espèces</option>
@@ -137,28 +167,57 @@ export function SaleReturnPage() {
             <option value="ORANGE_MONEY">Orange Money</option>
           </select>
         </div>
-        <div className="return-total"><span>Montant à rembourser</span><strong>{formatBackendMoney(`${total}.00`)}</strong></div>
-        <button className="button button-primary return-submit" type="button" disabled={submitting || selected.length === 0 || hasInvalidQuantity} onClick={() => setIsConfirming(true)}>Rembourser {formatBackendMoney(`${total}.00`)}</button>
-        {error && !isConfirming ? <p className="form-error" role="alert">{error}</p> : null}
-      </aside>
+        <div className="return-total">
+          <span>Montant à rembourser</span>
+          <strong><Money value={total} /></strong>
+        </div>
+        <Button
+          variant="primary"
+          size="lg"
+          block
+          disabled={selected.length === 0 || hasInvalidQuantity || submitting}
+          onClick={() => setIsConfirming(true)}
+        >
+          Rembourser {formatBackendMoney(`${total}.00`)}
+        </Button>
+        {error && !isConfirming ? <InlineAlert tone="error">{error}</InlineAlert> : null}
+        </aside>
+      </div>
     </div>
   </section>
   {isConfirming ? (
     <Dialog
       eyebrow="Retour marchandise"
       title="Confirmer le remboursement ?"
+      size="sm"
       dismissible={!submitting}
+      // Confirmation non destructive : le focus va sur l'action primaire,
+      // donc Entrée confirme sans quitter le clavier.
+      initialFocusRef={confirmButtonRef}
       onClose={() => setIsConfirming(false)}
     >
-      <div className="pos-dialog-body">
-        <p>Vous allez rembourser <strong>{formatBackendMoney(`${total}.00`)}</strong> par {{ CASH: "espèces", WAVE: "Wave", ORANGE_MONEY: "Orange Money" }[method]}.</p>
-        <p className="muted">Les quantités sélectionnées seront enregistrées comme retournées.</p>
-        {error ? <p className="form-error" role="alert">{error}</p> : null}
-        <div className="modal-actions">
-          <button className="button button-secondary" type="button" disabled={submitting} onClick={() => setIsConfirming(false)}>Annuler</button>
-          <button className="button button-primary" type="button" disabled={submitting} onClick={() => void submit()}>{submitting ? "Traitement…" : `Rembourser ${formatBackendMoney(`${total}.00`)}`}</button>
-        </div>
-      </div>
+      <DialogBody>
+        <p>
+          Vous allez rembourser <strong>{formatBackendMoney(`${total}.00`)}</strong> par{" "}
+          {refundLabels[method]}.
+        </p>
+        <p className="dialog-hint">Les quantités sélectionnées seront enregistrées comme retournées.</p>
+        {error ? <InlineAlert tone="error">{error}</InlineAlert> : null}
+        <DialogFooter>
+          <Button variant="secondary" disabled={submitting} onClick={() => setIsConfirming(false)}>
+            Annuler
+          </Button>
+          <Button
+            ref={confirmButtonRef}
+            variant="primary"
+            loading={submitting}
+            loadingLabel="Enregistrement…"
+            onClick={() => void submit()}
+          >
+            Rembourser {formatBackendMoney(`${total}.00`)}
+          </Button>
+        </DialogFooter>
+      </DialogBody>
     </Dialog>
   ) : null}
   </main>

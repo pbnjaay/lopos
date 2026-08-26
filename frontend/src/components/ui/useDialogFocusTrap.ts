@@ -38,9 +38,9 @@ export function useDialogFocusTrap(dialogRef: RefObject<HTMLElement | null>) {
       }
     }
 
-    document.addEventListener("keydown", handleKeyDown, true)
+    window.addEventListener("keydown", handleKeyDown, true)
     return () => {
-      document.removeEventListener("keydown", handleKeyDown, true)
+      window.removeEventListener("keydown", handleKeyDown, true)
       previouslyFocused?.focus()
     }
   }, [dialogRef])

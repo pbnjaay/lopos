@@ -2,8 +2,10 @@ import { useQuery } from "@tanstack/react-query"
 import { useParams, useSearchParams } from "react-router-dom"
 
 import { getSaleReceipt } from "../api/sales"
-import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
-import { RouteState } from "../components/ui/RouteState"
+import { PageHeader } from "../components/layout/PageHeader"
+import { Button } from "../components/ui/Button"
+import { Money } from "../components/ui/Money"
+import { RouteError, RouteLoading } from "../components/ui/RouteState"
 import { getLocalSaleById } from "../db/sales"
 import { receiptViewFromApiReceipt, receiptViewFromLocalSale } from "../features/sales/receiptView"
 import { formatDateTime } from "../utils/date"
@@ -31,20 +33,20 @@ export function SaleReceiptPage() {
     retry: false,
   })
 
-  if (!saleId) return <RouteState message="Ticket de vente introuvable." />
-  if (receiptQuery.isLoading) return <RouteState message="Chargement du ticket…" />
+  if (!saleId) return <RouteError context="ticket" title="Ticket introuvable" description="Ce ticket n’existe pas ou n’est plus accessible." />
+  if (receiptQuery.isLoading) return <RouteLoading message="Chargement du ticket…" />
   if (receiptQuery.error) {
     return (
-      <RouteState
-        message=""
+      <RouteError
         error={receiptQuery.error}
+        context="ticket"
         onRetry={() => void receiptQuery.refetch()}
       />
     )
   }
 
   const receipt = receiptQuery.data
-  if (!receipt) return <RouteState message="Chargement du ticket…" />
+  if (!receipt) return <RouteLoading message="Chargement du ticket…" />
   const isCash = receipt.payment.method === "CASH"
   const source = searchParams.get("from")
   const backDestination = source === "pos"
@@ -56,13 +58,13 @@ export function SaleReceiptPage() {
   return (
     <main className="operational-page operational-page-narrow receipt-screen-page">
       <div className="no-print">
-        <OperationalPageHeader
+        <PageHeader
           backTo={backDestination.to}
           backLabel={backDestination.label}
           eyebrow={`Ticket ${receipt.id.slice(0, 8).toUpperCase()}`}
           title="Ticket de vente"
           context={`${receipt.storeName} · ${receipt.cashRegisterName}`}
-          actions={<button className="button button-primary button-small" type="button" onClick={() => window.print()}>Imprimer le ticket</button>}
+          actions={<Button variant="primary" size="sm" onClick={() => window.print()}>Imprimer le ticket</Button>}
         />
       </div>
 
@@ -88,7 +90,7 @@ export function SaleReceiptPage() {
                 <span>
                   {formatQuantity(item.quantityMilli, item.saleUnit)} × {formatMoney(item.unitPrice)}{item.saleUnit === "KG" ? "/kg" : ""}
                 </span>
-                <span>{formatMoney(item.lineTotal)}</span>
+                <span><Money value={item.lineTotal} /></span>
               </div>
             </li>
           ))}
@@ -97,7 +99,7 @@ export function SaleReceiptPage() {
         <dl className="receipt-totals">
           <div className="receipt-total">
             <dt>Total</dt>
-            <dd>{formatMoney(receipt.total)}</dd>
+            <dd><Money value={receipt.total} /></dd>
           </div>
           <div>
             <dt>Paiement</dt>
@@ -106,13 +108,13 @@ export function SaleReceiptPage() {
           {isCash && receipt.payment.receivedAmount !== null ? (
             <div>
               <dt>Reçu</dt>
-              <dd>{formatMoney(receipt.payment.receivedAmount)}</dd>
+              <dd><Money value={receipt.payment.receivedAmount} /></dd>
             </div>
           ) : null}
           {isCash && receipt.payment.changeAmount !== null ? (
             <div>
               <dt>Monnaie</dt>
-              <dd>{formatMoney(receipt.payment.changeAmount)}</dd>
+              <dd><Money value={receipt.payment.changeAmount} /></dd>
             </div>
           ) : null}
         </dl>

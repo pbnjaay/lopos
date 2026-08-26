@@ -107,7 +107,7 @@ describe("SalesPage", () => {
       "/sales/a12f0000-0000-0000-0000-000000000000",
     )
     expect(screen.getByText("Boutique A · Caisse A")).toBeInTheDocument()
-    expect(screen.getByText("Retour : − 500 FCFA")).toBeInTheDocument()
+    expect(screen.getByText(/Déjà retourné : 500 FCFA/)).toBeInTheDocument()
     await waitFor(() => expect(listSales).toHaveBeenCalledWith(expect.objectContaining({ cashSessionId: "session-a" })))
   })
 

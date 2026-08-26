@@ -118,7 +118,7 @@ describe("CashSessionReportPage", () => {
       </QueryClientProvider>,
     )
 
-    await user.click(screen.getByRole("button", { name: "Imprimer" }))
+    await user.click(screen.getByRole("button", { name: "Imprimer le rapport" }))
 
     expect(printMock).toHaveBeenCalledOnce()
   })

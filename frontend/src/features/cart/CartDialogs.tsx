@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from "react"
 
-import { Dialog } from "../../components/ui/Dialog"
+import { Button } from "../../components/ui/Button"
+import { Dialog, DialogFooter } from "../../components/ui/Dialog"
 import { formatMoney, parseMoneyInput } from "../../utils/money"
 import { formatQuantity, milliToDisplayQuantity, parseQuantityToMilli } from "../../utils/quantity"
 import type { CartItem } from "./cartState"
@@ -51,7 +52,7 @@ export function QuantityDialog({ item, quantityMilli, onApply, onClose }: Quanti
       onClose={onClose}
       initialFocusRef={inputRef}
     >
-      <form className="pos-dialog-form" onSubmit={handleSubmit}>
+      <form className="dialog-body" onSubmit={handleSubmit}>
         <div className="dialog-product-summary">
           <strong>{item.name}</strong>
           <span>{formatMoney(item.unitPrice)} / {saleUnit === "KG" ? "kg" : "unité"}</span>
@@ -76,11 +77,15 @@ export function QuantityDialog({ item, quantityMilli, onApply, onClose }: Quanti
             {saleUnit === "KG" ? <span>kg</span> : null}
           </div>
         </div>
-        {error ? <p id="quantity-dialog-error" className="form-error" role="alert">{error}</p> : null}
-        <div className="modal-actions">
-          <button className="button button-secondary" type="button" onClick={onClose}>Annuler</button>
-          <button className="button button-primary" type="submit" disabled={!isValid}>Appliquer</button>
-        </div>
+        {error ? (
+          <p id="quantity-dialog-error" className="field-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>Annuler</Button>
+          <Button variant="primary" type="submit" disabled={!isValid}>Appliquer</Button>
+        </DialogFooter>
       </form>
     </Dialog>
   )
@@ -118,7 +123,7 @@ export function PriceDialog({ item, onApply, onClose }: PriceDialogProps) {
 
   return (
     <Dialog eyebrow="Panier" title="Modifier le prix" onClose={onClose} initialFocusRef={inputRef}>
-      <form className="pos-dialog-form" onSubmit={handleSubmit}>
+      <form className="dialog-body" onSubmit={handleSubmit}>
         <div className="dialog-product-summary">
           <strong>{item.name}</strong>
           <span>Prix catalogue : {formatMoney(catalogPrice)}{item.saleUnit === "KG" ? " / kg" : " / unité"}</span>
@@ -143,15 +148,24 @@ export function PriceDialog({ item, onApply, onClose }: PriceDialogProps) {
           </div>
         </div>
         {item.unitPrice !== catalogPrice ? (
-          <button className="catalog-reset-button" type="button" onClick={() => applyPrice(catalogPrice)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="catalog-reset-button"
+            onClick={() => applyPrice(catalogPrice)}
+          >
             Restaurer le prix catalogue
-          </button>
+          </Button>
         ) : null}
-        {error ? <p id="price-dialog-error" className="form-error" role="alert">{error}</p> : null}
-        <div className="modal-actions">
-          <button className="button button-secondary" type="button" onClick={onClose}>Annuler</button>
-          <button className="button button-primary" type="submit">Appliquer</button>
-        </div>
+        {error ? (
+          <p id="price-dialog-error" className="field-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>Annuler</Button>
+          <Button variant="primary" type="submit">Appliquer</Button>
+        </DialogFooter>
       </form>
     </Dialog>
   )

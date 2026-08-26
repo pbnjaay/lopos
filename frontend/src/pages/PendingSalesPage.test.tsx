@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { listConflictLocalSales, listPendingLocalSales } from "../db/sales"
 import type { LocalSale } from "../db/types"
+import { ToastProvider } from "../components/ui/Toast"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
 import { PendingSalesPage } from "./PendingSalesPage"
 
@@ -67,7 +68,9 @@ function renderPage() {
   render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
-        <PendingSalesPage />
+        <ToastProvider>
+          <PendingSalesPage />
+        </ToastProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -116,7 +119,7 @@ describe("PendingSalesPage", () => {
 
     renderPage()
 
-    expect(await screen.findByText("Ventes en conflit")).toBeInTheDocument()
+    expect(await screen.findByText("Ventes à vérifier")).toBeInTheDocument()
     expect(screen.getByText("La session de caisse est fermée.")).toBeInTheDocument()
   })
 

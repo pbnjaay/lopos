@@ -163,7 +163,7 @@ describe("OpenCashSessionPage", () => {
     renderPage([], [])
 
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Aucune boutique ne vous est affectée",
+      "Contactez un administrateur pour rattacher votre compte à une boutique.",
     )
     expect(screen.queryByRole("button", { name: /Ouvrir/ })).not.toBeInTheDocument()
   })

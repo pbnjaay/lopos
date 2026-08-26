@@ -6,9 +6,13 @@ import { getCurrentCashSession } from "../api/cashRegisters"
 import { openCashSession } from "../api/cashSessions"
 import { getStores } from "../api/stores"
 import { trackCashSessionOpened } from "../analytics/events"
+import { Button } from "../components/ui/Button"
+import { InlineAlert } from "../components/ui/InlineAlert"
+import { Skeleton } from "../components/ui/Skeleton"
 import { saveLocalCashSession } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
 import { storeCashRegisterId, usePosSession } from "../features/cash-session/queries"
+import { describeErrorShort } from "../utils/errorCopy"
 import { formatMoney, parseMoneyInput, toBackendMoney } from "../utils/money"
 
 export function OpenCashSessionPage() {
@@ -132,25 +136,36 @@ export function OpenCashSessionPage() {
       <section className="setup-card" aria-labelledby="open-session-title">
         <p className="eyebrow">Session de caisse</p>
         <h1 id="open-session-title">Ouvrir la caisse</h1>
-        <p className="muted">Choisissez votre boutique, puis la caisse et son fond initial.</p>
+        <p className="metadata">Choisissez votre boutique, puis la caisse et son fond initial.</p>
 
         {storesQuery.isLoading ? (
-          <p className="muted">Chargement des boutiques autorisées…</p>
-        ) : storesQuery.error ? (
-          <div className="inline-error" role="alert">
-            <p>{storesQuery.error.message}</p>
-            <button className="button button-secondary button-small" type="button" onClick={() => void storesQuery.refetch()}>
-              Réessayer
-            </button>
+          <div className="form-stack" role="status" aria-live="polite">
+            <span className="visually-hidden">Chargement des boutiques autorisées…</span>
+            <Skeleton height="var(--control-md)" />
+            <Skeleton height="var(--control-md)" />
+            <Skeleton height="var(--control-md)" />
           </div>
+        ) : storesQuery.error ? (
+          <InlineAlert
+            tone="error"
+            title="Impossible de charger vos boutiques"
+            className="setup-alert"
+            action={
+              <Button variant="secondary" size="sm" onClick={() => void storesQuery.refetch()}>
+                Réessayer
+              </Button>
+            }
+          >
+            {describeErrorShort(storesQuery.error, "session")}
+          </InlineAlert>
         ) : activeStores.length === 0 ? (
-          <p className="form-error" role="alert">
-            Aucune boutique ne vous est affectée. Contactez un administrateur.
-          </p>
+          <InlineAlert tone="warning" assertive title="Aucune boutique affectée" className="setup-alert">
+            Contactez un administrateur pour rattacher votre compte à une boutique.
+          </InlineAlert>
         ) : (
           <form className="form-stack" onSubmit={handleSubmit}>
             <label className="field">
-              <span>Boutique</span>
+              <span className="field-label">Boutique</span>
               <select
                 autoFocus
                 value={storeId}
@@ -165,7 +180,7 @@ export function OpenCashSessionPage() {
             </label>
 
             <label className="field">
-              <span>Caisse</span>
+              <span className="field-label">Caisse</span>
               <select
                 value={cashRegisterId}
                 disabled={openingMutation.isPending || !storeId}
@@ -181,9 +196,9 @@ export function OpenCashSessionPage() {
             </label>
 
             {storeId && storeRegisters.length === 0 ? (
-              <p className="form-error" role="alert">
+              <InlineAlert tone="warning" assertive>
                 Aucune caisse active n’est disponible dans cette boutique.
-              </p>
+              </InlineAlert>
             ) : null}
 
             <div className="field">
@@ -207,16 +222,19 @@ export function OpenCashSessionPage() {
               </small>
             </div>
 
-            {sessionQuery.isFetching ? <p className="muted">Vérification de la caisse…</p> : null}
+            {sessionQuery.isFetching ? (
+              <p className="metadata" role="status">Vérification de la caisse…</p>
+            ) : null}
             {occupiedByAnotherCashier ? (
-              <p className="form-error" role="alert">
-                Cette caisse possède déjà une session ouverte par un autre caissier.
-              </p>
+              <InlineAlert tone="warning" assertive title="Caisse déjà ouverte">
+                Un autre caissier a une session en cours sur cette caisse. Choisissez-en une autre.
+              </InlineAlert>
             ) : null}
             {fieldError || openingMutation.error || sessionQuery.error ? (
-              <p className="form-error" role="alert">
-                {fieldError ?? openingMutation.error?.message ?? sessionQuery.error?.message}
-              </p>
+              <InlineAlert tone="error">
+                {fieldError ??
+                  describeErrorShort(openingMutation.error ?? sessionQuery.error, "session")}
+              </InlineAlert>
             ) : null}
 
             {selectedStore && selected && parsedOpeningBalance !== null ? (
@@ -227,19 +245,21 @@ export function OpenCashSessionPage() {
               </div>
             ) : null}
 
-            <button
-              className="button button-primary"
+            <Button
+              variant="primary"
               type="submit"
+              block
+              loading={openingMutation.isPending}
+              loadingLabel="Ouverture…"
               disabled={
-                openingMutation.isPending ||
                 sessionQuery.isFetching ||
                 occupiedByAnotherCashier ||
                 !cashRegisterId ||
                 parsedOpeningBalance === null
               }
             >
-              {openingMutation.isPending ? "Ouverture…" : selected ? `Ouvrir ${selected.name}` : "Ouvrir la caisse"}
-            </button>
+              {selected ? `Ouvrir ${selected.name}` : "Ouvrir la caisse"}
+            </Button>
           </form>
         )}
       </section>

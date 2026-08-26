@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react"
 
+import { Button, buttonClassName } from "../../components/ui/Button"
+import { Money } from "../../components/ui/Money"
 import { useDialogFocusTrap } from "../../components/ui/useDialogFocusTrap"
 import type { ReceiptView } from "../sales/receiptView"
-import { formatMoney } from "../../utils/money"
 
 type SaleSuccessModalProps = {
   sale: ReceiptView
@@ -11,14 +12,26 @@ type SaleSuccessModalProps = {
   onPrintTicket?: () => void
 }
 
+/**
+ * Écran de succès de vente. Même grammaire que les autres succès du
+ * produit : marque de statut → titre → résultat clé → action primaire →
+ * action secondaire. Ici le résultat clé est la monnaie à rendre.
+ */
 export function SaleSuccessModal({ sale, cashSessionId, onNewSale, onPrintTicket }: SaleSuccessModalProps) {
   const dialogRef = useRef<HTMLElement>(null)
+  const newSaleButtonRef = useRef<HTMLButtonElement>(null)
   useDialogFocusTrap(dialogRef)
   const paymentLabel = {
     CASH: "Espèces",
     WAVE: "Wave",
     ORANGE_MONEY: "Orange Money",
   }[sale.payment.method]
+
+  // L'action suivante attendue après une vente est la vente suivante : le
+  // focus y va, donc Entrée l'enchaîne sans quitter le clavier.
+  useEffect(() => {
+    newSaleButtonRef.current?.focus()
+  }, [])
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -30,10 +43,10 @@ export function SaleSuccessModal({ sale, cashSessionId, onNewSale, onPrintTicket
   }, [onNewSale])
 
   return (
-    <div className="modal-backdrop">
+    <div className="dialog-backdrop">
       <section
         ref={dialogRef}
-        className="checkout-modal sale-success-modal"
+        className="dialog success-panel"
         role="dialog"
         aria-modal="true"
         aria-labelledby="sale-success-title"
@@ -58,33 +71,41 @@ export function SaleSuccessModal({ sale, cashSessionId, onNewSale, onPrintTicket
           </div>
           <div>
             <dt>Total</dt>
-            <dd>{formatMoney(sale.total)}</dd>
+            <dd>
+              <Money value={sale.total} />
+            </dd>
           </div>
           {sale.payment.receivedAmount !== null ? (
             <div>
               <dt>Reçu</dt>
-              <dd>{formatMoney(sale.payment.receivedAmount)}</dd>
+              <dd>
+                <Money value={sale.payment.receivedAmount} />
+              </dd>
             </div>
           ) : null}
           {sale.payment.changeAmount !== null ? (
             <div className="sale-change">
               <dt>Monnaie</dt>
-              <dd>{formatMoney(sale.payment.changeAmount)}</dd>
+              <dd>
+                <Money value={sale.payment.changeAmount} />
+              </dd>
             </div>
           ) : null}
         </dl>
 
         <div className="sale-success-actions">
+          {/* Navigation pleine page assumée : le ticket sort du parcours
+              d'encaissement et repart d'un état propre. */}
           <a
-            className="button button-secondary receipt-link"
+            className={buttonClassName({ variant: "secondary" })}
             href={`/sales/${encodeURIComponent(sale.id)}/receipt?${cashSessionId ? `cash_session_id=${encodeURIComponent(cashSessionId)}&` : ""}from=pos`}
             onClick={onPrintTicket}
           >
             Imprimer le ticket
           </a>
-          <button className="button button-primary" type="button" onClick={onNewSale}>
+          <Button ref={newSaleButtonRef} variant="primary" onClick={onNewSale}>
             Nouvelle vente
-          </button>
+          </Button>
         </div>
       </section>
     </div>

@@ -1,9 +1,8 @@
 import { useEffect, useRef } from "react"
 
-import { useDialogFocusTrap } from "../../components/ui/useDialogFocusTrap"
-import { XIcon } from "../../components/ui/Icons"
+import { Dialog } from "../../components/ui/Dialog"
+import { Money } from "../../components/ui/Money"
 import type { PaymentMethod } from "../../types/api"
-import { formatMoney } from "../../utils/money"
 
 type PaymentMethodModalProps = {
   total: number
@@ -54,8 +53,6 @@ export function PaymentMethodModal({
   onSelect,
 }: PaymentMethodModalProps) {
   const lastUsedButtonRef = useRef<HTMLButtonElement>(null)
-  const dialogRef = useRef<HTMLElement>(null)
-  useDialogFocusTrap(dialogRef)
 
   useEffect(() => {
     lastUsedButtonRef.current?.focus()
@@ -64,10 +61,6 @@ export function PaymentMethodModal({
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.repeat) return
-      if (event.key === "Escape") {
-        onClose()
-        return
-      }
       const method = shortcutToMethod[event.key]
       if (!method) return
       // Suppress the browser's own F1 (help) / F3 (find) behaviour.
@@ -76,61 +69,47 @@ export function PaymentMethodModal({
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [onClose, onSelect])
+  }, [onSelect])
 
   return (
-    <div className="modal-backdrop">
-      <section
-        ref={dialogRef}
-        className="checkout-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="payment-method-title"
-      >
-        <header className="checkout-modal-header">
-          <div>
-            <p className="eyebrow">Encaissement</p>
-            <h2 id="payment-method-title">Mode de paiement</h2>
-          </div>
-          <button className="modal-close" type="button" aria-label="Fermer" onClick={onClose}>
-            <XIcon />
-          </button>
-        </header>
-
-        <div className="payment-method-content">
-          <div className="payment-total">
-            <span>Total à payer</span>
-            <strong>{formatMoney(total)}</strong>
-          </div>
-          <div className="payment-method-list">
-            {methods.map(({ method, shortcut, label, description }) => (
-              <button
-                key={method}
-                ref={method === lastUsedMethod ? lastUsedButtonRef : undefined}
-                className={`payment-method-card${
-                  method === lastUsedMethod ? " payment-method-card-last-used" : ""
-                }`}
-                type="button"
-                onClick={() => onSelect(method)}
-              >
-                <span className="payment-method-shortcut" aria-hidden="true">
-                  {shortcut}
-                </span>
-                <span className="payment-method-copy">
-                  <strong>
-                    {label}
-                    {method === lastUsedMethod ? (
-                      <span className="payment-method-last-used">Dernier utilisé</span>
-                    ) : null}
-                  </strong>
-                  <small>{description}</small>
-                </span>
-                <span className="payment-method-arrow" aria-hidden="true">→</span>
-              </button>
-            ))}
-          </div>
+    <Dialog eyebrow="Encaissement" title="Mode de paiement" onClose={onClose}>
+      <div className="dialog-body">
+        <div className="payment-total">
+          <span>Total à payer</span>
+          <strong>
+            <Money value={total} />
+          </strong>
         </div>
-      </section>
-    </div>
+        <div className="payment-method-list">
+          {methods.map(({ method, shortcut, label, description }) => (
+            <button
+              key={method}
+              ref={method === lastUsedMethod ? lastUsedButtonRef : undefined}
+              className={`payment-method-card${
+                method === lastUsedMethod ? " payment-method-card-last-used" : ""
+              }`}
+              type="button"
+              onClick={() => onSelect(method)}
+            >
+              <span className="payment-method-shortcut" aria-hidden="true">
+                {shortcut}
+              </span>
+              <span className="payment-method-copy">
+                <strong>
+                  {label}
+                  {method === lastUsedMethod ? (
+                    <span className="badge badge-neutral">Dernier utilisé</span>
+                  ) : null}
+                </strong>
+                <small>{description}</small>
+              </span>
+              <span className="payment-method-arrow" aria-hidden="true">
+                →
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </Dialog>
   )
 }

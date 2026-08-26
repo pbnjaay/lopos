@@ -1,6 +1,6 @@
 import { Navigate } from "react-router-dom"
 
-import { RouteState } from "../components/ui/RouteState"
+import { RouteError, RouteLoading } from "../components/ui/RouteState"
 import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
 import type { CurrentUser } from "../types/api"
@@ -8,12 +8,12 @@ import type { CurrentUser } from "../types/api"
 function AuthenticatedEntry({ user }: { user: CurrentUser }) {
   const session = usePosSession(user)
 
-  if (session.isLoading) return <RouteState message="Recherche de la caisse…" />
+  if (session.isLoading) return <RouteLoading message="Recherche de la caisse…" />
   if (session.error) {
     return (
-      <RouteState
-        message=""
+      <RouteError
         error={session.error}
+        context="session"
         onRetry={() => void session.refetch()}
       />
     )
@@ -25,12 +25,12 @@ function AuthenticatedEntry({ user }: { user: CurrentUser }) {
 export function AppEntryPage() {
   const userQuery = useCurrentUser()
 
-  if (userQuery.isLoading) return <RouteState message="Vérification de la session…" />
+  if (userQuery.isLoading) return <RouteLoading message="Vérification de la session…" />
   if (userQuery.error) {
     return (
-      <RouteState
-        message=""
+      <RouteError
         error={userQuery.error}
+        context="session"
         onRetry={() => void userQuery.refetch()}
       />
     )

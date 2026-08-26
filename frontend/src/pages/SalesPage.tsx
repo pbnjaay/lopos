@@ -1,17 +1,22 @@
 import { useState, type FormEvent } from "react"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
-import { Link } from "react-router-dom"
 
 import { listSales } from "../api/sales"
-import { OperationalPageHeader } from "../components/layout/OperationalPageHeader"
+import { PageHeader } from "../components/layout/PageHeader"
+import { Badge } from "../components/ui/Badge"
+import { Button } from "../components/ui/Button"
 import { EmptyState } from "../components/ui/EmptyState"
+import { ErrorState } from "../components/ui/ErrorState"
+import { IconButton } from "../components/ui/IconButton"
 import { ChevronLeftIcon, ChevronRightIcon } from "../components/ui/Icons"
-import { RouteState } from "../components/ui/RouteState"
+import { ListRow } from "../components/ui/ListRow"
+import { Money } from "../components/ui/Money"
+import { SkeletonRows } from "../components/ui/Skeleton"
 import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import type { PaymentMethod } from "../types/api"
-import { formatDateTime } from "../utils/date"
+import { formatDate, formatTime } from "../utils/date"
 import { formatBackendMoney } from "../utils/money"
 
 const paymentLabels: Record<PaymentMethod, string> = {
@@ -81,10 +86,14 @@ export function SalesPage() {
   const storeName = localSession?.storeName || "Boutique actuelle"
   const totalPages = salesQuery.data ? Math.ceil(salesQuery.data.count / SALES_PAGE_SIZE) : 0
   const paginationItems = getPaginationItems(page, totalPages)
+  const sales = salesQuery.data?.results ?? []
+  // Une liste déjà affichée ne disparaît pas pendant qu'une nouvelle page
+  // arrive : elle se marque simplement comme en cours de rafraîchissement.
+  const isRefreshing = salesQuery.isFetching && !salesQuery.isLoading
 
   return (
     <main className="operational-page">
-      <OperationalPageHeader
+      <PageHeader
         backTo="/pos"
         backLabel="Retour au point de vente"
         eyebrow="Historique"
@@ -96,12 +105,12 @@ export function SalesPage() {
         <EmptyState
           role="status"
           title="Historique indisponible hors connexion"
-          description="Reconnectez-vous pour consulter les ventes et effectuer un retour."
+          description="Vous pouvez continuer à vendre. L'historique redeviendra consultable dès le retour de la connexion."
         />
       ) : (
         <>
           <form className="sales-filters" onSubmit={submitFilters}>
-            <div className="form-field sales-search-field">
+            <div className="field sales-search-field">
               <label htmlFor="sales-search">Numéro du ticket</label>
               <input
                 id="sales-search"
@@ -110,15 +119,15 @@ export function SalesPage() {
                 placeholder="Ex. A12F…"
               />
             </div>
-            <div className="form-field">
+            <div className="field">
               <label htmlFor="sales-date-from">Du</label>
               <input id="sales-date-from" type="date" value={draft.dateFrom} onChange={(event) => setDraft({ ...draft, dateFrom: event.target.value })} />
             </div>
-            <div className="form-field">
+            <div className="field">
               <label htmlFor="sales-date-to">Au</label>
               <input id="sales-date-to" type="date" value={draft.dateTo} onChange={(event) => setDraft({ ...draft, dateTo: event.target.value })} />
             </div>
-            <div className="form-field">
+            <div className="field">
               <label htmlFor="sales-payment">Paiement</label>
               <select id="sales-payment" value={draft.paymentMethod} onChange={(event) => setDraft({ ...draft, paymentMethod: event.target.value as PaymentMethod | "" })}>
                 <option value="">Tous</option>
@@ -127,38 +136,68 @@ export function SalesPage() {
                 <option value="ORANGE_MONEY">Orange Money</option>
               </select>
             </div>
-            <button className="button button-primary" type="submit">Rechercher</button>
+            <Button variant="primary" type="submit">Rechercher</Button>
           </form>
 
-          {salesQuery.isLoading ? <RouteState message="Chargement des ventes…" /> : null}
-          {salesQuery.error ? <RouteState message="" error={salesQuery.error} onRetry={() => void salesQuery.refetch()} /> : null}
-          {salesQuery.data?.results.length === 0 ? (
+          {/* La structure de la page reste en place pendant le chargement :
+              les filtres ne disparaissent jamais sous le caissier. */}
+          {salesQuery.isLoading ? (
+            <SkeletonRows count={6} label="Chargement des ventes…" />
+          ) : null}
+
+          {salesQuery.error ? (
+            <ErrorState
+              error={salesQuery.error}
+              context="historique"
+              title="Impossible de charger les ventes"
+              onRetry={() => void salesQuery.refetch()}
+            />
+          ) : null}
+
+          {!salesQuery.isLoading && !salesQuery.error && sales.length === 0 ? (
             <EmptyState
               title="Aucune vente trouvée"
               description="Modifiez les critères de recherche ou revenez au point de vente."
             />
           ) : null}
-          {salesQuery.data?.results.length ? (
-            <section className="sales-list" aria-label="Ventes de la boutique">
-              {salesQuery.data.results.map((sale) => {
+
+          {sales.length > 0 ? (
+            <section
+              className={isRefreshing ? "sales-list sales-list-refreshing" : "sales-list"}
+              aria-label="Ventes de la boutique"
+              aria-busy={isRefreshing || undefined}
+            >
+              {sales.map((sale) => {
                 const returned = Number(sale.returned_total ?? 0)
                 return (
-                  <Link className="sale-row" key={sale.id} to={`/sales/${sale.id}`}>
-                    <div className="sale-row-main">
-                      <strong>Ticket {sale.id.slice(0, 8).toUpperCase()}</strong>
-                      <div className="sale-row-meta">
-                        <span>{formatDateTime(sale.created_at)}</span>
-                        <span aria-hidden="true">•</span>
-                        <span>{sale.cash_register.name} · {sale.cashier.username}</span>
-                      </div>
-                    </div>
-                    <div className="sale-row-summary">
-                      <span className="payment-chip">{paymentLabels[sale.payment.method]}</span>
-                      <strong>{formatBackendMoney(sale.net_total ?? sale.total)}</strong>
-                      {returned > 0 ? <span>Net</span> : <span>Total</span>}
-                      {returned > 0 ? <span className="sale-return-status">Retour : − {formatBackendMoney(sale.returned_total!)}</span> : null}
-                    </div>
-                  </Link>
+                  <ListRow
+                    key={sale.id}
+                    to={`/sales/${sale.id}`}
+                    leading={formatTime(sale.created_at)}
+                    title={`Ticket ${sale.id.slice(0, 8).toUpperCase()}`}
+                    meta={
+                      <>
+                        <span>{paymentLabels[sale.payment.method]}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{formatDate(sale.created_at)}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{sale.cash_register.name}</span>
+                      </>
+                    }
+                    trailing={
+                      <>
+                        {returned > 0 ? <Badge tone="warning">Retour</Badge> : null}
+                        <Money backend={sale.net_total ?? sale.total} />
+                      </>
+                    }
+                    footnote={
+                      returned > 0 ? (
+                        <>
+                          Déjà retourné : {formatBackendMoney(sale.returned_total!)}
+                        </>
+                      ) : null
+                    }
+                  />
                 )
               })}
             </section>
@@ -166,15 +205,13 @@ export function SalesPage() {
 
           {salesQuery.data && totalPages > 1 ? (
             <nav className="sales-pagination" aria-label="Pagination des ventes">
-              <button
-                className="sales-pagination-button sales-pagination-arrow"
-                type="button"
-                aria-label="Page précédente"
+              <IconButton
+                label="Page précédente"
+                icon={<ChevronLeftIcon />}
+                surface
                 disabled={page === 1}
                 onClick={() => setPage((value) => Math.max(1, value - 1))}
-              >
-                <ChevronLeftIcon />
-              </button>
+              />
               <div className="sales-pagination-pages">
                 {paginationItems.map((item) => typeof item === "number" ? (
                   <button
@@ -191,15 +228,13 @@ export function SalesPage() {
                   <span className="sales-pagination-ellipsis" aria-hidden="true" key={item}>…</span>
                 ))}
               </div>
-              <button
-                className="sales-pagination-button sales-pagination-arrow"
-                type="button"
-                aria-label="Page suivante"
+              <IconButton
+                label="Page suivante"
+                icon={<ChevronRightIcon />}
+                surface
                 disabled={page === totalPages}
                 onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
-              >
-                <ChevronRightIcon />
-              </button>
+              />
             </nav>
           ) : null}
         </>

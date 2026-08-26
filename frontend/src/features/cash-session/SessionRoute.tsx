@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { Navigate } from "react-router-dom"
 
-import { RouteState } from "../../components/ui/RouteState"
+import { RouteError, RouteLoading } from "../../components/ui/RouteState"
 import { useCurrentUser } from "../auth/queries"
 import { usePosSession } from "./queries"
 
@@ -14,12 +14,12 @@ export function SessionRoute({ requireOpen, children }: SessionRouteProps) {
   const userQuery = useCurrentUser()
   const session = usePosSession(userQuery.data!)
 
-  if (session.isLoading) return <RouteState message="Recherche de la caisse…" />
+  if (session.isLoading) return <RouteLoading message="Recherche de la caisse…" />
   if (session.error) {
     return (
-      <RouteState
-        message=""
+      <RouteError
         error={session.error}
+        context="session"
         onRetry={() => void session.refetch()}
       />
     )
