@@ -130,7 +130,8 @@ describe("SalesPage", () => {
       "/sales/a12f0000-0000-0000-0000-000000000000",
     )
     expect(screen.getByText("Boutique A · Caisse A")).toBeInTheDocument()
-    expect(screen.getByText(/Déjà retourné : 500 FCFA/)).toBeInTheDocument()
+    expect(screen.getByText("Retour partiel")).toBeInTheDocument()
+    expect(screen.getByText("−500 FCFA remboursés")).toBeInTheDocument()
     await waitFor(() => expect(listSales).toHaveBeenCalledWith(expect.objectContaining({ cashSessionId: "session-a" })))
   })
 
@@ -314,6 +315,26 @@ describe("SalesPage", () => {
     expect(summary).toHaveTextContent("2 ventes")
     expect(summary).toHaveTextContent("Total")
     expect(summary).toHaveTextContent("3 500 FCFA")
+  })
+
+  it("distinguishes a fully returned sale from a partial return", async () => {
+    vi.mocked(listSales).mockResolvedValue({
+      count: 1,
+      next: null,
+      previous: null,
+      results: [saleFixture("a12f0000-0000-0000-0000-000000000000", {
+        total: "2000.00",
+        returned_total: "2000.00",
+        net_total: "0.00",
+      })],
+    })
+
+    renderPage()
+
+    const row = await screen.findByRole("link", { name: /Ticket A12F0000/ })
+    expect(row).toHaveTextContent("Retour total")
+    expect(row).toHaveTextContent("0 FCFA")
+    expect(row).toHaveTextContent("−2 000 FCFA remboursés")
   })
 
   it("drops the date from a row when the sale is from today", async () => {

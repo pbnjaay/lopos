@@ -249,6 +249,7 @@ export function SalesPage() {
               >
                 {sales.map((sale, index) => {
                   const returned = Number(sale.returned_total ?? 0)
+                  const isFullyReturned = returned > 0 && returned >= Number(sale.total)
                   const day = formatDate(sale.created_at)
                   return (
                     <ListRow
@@ -273,17 +274,21 @@ export function SalesPage() {
                         </>
                       }
                       trailing={
-                        <>
-                          {returned > 0 ? <Badge tone="warning">Retour</Badge> : null}
-                          <Money backend={sale.net_total ?? sale.total} />
-                        </>
-                      }
-                      footnote={
-                        returned > 0 ? (
-                          <>
-                            Déjà retourné : {formatBackendMoney(sale.returned_total!)}
-                          </>
-                        ) : null
+                        <span className="sales-row-financials">
+                          <span className="sales-row-financial-primary">
+                            {returned > 0 ? (
+                              <Badge tone="warning">
+                                {isFullyReturned ? "Retour total" : "Retour partiel"}
+                              </Badge>
+                            ) : null}
+                            <Money backend={sale.net_total ?? sale.total} />
+                          </span>
+                          {returned > 0 ? (
+                            <span className="sales-row-refunded">
+                              −{formatBackendMoney(sale.returned_total!)} remboursés
+                            </span>
+                          ) : null}
+                        </span>
                       }
                     />
                   )

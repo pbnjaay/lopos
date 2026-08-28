@@ -76,6 +76,7 @@ describe("SaleReceiptPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Supérette Test" })).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "Ticket de vente" })).toBeInTheDocument()
+    expect(screen.getAllByText("Ticket de vente")).toHaveLength(2)
     expect(screen.getByRole("link", { name: "Retour à la vente" })).toHaveAttribute("href", `/sales/${cashReceipt.id}`)
     expect(screen.getByText("N° ticket : SALE-ID")).toBeInTheDocument()
     expect(screen.getByText("Coca 50cl")).toBeInTheDocument()
@@ -107,6 +108,28 @@ describe("SaleReceiptPage", () => {
     expect(await screen.findByText(label)).toBeInTheDocument()
     expect(screen.queryByText("Reçu")).not.toBeInTheDocument()
     expect(screen.queryByText("Monnaie")).not.toBeInTheDocument()
+  })
+
+  it("keeps the original sale and shows returned items as adjustments", async () => {
+    renderReceipt({
+      ...cashReceipt,
+      returned_total: "500.00",
+      net_total: "500.00",
+      items: [{
+        ...cashReceipt.items[0]!,
+        quantity_returned: "1.000",
+        quantity_returnable: "1.000",
+      }],
+    })
+
+    expect(await screen.findByText("Retour partiel")).toBeInTheDocument()
+    expect(screen.getByText("↳ Retourné : 1 · Reste : 1")).toBeInTheDocument()
+    expect(screen.getByText("Total de la vente")).toBeInTheDocument()
+    expect(screen.getByText("Remboursements")).toBeInTheDocument()
+    expect(screen.getByText("Total net")).toBeInTheDocument()
+    expect(screen.getAllByText("− 500 FCFA")).toHaveLength(3)
+    expect(screen.getByText("Vente partiellement retournée")).toBeInTheDocument()
+    expect(screen.getByText(/ticket de retour constitue le justificatif/i)).toBeInTheDocument()
   })
 
   it("renders a pending-sync local sale without calling the API", async () => {

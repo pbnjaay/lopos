@@ -1705,6 +1705,30 @@ a.list-row:active {
   margin-top: var(--space-2);
 }
 
+.sales-list .list-row-trailing {
+  margin-left: auto;
+}
+
+.sales-row-financials {
+  display: grid;
+  justify-items: end;
+  gap: 0.1rem;
+}
+
+.sales-row-financial-primary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.sales-row-refunded {
+  color: var(--color-warning);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* Rafraichissement en arriere-plan : le contenu reste lisible et
    interactif, il s'attenue simplement le temps de la mise a jour. */
 .sales-list-refreshing {
@@ -2242,10 +2266,32 @@ a.list-row:active {
   font-size: 0.85rem;
 }
 
+.receipt-heading .receipt-document-title {
+  margin: 0 0 var(--space-3);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .receipt-pending-note {
   margin-top: var(--space-2);
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+
+.receipt-return-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--color-warning-border);
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+  font-size: var(--text-secondary);
 }
 
 .receipt-items {
@@ -2268,6 +2314,13 @@ a.list-row:active {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   font-size: 0.85rem;
+}
+
+.receipt-items li > .receipt-item-return {
+  padding-top: var(--space-1);
+  color: var(--color-warning);
+  font-size: var(--text-caption);
+  font-weight: 700;
 }
 
 .receipt-totals {
@@ -2295,12 +2348,33 @@ a.list-row:active {
   text-transform: uppercase;
 }
 
+.receipt-returned-total {
+  color: var(--color-warning);
+  font-weight: 700;
+}
+
+.receipt-net-total {
+  margin: var(--space-2) 0;
+  padding: var(--space-3) 0;
+  border-block: 1px solid #555;
+  font-size: 1.15rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .receipt-footer {
   margin-top: var(--space-5);
+  display: grid;
+  gap: var(--space-1);
   padding-top: var(--space-4-5);
   border-top: 1px dashed #555;
   font-weight: 700;
   text-align: center;
+}
+
+.receipt-footer span {
+  font-size: var(--text-caption);
+  font-weight: 600;
 }
 
 .return-detail-receipt {
@@ -2340,6 +2414,14 @@ a.list-row:active {
   padding: 0;
   border-top: 1px solid var(--color-border);
   border-bottom: 0;
+}
+
+.return-detail-receipt > .receipt-heading {
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
 }
 
 .return-detail-receipt .return-detail-items li {
@@ -2426,6 +2508,14 @@ a.list-row:active {
     border-radius: 0;
     color: #111;
     font-family: "Courier New", Courier, monospace;
+  }
+
+  .return-detail-receipt > .receipt-heading {
+    margin-top: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
 
   .return-detail-receipt .return-detail-items {

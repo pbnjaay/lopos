@@ -17,6 +17,8 @@ const sale: ReceiptView = {
   cashierName: "cashier",
   createdAt: "2026-08-17T00:00:00Z",
   total: 1_000,
+  returnedTotal: 0,
+  netTotal: 1_000,
   payment: {
     method: "CASH",
     receivedAmount: 2_000,

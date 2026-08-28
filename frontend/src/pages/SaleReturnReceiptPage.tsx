@@ -4,8 +4,8 @@ import { useParams, useSearchParams } from "react-router-dom";
 
 import { getSaleReceipt, getSaleReturn } from "../api/sales";
 import { PageHeader } from "../components/layout/PageHeader";
+import { ReceiptHeading } from "../components/receipt/ReceiptHeading";
 import { Button } from "../components/ui/Button";
-import { MetaList } from "../components/ui/Metadata";
 import { Money } from "../components/ui/Money";
 import { RouteError, RouteLoading } from "../components/ui/RouteState";
 import { SectionHeader } from "../components/ui/SectionHeader";
@@ -115,36 +115,20 @@ export function SaleReturnReceiptPage() {
             <p>Le stock et les montants de la vente ont été mis à jour.</p>
           </div>
         </div>
-        <div className="no-print return-detail-meta">
-          <MetaList
-            label="Informations du retour"
-            items={[
-              { label: "Référence", value: saleReturn.reference },
-              {
-                label: "Ticket d’origine",
-                value: saleReturn.original_sale_id.slice(0, 8).toUpperCase(),
-              },
-              {
-                label: "Date et heure",
-                value: formatDateTime(saleReturn.created_at),
-              },
-            ]}
-          />
-        </div>
-
-        <header className="receipt-heading print-only">
-          <h1>{originalSale.store.name}</h1>
-          <p>
-            <strong>N° retour : {saleReturn.reference}</strong>
-          </p>
-          <p>
-            Ticket d’origine :{" "}
-            {saleReturn.original_sale_id.slice(0, 8).toUpperCase()}
-          </p>
-          <p>{formatDateTime(saleReturn.created_at)}</p>
-          <p>Caisse : {originalSale.cash_register.name}</p>
-          <p>Caissier : {originalSale.cashier.username}</p>
-        </header>
+        <ReceiptHeading
+          storeName={originalSale.store.name}
+          documentTitle="Ticket de retour"
+          referenceLabel="N° retour"
+          reference={saleReturn.reference}
+          createdAt={formatDateTime(saleReturn.created_at)}
+          cashRegisterName={originalSale.cash_register.name}
+          cashierName={originalSale.cashier.username}
+          secondaryLine={(
+            <>
+              Ticket d’origine : {saleReturn.original_sale_id.slice(0, 8).toUpperCase()}
+            </>
+          )}
+        />
 
         <div className="no-print return-detail-section">
           <SectionHeader

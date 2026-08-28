@@ -102,6 +102,7 @@ describe("SaleReturnReceiptPage", () => {
     renderPage()
 
     expect(await screen.findByRole("heading", { name: "Ticket de retour" })).toBeInTheDocument()
+    expect(screen.getAllByText("Ticket de retour")).toHaveLength(2)
     expect(screen.getByRole("link", { name: "Retour à la vente" })).toHaveAttribute(
       "href",
       `/sales/${originalSale.id}`,
