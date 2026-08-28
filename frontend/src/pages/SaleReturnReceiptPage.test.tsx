@@ -3,7 +3,7 @@
 import "@testing-library/jest-dom/vitest"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -75,13 +75,13 @@ const saleReturn: SaleReturn = {
 vi.mock("../features/auth/queries", () => ({ useCurrentUser: () => ({ data: user }) }))
 vi.mock("../features/cash-session/queries", () => ({ usePosSession: () => ({ ownSession: session }) }))
 
-function renderPage() {
+function renderPage(initialEntry = `/returns/${saleReturn.id}/receipt`) {
   vi.mocked(getSaleReturn).mockResolvedValue(saleReturn)
   vi.mocked(getSaleReceipt).mockResolvedValue(originalSale)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[`/returns/${saleReturn.id}/receipt`]}>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <Routes>
           <Route path="/returns/:returnId/receipt" element={<SaleReturnReceiptPage />} />
         </Routes>
@@ -112,5 +112,18 @@ describe("SaleReturnReceiptPage", () => {
 
     await actor.click(screen.getByRole("button", { name: "Imprimer le ticket" }))
     expect(printMock).toHaveBeenCalledOnce()
+  })
+
+  it("opens the print dialog when requested by the inline success action", async () => {
+    const printMock = vi.spyOn(window, "print").mockImplementation(() => undefined)
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0)
+      return 1
+    })
+
+    renderPage(`/returns/${saleReturn.id}/receipt?print=1`)
+
+    await screen.findByRole("heading", { name: "Ticket de retour" })
+    await waitFor(() => expect(printMock).toHaveBeenCalledOnce())
   })
 })

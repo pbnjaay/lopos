@@ -1,39 +1,40 @@
-import { useQuery } from "@tanstack/react-query"
-import { useParams } from "react-router-dom"
+import { useQuery } from "@tanstack/react-query";
+import { useParams } from "react-router-dom";
 
-import { getSaleReceipt } from "../api/sales"
-import { PageHeader } from "../components/layout/PageHeader"
-import { ButtonLink } from "../components/ui/Button"
-import { InlineAlert } from "../components/ui/InlineAlert"
-import { ReceiptIcon, RotateCcwIcon } from "../components/ui/Icons"
-import { MetaList } from "../components/ui/Metadata"
-import { Money } from "../components/ui/Money"
-import { RouteError, RouteLoading } from "../components/ui/RouteState"
-import { SectionHeader } from "../components/ui/SectionHeader"
-import { useCurrentUser } from "../features/auth/queries"
-import { usePosSession } from "../features/cash-session/queries"
-import { useNetworkStatus } from "../features/offline/useNetworkStatus"
-import { formatDateTime } from "../utils/date"
-import { formatBackendMoney } from "../utils/money"
-import { backendQuantityToMilli, formatQuantity } from "../utils/quantity"
+import { getSaleReceipt } from "../api/sales";
+import { PageHeader } from "../components/layout/PageHeader";
+import { ButtonLink } from "../components/ui/Button";
+import { InlineAlert } from "../components/ui/InlineAlert";
+import { ReceiptIcon, RotateCcwIcon } from "../components/ui/Icons";
+import { MetaList } from "../components/ui/Metadata";
+import { Money } from "../components/ui/Money";
+import { RouteError, RouteLoading } from "../components/ui/RouteState";
+import { SectionHeader } from "../components/ui/SectionHeader";
+import { useCurrentUser } from "../features/auth/queries";
+import { usePosSession } from "../features/cash-session/queries";
+import { useNetworkStatus } from "../features/offline/useNetworkStatus";
+import { saleReceiptQueryKey } from "../features/sales/queries";
+import { formatDateTime } from "../utils/date";
+import { formatBackendMoney } from "../utils/money";
+import { backendQuantityToMilli, formatQuantity } from "../utils/quantity";
 
 const paymentLabels = {
   CASH: "Espèces",
   WAVE: "Wave",
   ORANGE_MONEY: "Orange Money",
-} as const
+} as const;
 
 export function SaleDetailPage() {
-  const { saleId } = useParams<{ saleId: string }>()
-  const user = useCurrentUser().data!
-  const { ownSession } = usePosSession(user)
-  const online = useNetworkStatus()
+  const { saleId } = useParams<{ saleId: string }>();
+  const user = useCurrentUser().data!;
+  const { ownSession } = usePosSession(user);
+  const online = useNetworkStatus();
   const saleQuery = useQuery({
-    queryKey: ["sales", saleId, ownSession?.id],
+    queryKey: saleReceiptQueryKey(saleId, ownSession?.id),
     queryFn: () => getSaleReceipt(saleId!, ownSession!.id),
     enabled: Boolean(saleId && ownSession && online),
     retry: false,
-  })
+  });
 
   if (!online) {
     return (
@@ -42,9 +43,10 @@ export function SaleDetailPage() {
         title="Mode hors ligne"
         description="Le détail des ventes redeviendra consultable dès le retour de la connexion. Vous pouvez continuer à vendre."
       />
-    )
+    );
   }
-  if (saleQuery.isLoading) return <RouteLoading message="Chargement de la vente…" />
+  if (saleQuery.isLoading)
+    return <RouteLoading message="Chargement de la vente…" />;
   if (saleQuery.error || !saleQuery.data) {
     return (
       <RouteError
@@ -52,11 +54,15 @@ export function SaleDetailPage() {
         context="vente"
         onRetry={() => void saleQuery.refetch()}
       />
-    )
+    );
   }
 
-  const sale = saleQuery.data
-  const canReturn = sale.status === "COMPLETED" && sale.items.some((item) => Number(item.quantity_returnable ?? item.quantity) > 0)
+  const sale = saleQuery.data;
+  const canReturn =
+    sale.status === "COMPLETED" &&
+    sale.items.some(
+      (item) => Number(item.quantity_returnable ?? item.quantity) > 0,
+    );
 
   return (
     <main className="operational-page">
@@ -66,22 +72,28 @@ export function SaleDetailPage() {
         eyebrow="Vente"
         title={`Ticket ${sale.id.slice(0, 8).toUpperCase()}`}
         context={`${sale.store.name} · ${sale.cash_register.name}`}
-        actions={<>
-          <ButtonLink
-            variant="secondary"
-            size="sm"
-            to={`/sales/${sale.id}/receipt?cash_session_id=${ownSession!.id}&from=detail`}
-          >
-            <ReceiptIcon />
-            <span>Voir le ticket</span>
-          </ButtonLink>
-          {canReturn ? (
-            <ButtonLink variant="primary" size="sm" to={`/sales/${sale.id}/return`}>
-              <RotateCcwIcon />
-              <span>Effectuer un retour</span>
+        actions={
+          <>
+            <ButtonLink
+              variant="secondary"
+              size="sm"
+              to={`/sales/${sale.id}/receipt?cash_session_id=${ownSession!.id}&from=detail`}
+            >
+              <ReceiptIcon />
+              <span>Voir le ticket</span>
             </ButtonLink>
-          ) : null}
-        </>}
+            {canReturn ? (
+              <ButtonLink
+                variant="primary"
+                size="sm"
+                to={`/sales/${sale.id}/return`}
+              >
+                <RotateCcwIcon />
+                <span>Effectuer un retour</span>
+              </ButtonLink>
+            ) : null}
+          </>
+        }
       />
       <section className="operational-card sale-detail-card">
         <MetaList
@@ -89,7 +101,10 @@ export function SaleDetailPage() {
           items={[
             { label: "Date et heure", value: formatDateTime(sale.created_at) },
             { label: "Caissier", value: sale.cashier.username },
-            { label: "Mode de paiement", value: paymentLabels[sale.payment.method] },
+            {
+              label: "Mode de paiement",
+              value: paymentLabels[sale.payment.method],
+            },
           ]}
         />
         <div className="card-section">
@@ -103,7 +118,11 @@ export function SaleDetailPage() {
                 <div>
                   <strong>{item.product_name}</strong>
                   <span>
-                    {formatQuantity(backendQuantityToMilli(item.quantity), item.sale_unit ?? "UNIT")} × {formatBackendMoney(item.unit_price)}
+                    {formatQuantity(
+                      backendQuantityToMilli(item.quantity),
+                      item.sale_unit ?? "UNIT",
+                    )}{" "}
+                    × {formatBackendMoney(item.unit_price)}
                   </span>
                 </div>
                 <div>
@@ -112,7 +131,11 @@ export function SaleDetailPage() {
                   </strong>
                   {Number(item.quantity_returned ?? 0) > 0 ? (
                     <span>
-                      Retourné : {formatQuantity(backendQuantityToMilli(item.quantity_returned!), item.sale_unit ?? "UNIT")}
+                      Retourné :{" "}
+                      {formatQuantity(
+                        backendQuantityToMilli(item.quantity_returned!),
+                        item.sale_unit ?? "UNIT",
+                      )}
                     </span>
                   ) : null}
                 </div>
@@ -154,5 +177,5 @@ export function SaleDetailPage() {
         ) : null}
       </section>
     </main>
-  )
+  );
 }
