@@ -26,6 +26,7 @@ export function buildLocalProducts(
   products: Product[],
   existingProducts: LocalProduct[],
   cachedAt: string,
+  pendingSoldQuantityByProductId?: ReadonlyMap<string, number>,
 ): LocalProduct[] {
   const existingById = new Map(
     existingProducts.map((product) => [product.id, product]),
@@ -46,10 +47,16 @@ export function buildLocalProducts(
     if (product.sale_unit) {
       base.saleUnit = product.sale_unit
       base.serverKnownStockMilli = backendQuantityToMilli(product.stock)
-      base.pendingSoldQuantityMilli = existing?.pendingSoldQuantityMilli ?? (existing?.pendingSoldQuantity ?? 0) * 1000
+      base.pendingSoldQuantityMilli =
+        pendingSoldQuantityByProductId?.get(product.id) ??
+        existing?.pendingSoldQuantityMilli ??
+        (existing?.pendingSoldQuantity ?? 0) * 1000
     } else {
       base.serverKnownStock = backendQuantityToMilli(product.stock) / 1000
-      base.pendingSoldQuantity = existing?.pendingSoldQuantity ?? (existing?.pendingSoldQuantityMilli ?? 0) / 1000
+      base.pendingSoldQuantity =
+        (pendingSoldQuantityByProductId?.get(product.id) ??
+          existing?.pendingSoldQuantityMilli ??
+          (existing?.pendingSoldQuantity ?? 0) * 1000) / 1000
     }
     return base
   })
@@ -64,17 +71,32 @@ export async function saveProductCatalog(
 
   await database.transaction(
     "rw",
-    [database.products, database.metadata],
+    [database.products, database.localSales, database.metadata],
     async () => {
       const existingProducts = await database.products
         .where("storeId")
         .equals(storeId)
         .toArray()
+      const pendingSoldQuantityByProductId = new Map<string, number>()
+      const unsyncedSales = await database.localSales
+        .filter((sale) => sale.storeId === storeId && sale.status !== "SYNCED")
+        .toArray()
+      for (const sale of unsyncedSales) {
+        for (const item of sale.items) {
+          const quantityMilli = item.quantityMilli ?? (item.quantity ?? 0) * 1000
+          pendingSoldQuantityByProductId.set(
+            item.productId,
+            (pendingSoldQuantityByProductId.get(item.productId) ?? 0) + quantityMilli,
+          )
+        }
+      }
+
       const localProducts = buildLocalProducts(
         storeId,
         products,
         existingProducts,
         cachedAt,
+        pendingSoldQuantityByProductId,
       )
 
       await database.products.where("storeId").equals(storeId).delete()
@@ -99,15 +121,23 @@ export async function getProductCatalogMetadata(
   database: PosDatabase = db,
 ): Promise<ProductCatalogMetadata | null> {
   const metadata = await database.metadata.get(productCatalogMetadataKey(storeId))
-  return (metadata?.value as ProductCatalogMetadata | undefined) ?? null
+  const catalogMetadata = metadata?.value as ProductCatalogMetadata | undefined
+  if (!catalogMetadata) return null
+
+  const actualProductCount = await database.products
+    .where("storeId")
+    .equals(storeId)
+    .count()
+  return actualProductCount === catalogMetadata.productCount
+    ? catalogMetadata
+    : null
 }
 
 export async function hasLocalProductCatalog(
   storeId: string,
   database: PosDatabase = db,
 ): Promise<boolean> {
-  const metadata = await database.metadata.get(productCatalogMetadataKey(storeId))
-  return metadata !== undefined
+  return (await getProductCatalogMetadata(storeId, database)) !== null
 }
 
 export async function findLocalProductByBarcode(

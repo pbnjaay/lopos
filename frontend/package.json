@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "test": "vitest run",
+    "test:offline-build": "node scripts/verify-offline-build.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {

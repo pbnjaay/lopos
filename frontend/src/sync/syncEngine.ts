@@ -14,6 +14,7 @@ import {
 } from "../db/sales"
 import { getOrCreateTerminalId } from "../db/terminal"
 import type { LocalSale } from "../db/types"
+import { withInterTabSyncLock } from "../db/syncLock"
 import { toBackendMoney } from "../utils/money"
 import { milliToBackendQuantity } from "../utils/quantity"
 
@@ -164,9 +165,17 @@ async function runSync(): Promise<SyncOutcome> {
 /** At most one sync runs at a time; concurrent callers share the in-flight result. */
 export function syncPendingSales(): Promise<SyncOutcome> {
   if (!syncInProgress) {
-    syncInProgress = runSync().finally(() => {
-      syncInProgress = null
-    })
+    syncInProgress = withInterTabSyncLock(runSync)
+      .then((outcome) => {
+        if (outcome !== null) return outcome
+        // Another tab owns the fallback lease. Retry locally so a crashed
+        // owner cannot strand pending sales once its lease expires.
+        scheduleRetry()
+        return EMPTY_OUTCOME
+      })
+      .finally(() => {
+        syncInProgress = null
+      })
   }
   return syncInProgress
 }

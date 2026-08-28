@@ -34,6 +34,12 @@ function useSyncStatusState(active: boolean): SyncStatus {
     try {
       const outcome = await syncPendingSales()
       if (outcome.synced > 0 || outcome.conflicts > 0) setLastOutcome(outcome)
+      if (outcome.synced > 0) {
+        // The server stock now includes these sales. Refetch the active full
+        // catalog snapshot; saveProductCatalog() rebuilds the remaining local
+        // pending stock from unsynced sales, avoiding a double subtraction.
+        await queryClient.invalidateQueries({ queryKey: ["product-catalog"] })
+      }
       return outcome
     } catch {
       // Un échec de synchronisation n'est jamais une erreur pour l'appelant

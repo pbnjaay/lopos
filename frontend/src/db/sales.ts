@@ -201,11 +201,41 @@ export async function markLocalSaleSynced(
   serverId: string,
   database: PosDatabase = db,
 ): Promise<void> {
-  await database.localSales.update(id, {
-    status: "SYNCED",
-    serverId,
-    conflictCode: null,
-    conflictMessage: null,
+  await database.transaction("rw", [database.products, database.localSales], async () => {
+    const sale = await database.localSales.get(id)
+    if (!sale || sale.status === "SYNCED") return
+
+    const soldByProduct = new Map<string, number>()
+    for (const item of sale.items) {
+      const quantityMilli = item.quantityMilli ?? (item.quantity ?? 0) * 1000
+      soldByProduct.set(
+        item.productId,
+        (soldByProduct.get(item.productId) ?? 0) + quantityMilli,
+      )
+    }
+
+    for (const [productId, soldQuantityMilli] of soldByProduct) {
+      const product = await database.products.get([sale.storeId, productId])
+      if (!product) continue
+      const pendingQuantityMilli =
+        product.pendingSoldQuantityMilli ??
+        (product.pendingSoldQuantity ?? 0) * 1000
+      const nextPendingQuantityMilli = Math.max(
+        pendingQuantityMilli - soldQuantityMilli,
+        0,
+      )
+      await database.products.update([sale.storeId, productId], {
+        pendingSoldQuantityMilli: nextPendingQuantityMilli,
+        pendingSoldQuantity: nextPendingQuantityMilli / 1000,
+      })
+    }
+
+    await database.localSales.update(id, {
+      status: "SYNCED",
+      serverId,
+      conflictCode: null,
+      conflictMessage: null,
+    })
   })
 }
 

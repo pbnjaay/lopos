@@ -7,7 +7,11 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { NetworkError } from "../api/client"
 import { pushSyncEvents } from "../api/sync"
 import { db } from "../db/database"
-import type { LocalSale } from "../db/types"
+import { saveProductCatalog } from "../db/products"
+import { repairPendingSoldQuantities } from "../db/recovery"
+import { createLocalSale } from "../db/sales"
+import type { LocalCashSession, LocalProduct, LocalSale } from "../db/types"
+import type { Product } from "../types/api"
 import { syncPendingSales } from "./syncEngine"
 
 vi.mock("../api/sync", () => ({ pushSyncEvents: vi.fn() }))
@@ -63,6 +67,8 @@ afterEach(async () => {
   vi.clearAllMocks()
   vi.unstubAllGlobals()
   await db.localSales.clear()
+  await db.products.clear()
+  await db.cashSessions.clear()
   await db.metadata.clear()
 })
 
@@ -192,5 +198,90 @@ describe("syncPendingSales", () => {
 
     expect(outcome).toEqual({ attempted: 1, synced: 1, conflicts: 0 })
     expect((await db.localSales.get("sale-7"))?.status).toBe("SYNCED")
+  })
+
+  it("survives ten offline sales, a restart and a lost response without duplicating stock effects", async () => {
+    const session: LocalCashSession = {
+      id: "session-chaos",
+      cashRegisterId: "register-chaos",
+      cashRegisterName: "Caisse chaos",
+      storeId: "store-chaos",
+      storeName: "Boutique chaos",
+      cashierId: 1,
+      cashierName: "Awa",
+      openingBalance: 0,
+      openedAt: "2026-08-28T10:00:00Z",
+      status: "OPEN",
+      cachedAt: "2026-08-28T10:00:00Z",
+    }
+    const localProduct: LocalProduct = {
+      id: "product-chaos",
+      storeId: session.storeId,
+      name: "Coca",
+      barcode: "999",
+      sellingPrice: 500,
+      saleUnit: "UNIT",
+      serverKnownStockMilli: 100_000,
+      pendingSoldQuantityMilli: 0,
+      isActive: true,
+      cachedAt: "2026-08-28T10:00:00Z",
+    }
+    await db.products.put(localProduct)
+
+    for (let index = 0; index < 10; index += 1) {
+      await createLocalSale({
+        session,
+        items: [{ productId: localProduct.id, quantityMilli: 1_000 }],
+        payment: { method: "WAVE" },
+      })
+    }
+    expect((await db.products.get([session.storeId, localProduct.id]))?.pendingSoldQuantityMilli).toBe(10_000)
+
+    // Browser restart: durable rows remain, then startup recovery derives the
+    // counter from those rows instead of trusting its previous value.
+    db.close()
+    await db.open()
+    await db.products.update([session.storeId, localProduct.id], { pendingSoldQuantityMilli: 77_000 })
+    await repairPendingSoldQuantities()
+    expect((await db.products.get([session.storeId, localProduct.id]))?.pendingSoldQuantityMilli).toBe(10_000)
+
+    const pending = await db.localSales.where("status").equals("PENDING_SYNC").toArray()
+    const originalEventIds = pending.map((sale) => sale.syncEventId)
+    vi.mocked(pushSyncEvents).mockRejectedValueOnce(new NetworkError())
+    await syncPendingSales()
+
+    vi.mocked(pushSyncEvents).mockResolvedValueOnce({
+      // The server committed before the response was lost, so every retry is
+      // reported as already processed under the original event identity.
+      results: pending.map((sale) => ({
+        event_id: sale.syncEventId,
+        status: "ALREADY_PROCESSED",
+        entity_id: sale.id,
+      })),
+    })
+    await syncPendingSales()
+
+    expect(
+      vi.mocked(pushSyncEvents).mock.calls[1]?.[1].map((event) => event.event_id).sort(),
+    ).toEqual(originalEventIds.sort())
+    expect(await db.localSales.where("status").equals("SYNCED").count()).toBe(10)
+    expect((await db.products.get([session.storeId, localProduct.id]))?.pendingSoldQuantityMilli).toBe(0)
+
+    const serverProduct: Product = {
+      id: localProduct.id,
+      name: localProduct.name,
+      barcode: localProduct.barcode,
+      selling_price: "500.00",
+      purchase_price: null,
+      sale_unit: "UNIT",
+      is_active: true,
+      stock: "90.000",
+      created_at: "2026-08-01T00:00:00Z",
+      updated_at: "2026-08-28T10:05:00Z",
+    }
+    await saveProductCatalog(session.storeId, [serverProduct])
+    const refreshed = await db.products.get([session.storeId, localProduct.id])
+    expect(refreshed?.serverKnownStockMilli).toBe(90_000)
+    expect(refreshed?.pendingSoldQuantityMilli).toBe(0)
   })
 })

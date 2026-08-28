@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { getProductCatalog } from "../../api/products"
@@ -41,6 +42,17 @@ export function useProductCatalog(storeId: string | null) {
     enabled: storeId !== null,
     staleTime: 5 * 60_000,
   })
+
+  useEffect(() => {
+    if (storeId === null) return
+
+    function refreshAfterReconnect() {
+      void syncQuery.refetch()
+    }
+
+    window.addEventListener("online", refreshAfterReconnect)
+    return () => window.removeEventListener("online", refreshAfterReconnect)
+  }, [storeId, syncQuery.refetch])
 
   const metadata = localQuery.data ?? null
   const status: ProductCatalogStatus =

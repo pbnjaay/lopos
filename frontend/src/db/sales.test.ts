@@ -213,7 +213,24 @@ describe("sync status transitions", () => {
     expect(updated?.serverId).toBe(sale.id)
     expect(updated?.conflictCode).toBeNull()
     expect(updated?.conflictMessage).toBeNull()
+    const product = await database.products.get([coca.storeId, coca.id])
+    expect(product?.pendingSoldQuantityMilli).toBe(0)
+    expect(product?.pendingSoldQuantity).toBe(0)
     await expect(countPendingLocalSales(database)).resolves.toBe(0)
+  })
+
+  it("releases the local stock effect exactly once after an idempotent sync result", async () => {
+    const sale = await createLocalSale(
+      { session, items: [{ productId: coca.id, quantity: 2 }], payment: { method: "WAVE" } },
+      database,
+    )
+
+    await markLocalSaleSynced(sale.id, sale.id, database)
+    await markLocalSaleSynced(sale.id, sale.id, database)
+
+    const product = await database.products.get([coca.storeId, coca.id])
+    expect(product?.pendingSoldQuantityMilli).toBe(0)
+    expect(product?.pendingSoldQuantity).toBe(0)
   })
 
   it("marks a sale CONFLICT with the server's code and message, removing it from the pending queue", async () => {
