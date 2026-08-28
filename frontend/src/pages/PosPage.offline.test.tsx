@@ -25,6 +25,7 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import { ToastProvider } from "../components/ui/Toast"
 import { db } from "../db/database"
 import { saveProductCatalog } from "../db/products"
 import { currentUserQueryKey } from "../features/auth/queries"
@@ -142,9 +143,11 @@ function renderPosOfflineAfterInit() {
 
   render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
-        <PosPage />
-      </MemoryRouter>
+      <ToastProvider>
+        <MemoryRouter>
+          <PosPage />
+        </MemoryRouter>
+      </ToastProvider>
     </QueryClientProvider>,
   )
 }
@@ -172,6 +175,7 @@ afterEach(async () => {
   await db.cashSessions.clear()
   await db.products.clear()
   await db.metadata.clear()
+  await db.carts.clear()
 })
 
 describe("POS résilience hors ligne (reproduction pilote)", () => {

@@ -59,6 +59,7 @@ describe("PosDatabase migrations", () => {
       serverKnownStockMilli: 12_000,
       pendingSoldQuantityMilli: 300,
     })
+    expect(await upgraded.carts.count()).toBe(0)
     upgraded.close()
   })
 })

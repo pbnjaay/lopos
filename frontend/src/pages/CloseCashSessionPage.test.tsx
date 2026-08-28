@@ -81,7 +81,10 @@ const summary: CashSessionSummary = {
   closed_at: null,
 }
 
-function renderPage(pendingLocalSalesCount = 0) {
+function renderPage(
+  pendingLocalSalesCount = 0,
+  cartBlockers: { activeItemCount: number; heldCount: number } = { activeItemCount: 0, heldCount: 0 },
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   })
@@ -96,6 +99,7 @@ function renderPage(pendingLocalSalesCount = 0) {
     ["pending-local-sales-for-session", session.id],
     pendingLocalSalesCount,
   )
+  queryClient.setQueryData(["session-cart-blockers", session.id], cartBlockers)
   localStorage.setItem(SELECTED_CASH_REGISTER_KEY, cashRegister.id)
 
   render(
@@ -240,5 +244,32 @@ describe("CloseCashSessionPage", () => {
     expect(await screen.findByText("2 ventes en attente")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Synchroni/ })).toBeInTheDocument()
     expect(screen.queryByLabelText("Montant compté")).not.toBeInTheDocument()
+  })
+
+  it("blocks closing while the active cart still has items", async () => {
+    renderPage(0, { activeItemCount: 2, heldCount: 0 })
+
+    expect(
+      await screen.findByText("La vente en cours contient 2 articles.", { exact: false }),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText("Montant compté")).not.toBeInTheDocument()
+  })
+
+  it("blocks closing while a held cart has not been resumed or deleted", async () => {
+    renderPage(0, { activeItemCount: 0, heldCount: 1 })
+
+    expect(
+      await screen.findByText("1 panier en attente n'a pas été repris ou supprimé.", { exact: false }),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText("Montant compté")).not.toBeInTheDocument()
+  })
+
+  it("checks for a blocking cart before checking for unsynced sales", async () => {
+    renderPage(3, { activeItemCount: 1, heldCount: 0 })
+
+    expect(
+      await screen.findByText("La vente en cours contient 1 article.", { exact: false }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/ventes en attente/)).not.toBeInTheDocument()
   })
 })

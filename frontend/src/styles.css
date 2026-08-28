@@ -2783,6 +2783,18 @@ a.list-row:active {
   margin-top: 0.3rem;
 }
 
+.cart-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.held-carts-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
 /* Le bouton partage une cellule de grille avec le compteur de quantite :
    il doit pouvoir retrecir au lieu de deborder. */
 .cart-edit-price {

@@ -9,6 +9,7 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import { ToastProvider } from "../components/ui/Toast"
 import { db } from "../db/database"
 import {
   findLocalProductByBarcode,
@@ -172,9 +173,11 @@ function renderPos(localSession?: LocalCashSession) {
 
   render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
-        <PosPage />
-      </MemoryRouter>
+      <ToastProvider>
+        <MemoryRouter>
+          <PosPage />
+        </MemoryRouter>
+      </ToastProvider>
     </QueryClientProvider>,
   )
 }
@@ -210,6 +213,8 @@ afterEach(async () => {
   document.cookie = "csrftoken=; Max-Age=0; path=/"
   await db.localSales.clear()
   await db.cashSessions.clear()
+  await db.carts.clear()
+  await db.products.clear()
 })
 
 describe("POS sale workflow", () => {
@@ -270,6 +275,38 @@ describe("POS sale workflow", () => {
     )
     expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1")
     expect(screen.queryByRole("heading", { name: "Vente validée" })).not.toBeInTheDocument()
+  })
+})
+
+describe("POS held carts", () => {
+  it("suspends the current sale and resumes it later with the same item", async () => {
+    const userEvents = userEvent.setup()
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    // La revalidation à la reprise lit le catalogue local réel (Dexie), pas
+    // le mock de `db/products` utilisé par le reste de ce fichier.
+    await db.products.put(localCoca)
+
+    renderPos()
+    await scanCoca(userEvents)
+
+    await userEvents.click(screen.getByRole("button", { name: /Suspendre/ }))
+    await waitFor(() => expect(screen.getByText("Panier vide")).toBeInTheDocument())
+    expect(await screen.findByRole("button", { name: /En attente/ })).toHaveTextContent("1")
+
+    await userEvents.click(screen.getByRole("button", { name: /En attente/ }))
+    expect(screen.getByRole("heading", { name: "Paniers en attente" })).toBeInTheDocument()
+    await userEvents.click(screen.getByRole("button", { name: "Reprendre" }))
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1"),
+    )
+    expect(screen.queryByRole("button", { name: /En attente/ })).not.toBeInTheDocument()
   })
 })
 

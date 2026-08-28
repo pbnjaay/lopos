@@ -13,6 +13,7 @@ import { Money } from "../components/ui/Money"
 import { RouteError, RouteLoading } from "../components/ui/RouteState"
 import { SectionHeader } from "../components/ui/SectionHeader"
 import { useToast } from "../components/ui/Toast"
+import { getSessionCartBlockers } from "../db/carts"
 import { countPendingLocalSalesForSession } from "../db/sales"
 import { markLocalCashSessionClosed } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
@@ -48,6 +49,12 @@ export function CloseCashSessionPage() {
   const pendingLocalSalesQuery = useQuery({
     queryKey: pendingLocalSalesQueryKey,
     queryFn: () => countPendingLocalSalesForSession(ownSession!.id),
+    enabled: ownSession !== null,
+  })
+  const cartBlockersQueryKey = ["session-cart-blockers", ownSession?.id] as const
+  const cartBlockersQuery = useQuery({
+    queryKey: cartBlockersQueryKey,
+    queryFn: () => getSessionCartBlockers(ownSession!.id),
     enabled: ownSession !== null,
   })
   const closeMutation = useMutation({
@@ -122,14 +129,63 @@ export function CloseCashSessionPage() {
     )
   }
 
-  if (pendingLocalSalesQuery.isLoading) {
+  if (pendingLocalSalesQuery.isLoading || cartBlockersQuery.isLoading) {
     return <RouteLoading message="Vérification des ventes en attente…" />
   }
 
   const pendingLocalSalesCount = pendingLocalSalesQuery.data ?? 0
+  const cartBlockers = cartBlockersQuery.data ?? { activeItemCount: 0, heldCount: 0 }
   const cashContext = localSession?.storeName
     ? `${localSession.storeName} · ${summary.cash_register.name}`
     : summary.cash_register.name
+
+  if (cartBlockers.activeItemCount > 0 || cartBlockers.heldCount > 0) {
+    const messages: string[] = []
+    if (cartBlockers.activeItemCount > 0) {
+      messages.push(
+        `La vente en cours contient ${cartBlockers.activeItemCount} article${cartBlockers.activeItemCount > 1 ? "s" : ""}.`,
+      )
+    }
+    if (cartBlockers.heldCount > 0) {
+      messages.push(
+        `${cartBlockers.heldCount} panier${cartBlockers.heldCount > 1 ? "s" : ""} en attente n'${cartBlockers.heldCount > 1 ? "ont" : "a"} pas été repris ou supprimé${cartBlockers.heldCount > 1 ? "s" : ""}.`,
+      )
+    }
+
+    return (
+      <main className="operational-page operational-page-narrow">
+        <PageHeader
+          backTo="/pos"
+          backLabel="Retour au point de vente"
+          eyebrow="Fin de journée"
+          title="Clôturer la caisse"
+          context={cashContext}
+        />
+        <section className="operational-card closing-sheet" aria-label="Vente ou panier non résolu">
+          <div className="card-section">
+            <SectionHeader
+              eyebrow="Avant de clôturer"
+              title="Vente en cours ou panier en attente"
+              description="La clôture attend qu'il n'y ait plus aucune vente à finaliser sur cette session."
+            />
+            {/* Blocage réel : fermer la caisse ne doit jamais faire perdre
+                une vente scannée ou mise en attente. */}
+            <InlineAlert
+              tone="warning"
+              title="Terminez ou libérez la caisse avant de clôturer"
+              action={
+                <Button variant="primary" size="sm" onClick={() => navigate("/pos")}>
+                  Retour au point de vente
+                </Button>
+              }
+            >
+              {messages.join(" ")}
+            </InlineAlert>
+          </div>
+        </section>
+      </main>
+    )
+  }
 
   if (pendingLocalSalesCount > 0) {
     async function handleSyncClick() {

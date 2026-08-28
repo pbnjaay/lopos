@@ -80,3 +80,30 @@ export type LocalMetadata = {
   value: unknown
   updatedAt: string
 }
+
+/** Structurally identical to `features/cart/cartState.ts`'s `CartItem` — kept
+ *  separate so the storage layer never imports from `features/`. */
+export type LocalCartItem = {
+  productId: string
+  name: string
+  unitPrice: number
+  catalogUnitPrice?: number
+  saleUnit?: "UNIT" | "KG"
+  quantityMilli?: number
+  stockMilli?: number
+  quantity?: number
+  stock?: number
+}
+
+export type LocalCartStatus = "ACTIVE" | "HELD"
+
+export type LocalCart = {
+  id: string
+  cashSessionId: string
+  status: LocalCartStatus
+  items: LocalCartItem[]
+  createdAt: string
+  updatedAt: string
+  /** Set only once HELD; null for the current ACTIVE cart. */
+  heldAt: string | null
+}

@@ -100,3 +100,11 @@ export function MinusIcon(props: IconProps) {
 export function PlusIcon(props: IconProps) {
   return <Icon {...props}><path d="M12 5v14M5 12h14" /></Icon>
 }
+
+export function PauseIcon(props: IconProps) {
+  return <Icon {...props}><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></Icon>
+}
+
+export function PlayIcon(props: IconProps) {
+  return <Icon {...props}><path d="M7 4v16l13-8Z" /></Icon>
+}

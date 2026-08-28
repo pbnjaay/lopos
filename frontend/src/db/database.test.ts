@@ -13,6 +13,7 @@ describe("PosDatabase schema", () => {
       "localSales",
       "cashSessions",
       "metadata",
+      "carts",
     ])
   })
 

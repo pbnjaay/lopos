@@ -5,6 +5,7 @@ import { getStore } from "../api/stores"
 import { Button } from "../components/ui/Button"
 import { ErrorState } from "../components/ui/ErrorState"
 import { InlineAlert } from "../components/ui/InlineAlert"
+import { useToast } from "../components/ui/Toast"
 import {
   trackCheckoutOpened,
   trackPaymentMethodSelected,
@@ -26,6 +27,7 @@ import { useCurrentUser } from "../features/auth/queries"
 import { Cart } from "../features/cart/Cart"
 import { QuantityDialog } from "../features/cart/CartDialogs"
 import { useCart } from "../features/cart/useCart"
+import type { ResumeStrategy } from "../features/cart/HeldCartsPanel"
 import { usePosSession } from "../features/cash-session/queries"
 import { CashPaymentModal } from "../features/checkout/CashPaymentModal"
 import { MobileMoneyConfirmation } from "../features/checkout/MobileMoneyConfirmation"
@@ -40,6 +42,7 @@ import type { CatalogProduct } from "../features/products/types"
 import { type ReceiptView, receiptViewFromLocalSale } from "../features/sales/receiptView"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
 import type { PaymentMethod } from "../types/api"
+import { formatQuantity } from "../utils/quantity"
 
 type CheckoutPayment = {
   method: PaymentMethod
@@ -72,7 +75,8 @@ export function PosPage() {
   const isOnline = useNetworkStatus()
   const { triggerSync } = useSyncStatus()
   const queryClient = useQueryClient()
-  const cart = useCart(ownSession?.id ?? null)
+  const toast = useToast()
+  const cart = useCart(ownSession?.id ?? null, selectedRegister?.store_id ?? null)
   const [checkoutStep, setCheckoutStep] = useState<"METHODS" | PaymentMethod | null>(null)
   const [completedSale, setCompletedSale] = useState<ReceiptView | null>(null)
   const [weighedProduct, setWeighedProduct] = useState<CatalogProduct | null>(null)
@@ -202,6 +206,40 @@ export function PosPage() {
     })
   }
 
+  function handleSuspendCart() {
+    void cart.holdCart()
+    toast.success("Vente mise en attente")
+    focusProductSearch()
+  }
+
+  function handleDeleteHeldCart(cartId: string) {
+    void cart.deleteHeldCart(cartId)
+  }
+
+  async function handleResumeHeldCart(cartId: string, strategy: ResumeStrategy) {
+    if (strategy === "hold") await cart.holdCart()
+    else if (strategy === "clear") await cart.clearCart()
+
+    const revalidation = await cart.resumeCart(cartId)
+    if (!revalidation) {
+      toast.error("Impossible de reprendre ce panier", { description: "Réessayez." })
+      return
+    }
+
+    if (revalidation.removed.length > 0 || revalidation.reduced.length > 0) {
+      const adjustments = [
+        ...revalidation.removed.map((name) => `${name} retiré (stock épuisé)`),
+        ...revalidation.reduced.map(
+          (change) => `${change.name} réduit à ${formatQuantity(change.toMilli, change.saleUnit)}`,
+        ),
+      ]
+      toast.warning("Panier repris avec des ajustements", { description: adjustments.join(" · ") })
+    } else {
+      toast.success("Panier repris")
+    }
+    focusProductSearch()
+  }
+
   function closeCheckout() {
     setCheckoutStep(null)
     focusProductSearch()
@@ -278,6 +316,10 @@ export function PosPage() {
             onPriceChange={cart.setItemPrice}
             onRemove={cart.removeItem}
             onClear={cart.clearCart}
+            onSuspend={handleSuspendCart}
+            heldCarts={cart.heldCarts.list}
+            onResumeHeldCart={(cartId, strategy) => void handleResumeHeldCart(cartId, strategy)}
+            onDeleteHeldCart={handleDeleteHeldCart}
             onDialogOpenChange={setIsCartDialogOpen}
             onInteractionComplete={focusProductSearch}
             onCheckout={() => {

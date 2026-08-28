@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable, type Table } from "dexie"
 
 import type {
+  LocalCart,
   LocalCashSession,
   LocalMetadata,
   LocalProduct,
@@ -8,18 +9,19 @@ import type {
 } from "./types"
 
 export const POS_DATABASE_NAME = "PosDatabase"
-export const POS_DATABASE_VERSION = 2
+export const POS_DATABASE_VERSION = 3
 
 export class PosDatabase extends Dexie {
   products!: Table<LocalProduct, [string, string]>
   localSales!: EntityTable<LocalSale, "id">
   cashSessions!: EntityTable<LocalCashSession, "id">
   metadata!: EntityTable<LocalMetadata, "key">
+  carts!: EntityTable<LocalCart, "id">
 
   constructor() {
     super(POS_DATABASE_NAME)
 
-    this.version(POS_DATABASE_VERSION).stores({
+    this.version(2).stores({
       products: "[storeId+id],[storeId+barcode],storeId,barcode,name",
       localSales: "id,[status+createdAt],status,createdAt,cashSessionId",
       cashSessions: "id,cashRegisterId,status",
@@ -40,6 +42,14 @@ export class PosDatabase extends Dexie {
           quantityMilli: Number(item.quantity ?? 0) * 1000,
         }))
       })
+    })
+
+    this.version(POS_DATABASE_VERSION).stores({
+      products: "[storeId+id],[storeId+barcode],storeId,barcode,name",
+      localSales: "id,[status+createdAt],status,createdAt,cashSessionId",
+      cashSessions: "id,cashRegisterId,status",
+      metadata: "key",
+      carts: "id,cashSessionId,[cashSessionId+status],status",
     })
   }
 }

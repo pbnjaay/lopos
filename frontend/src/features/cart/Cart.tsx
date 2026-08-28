@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from "react"
 
-import { CartIcon, PencilIcon, TrashIcon, XIcon } from "../../components/ui/Icons"
+import { CartIcon, PauseIcon, PencilIcon, TrashIcon, XIcon } from "../../components/ui/Icons"
 import { Badge } from "../../components/ui/Badge"
 import { Button } from "../../components/ui/Button"
 import { Dialog, DialogBody, DialogFooter } from "../../components/ui/Dialog"
 import { IconButton } from "../../components/ui/IconButton"
 import { Money } from "../../components/ui/Money"
 import { QuantityControl } from "../../components/ui/QuantityControl"
+import type { LocalCart } from "../../db/types"
 import { formatMoney } from "../../utils/money"
 import type { CartItem } from "./cartState"
 import { formatQuantity, lineTotal } from "../../utils/quantity"
 import { PriceDialog } from "./CartDialogs"
+import { HeldCartsDialog, type ResumeStrategy } from "./HeldCartsPanel"
 
 type CartProps = {
   items: CartItem[]
@@ -22,6 +24,10 @@ type CartProps = {
   onRemove: (productId: string) => void
   onClear: () => void
   onCheckout: () => void
+  onSuspend: () => void
+  heldCarts: LocalCart[]
+  onResumeHeldCart: (cartId: string, strategy: ResumeStrategy) => void
+  onDeleteHeldCart: (cartId: string) => void
   onDialogOpenChange?: (isOpen: boolean) => void
   onInteractionComplete?: () => void
 }
@@ -36,15 +42,22 @@ export function Cart({
   onRemove,
   onClear,
   onCheckout,
+  onSuspend,
+  heldCarts,
+  onResumeHeldCart,
+  onDeleteHeldCart,
   onDialogOpenChange,
   onInteractionComplete,
 }: CartProps) {
   const [editingQuantityProductId, setEditingQuantityProductId] = useState<string | null>(null)
   const [priceProductId, setPriceProductId] = useState<string | null>(null)
   const [isClearConfirming, setIsClearConfirming] = useState(false)
+  const [isHeldCartsOpen, setIsHeldCartsOpen] = useState(false)
   const cancelClearRef = useRef<HTMLButtonElement>(null)
   const priceItem = items.find((item) => item.productId === priceProductId)
-  const hasBlockingInteraction = Boolean(editingQuantityProductId || priceItem || isClearConfirming)
+  const hasBlockingInteraction = Boolean(
+    editingQuantityProductId || priceItem || isClearConfirming || isHeldCartsOpen,
+  )
 
   function finishInteraction() {
     onInteractionComplete?.()
@@ -78,20 +91,33 @@ export function Cart({
             ) : null}
           </div>
         </div>
-        {/* Retirer les articles d'une vente en cours n'est pas une suppression
-            définitive : le caissier les rescanne. Le rouge reste pour la
-            confirmation qui suit. */}
-        {items.length > 0 ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            title="Vider le panier"
-            onClick={() => setIsClearConfirming(true)}
-          >
-            <TrashIcon />
-            Vider
-          </Button>
-        ) : null}
+        <div className="cart-header-actions">
+          {heldCarts.length > 0 ? (
+            <Button variant="ghost" size="sm" onClick={() => setIsHeldCartsOpen(true)}>
+              En attente <Badge tone="accent">{heldCarts.length}</Badge>
+            </Button>
+          ) : null}
+          {items.length > 0 ? (
+            <Button variant="ghost" size="sm" title="Mettre la vente en attente" onClick={onSuspend}>
+              <PauseIcon />
+              Suspendre
+            </Button>
+          ) : null}
+          {/* Retirer les articles d'une vente en cours n'est pas une suppression
+              définitive : le caissier les rescanne. Le rouge reste pour la
+              confirmation qui suit. */}
+          {items.length > 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Vider le panier"
+              onClick={() => setIsClearConfirming(true)}
+            >
+              <TrashIcon />
+              Vider
+            </Button>
+          ) : null}
+        </div>
       </header>
 
       {items.length === 0 ? (
@@ -240,6 +266,22 @@ export function Cart({
           </DialogFooter>
         </DialogBody>
       </Dialog>
+    ) : null}
+    {isHeldCartsOpen ? (
+      <HeldCartsDialog
+        carts={heldCarts}
+        activeItemCount={items.length}
+        onClose={() => {
+          setIsHeldCartsOpen(false)
+          finishInteraction()
+        }}
+        onResume={(cartId, strategy) => {
+          setIsHeldCartsOpen(false)
+          onResumeHeldCart(cartId, strategy)
+          finishInteraction()
+        }}
+        onDelete={(cartId) => onDeleteHeldCart(cartId)}
+      />
     ) : null}
     </>
   )
