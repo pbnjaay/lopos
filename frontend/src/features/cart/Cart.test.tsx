@@ -7,7 +7,6 @@ import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { lineTotal } from "../../utils/quantity"
-import type { LocalCart } from "../../db/types"
 import { Cart } from "./Cart"
 import { QuantityDialog } from "./CartDialogs"
 import type { CartItem } from "./cartState"
@@ -39,15 +38,9 @@ type Callbacks = {
   onClear: ReturnType<typeof vi.fn>
   onCheckout: ReturnType<typeof vi.fn>
   onSuspend: ReturnType<typeof vi.fn>
-  onResumeHeldCart: ReturnType<typeof vi.fn>
-  onDeleteHeldCart: ReturnType<typeof vi.fn>
 }
 
-function renderCart(
-  items: CartItem[],
-  overrides: Partial<Callbacks> = {},
-  heldCarts: LocalCart[] = [],
-) {
+function renderCart(items: CartItem[], overrides: Partial<Callbacks> = {}) {
   const callbacks: Callbacks = {
     onQuantityChange: vi.fn(),
     onPriceChange: vi.fn(),
@@ -55,8 +48,6 @@ function renderCart(
     onClear: vi.fn(),
     onCheckout: vi.fn(),
     onSuspend: vi.fn(),
-    onResumeHeldCart: vi.fn(),
-    onDeleteHeldCart: vi.fn(),
     ...overrides,
   }
   render(
@@ -71,25 +62,9 @@ function renderCart(
       onClear={callbacks.onClear}
       onCheckout={callbacks.onCheckout}
       onSuspend={callbacks.onSuspend}
-      heldCarts={heldCarts}
-      onResumeHeldCart={callbacks.onResumeHeldCart}
-      onDeleteHeldCart={callbacks.onDeleteHeldCart}
     />,
   )
   return callbacks
-}
-
-function buildHeldCart(overrides: Partial<LocalCart> = {}): LocalCart {
-  return {
-    id: "held-1",
-    cashSessionId: "session-a",
-    status: "HELD",
-    items: [coca],
-    createdAt: "2026-08-28T10:00:00Z",
-    updatedAt: "2026-08-28T10:05:00Z",
-    heldAt: "2026-08-28T10:05:00Z",
-    ...overrides,
-  }
 }
 
 afterEach(cleanup)
@@ -244,53 +219,9 @@ describe("Cart POS interactions", () => {
     expect(callbacks.onSuspend).toHaveBeenCalledOnce()
   })
 
-  it("hides suspend and clear when the cart is empty, but still shows held carts", () => {
-    renderCart([], {}, [buildHeldCart()])
+  it("hides suspend and clear when the cart is empty", () => {
+    renderCart([])
     expect(screen.queryByRole("button", { name: /Suspendre/ })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Vider" })).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /En attente/ })).toBeInTheDocument()
-  })
-})
-
-describe("Held carts", () => {
-  it("resumes a held cart directly when the active cart is empty", async () => {
-    const user = userEvent.setup()
-    const callbacks = renderCart([], {}, [buildHeldCart()])
-    await user.click(screen.getByRole("button", { name: /En attente/ }))
-    expect(screen.getByRole("heading", { name: "Paniers en attente" })).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Reprendre" }))
-    expect(callbacks.onResumeHeldCart).toHaveBeenCalledWith("held-1", "direct")
-  })
-
-  it("asks to hold or clear the active cart before resuming a held one", async () => {
-    const user = userEvent.setup()
-    const callbacks = renderCart([banana], {}, [buildHeldCart()])
-    await user.click(screen.getByRole("button", { name: /En attente/ }))
-    await user.click(screen.getByRole("button", { name: "Reprendre" }))
-    expect(screen.getByRole("heading", { name: "Panier actuel non vide" })).toBeInTheDocument()
-    expect(callbacks.onResumeHeldCart).not.toHaveBeenCalled()
-
-    await user.click(screen.getByRole("button", { name: "Mettre en attente et reprendre" }))
-    expect(callbacks.onResumeHeldCart).toHaveBeenCalledWith("held-1", "hold")
-  })
-
-  it("clears the active cart and resumes when that choice is made", async () => {
-    const user = userEvent.setup()
-    const callbacks = renderCart([banana], {}, [buildHeldCart()])
-    await user.click(screen.getByRole("button", { name: /En attente/ }))
-    await user.click(screen.getByRole("button", { name: "Reprendre" }))
-    await user.click(screen.getByRole("button", { name: "Vider et reprendre" }))
-    expect(callbacks.onResumeHeldCart).toHaveBeenCalledWith("held-1", "clear")
-  })
-
-  it("deletes a held cart after confirmation", async () => {
-    const user = userEvent.setup()
-    const callbacks = renderCart([], {}, [buildHeldCart()])
-    await user.click(screen.getByRole("button", { name: /En attente/ }))
-    await user.click(screen.getByRole("button", { name: "Supprimer le panier en attente (1 article)" }))
-    expect(screen.getByRole("heading", { name: "Supprimer ce panier ?" })).toBeInTheDocument()
-    expect(callbacks.onDeleteHeldCart).not.toHaveBeenCalled()
-    await user.click(screen.getByRole("button", { name: "Supprimer le panier" }))
-    expect(callbacks.onDeleteHeldCart).toHaveBeenCalledWith("held-1")
   })
 })

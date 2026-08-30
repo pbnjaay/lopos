@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { getStore } from "../api/stores"
+import { Badge } from "../components/ui/Badge"
 import { Button } from "../components/ui/Button"
 import { ErrorState } from "../components/ui/ErrorState"
 import { InlineAlert } from "../components/ui/InlineAlert"
@@ -27,7 +28,7 @@ import { useCurrentUser } from "../features/auth/queries"
 import { Cart } from "../features/cart/Cart"
 import { QuantityDialog } from "../features/cart/CartDialogs"
 import { useCart } from "../features/cart/useCart"
-import type { ResumeStrategy } from "../features/cart/HeldCartsPanel"
+import { HeldCartsDialog, type ResumeStrategy } from "../features/cart/HeldCartsPanel"
 import { usePosSession } from "../features/cash-session/queries"
 import { CashPaymentModal } from "../features/checkout/CashPaymentModal"
 import { MobileMoneyConfirmation } from "../features/checkout/MobileMoneyConfirmation"
@@ -81,6 +82,7 @@ export function PosPage() {
   const [completedSale, setCompletedSale] = useState<ReceiptView | null>(null)
   const [weighedProduct, setWeighedProduct] = useState<CatalogProduct | null>(null)
   const [isCartDialogOpen, setIsCartDialogOpen] = useState(false)
+  const [isHeldCartsOpen, setIsHeldCartsOpen] = useState(false)
   const [lastPaymentMethod, setLastPaymentMethod] = useState<PaymentMethod | null>(
     getLastPaymentMethod,
   )
@@ -217,6 +219,7 @@ export function PosPage() {
   }
 
   async function handleResumeHeldCart(cartId: string, strategy: ResumeStrategy) {
+    setIsHeldCartsOpen(false)
     if (strategy === "hold") await cart.holdCart()
     else if (strategy === "clear") await cart.clearCart()
 
@@ -257,7 +260,14 @@ export function PosPage() {
       const method = checkoutFKeyToMethod[event.key]
       if (!method) return
       event.preventDefault()
-      if (checkoutStep !== null || completedSale !== null || weighedProduct !== null || isCartDialogOpen) return
+      if (
+        checkoutStep !== null ||
+        completedSale !== null ||
+        weighedProduct !== null ||
+        isCartDialogOpen ||
+        isHeldCartsOpen
+      )
+        return
       if (!ownSession || cart.items.length === 0) return
       saleMutation.reset()
       setCheckoutStep(method)
@@ -266,7 +276,17 @@ export function PosPage() {
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [checkoutStep, completedSale, weighedProduct, isCartDialogOpen, ownSession, cart.items.length, cart.total, saleMutation])
+  }, [
+    checkoutStep,
+    completedSale,
+    weighedProduct,
+    isCartDialogOpen,
+    isHeldCartsOpen,
+    ownSession,
+    cart.items.length,
+    cart.total,
+    saleMutation,
+  ])
 
   return (
     <main className="pos-page">
@@ -276,6 +296,11 @@ export function PosPage() {
           <h1>{storeQuery.data?.name ?? localSession?.storeName ?? "Magasin"}</h1>
           <p className="metadata">{selectedRegister?.name ?? "Caisse"}</p>
         </div>
+        {cart.heldCarts.count > 0 ? (
+          <Button variant="ghost" size="sm" onClick={() => setIsHeldCartsOpen(true)}>
+            En attente <Badge tone="accent">{cart.heldCarts.count}</Badge>
+          </Button>
+        ) : null}
       </header>
 
       {catalog.status === "catalogue_syncing" ? (
@@ -317,9 +342,6 @@ export function PosPage() {
             onRemove={cart.removeItem}
             onClear={cart.clearCart}
             onSuspend={handleSuspendCart}
-            heldCarts={cart.heldCarts.list}
-            onResumeHeldCart={(cartId, strategy) => void handleResumeHeldCart(cartId, strategy)}
-            onDeleteHeldCart={handleDeleteHeldCart}
             onDialogOpenChange={setIsCartDialogOpen}
             onInteractionComplete={focusProductSearch}
             onCheckout={() => {
@@ -414,6 +436,18 @@ export function PosPage() {
             setWeighedProduct(null)
             focusProductSearch()
           }}
+        />
+      ) : null}
+      {isHeldCartsOpen ? (
+        <HeldCartsDialog
+          carts={cart.heldCarts.list}
+          activeItemCount={cart.items.length}
+          onClose={() => {
+            setIsHeldCartsOpen(false)
+            focusProductSearch()
+          }}
+          onResume={(cartId, strategy) => void handleResumeHeldCart(cartId, strategy)}
+          onDelete={handleDeleteHeldCart}
         />
       ) : null}
     </main>

@@ -7,12 +7,10 @@ import { Dialog, DialogBody, DialogFooter } from "../../components/ui/Dialog"
 import { IconButton } from "../../components/ui/IconButton"
 import { Money } from "../../components/ui/Money"
 import { QuantityControl } from "../../components/ui/QuantityControl"
-import type { LocalCart } from "../../db/types"
 import { formatMoney } from "../../utils/money"
 import type { CartItem } from "./cartState"
 import { formatQuantity, lineTotal } from "../../utils/quantity"
 import { PriceDialog } from "./CartDialogs"
-import { HeldCartsDialog, type ResumeStrategy } from "./HeldCartsPanel"
 
 type CartProps = {
   items: CartItem[]
@@ -25,9 +23,6 @@ type CartProps = {
   onClear: () => void
   onCheckout: () => void
   onSuspend: () => void
-  heldCarts: LocalCart[]
-  onResumeHeldCart: (cartId: string, strategy: ResumeStrategy) => void
-  onDeleteHeldCart: (cartId: string) => void
   onDialogOpenChange?: (isOpen: boolean) => void
   onInteractionComplete?: () => void
 }
@@ -43,21 +38,15 @@ export function Cart({
   onClear,
   onCheckout,
   onSuspend,
-  heldCarts,
-  onResumeHeldCart,
-  onDeleteHeldCart,
   onDialogOpenChange,
   onInteractionComplete,
 }: CartProps) {
   const [editingQuantityProductId, setEditingQuantityProductId] = useState<string | null>(null)
   const [priceProductId, setPriceProductId] = useState<string | null>(null)
   const [isClearConfirming, setIsClearConfirming] = useState(false)
-  const [isHeldCartsOpen, setIsHeldCartsOpen] = useState(false)
   const cancelClearRef = useRef<HTMLButtonElement>(null)
   const priceItem = items.find((item) => item.productId === priceProductId)
-  const hasBlockingInteraction = Boolean(
-    editingQuantityProductId || priceItem || isClearConfirming || isHeldCartsOpen,
-  )
+  const hasBlockingInteraction = Boolean(editingQuantityProductId || priceItem || isClearConfirming)
 
   function finishInteraction() {
     onInteractionComplete?.()
@@ -92,11 +81,6 @@ export function Cart({
           </div>
         </div>
         <div className="cart-header-actions">
-          {heldCarts.length > 0 ? (
-            <Button variant="ghost" size="sm" onClick={() => setIsHeldCartsOpen(true)}>
-              En attente <Badge tone="accent">{heldCarts.length}</Badge>
-            </Button>
-          ) : null}
           {items.length > 0 ? (
             <Button variant="ghost" size="sm" title="Mettre la vente en attente" onClick={onSuspend}>
               <PauseIcon />
@@ -266,22 +250,6 @@ export function Cart({
           </DialogFooter>
         </DialogBody>
       </Dialog>
-    ) : null}
-    {isHeldCartsOpen ? (
-      <HeldCartsDialog
-        carts={heldCarts}
-        activeItemCount={items.length}
-        onClose={() => {
-          setIsHeldCartsOpen(false)
-          finishInteraction()
-        }}
-        onResume={(cartId, strategy) => {
-          setIsHeldCartsOpen(false)
-          onResumeHeldCart(cartId, strategy)
-          finishInteraction()
-        }}
-        onDelete={(cartId) => onDeleteHeldCart(cartId)}
-      />
     ) : null}
     </>
   )
