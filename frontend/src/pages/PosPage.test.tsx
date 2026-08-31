@@ -297,16 +297,52 @@ describe("POS held carts", () => {
 
     await userEvents.click(screen.getByRole("button", { name: /Suspendre/ }))
     await waitFor(() => expect(screen.getByText("Panier vide")).toBeInTheDocument())
-    expect(await screen.findByRole("button", { name: /En attente/ })).toHaveTextContent("1")
 
-    await userEvents.click(screen.getByRole("button", { name: /En attente/ }))
-    expect(screen.getByRole("heading", { name: "Paniers en attente" })).toBeInTheDocument()
-    await userEvents.click(screen.getByRole("button", { name: "Reprendre" }))
+    // Le panier suspendu apparaît directement dans le rail : le reprendre
+    // coûte un clic, sans modale ni changement de page.
+    expect(
+      await screen.findByRole("heading", { name: /Paniers en attente/ }),
+    ).toBeInTheDocument()
+    await userEvents.click(screen.getByRole("button", { name: /Reprendre le panier/ }))
 
     await waitFor(() =>
       expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1"),
     )
-    expect(screen.queryByRole("button", { name: /En attente/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: /Paniers en attente/ })).not.toBeInTheDocument()
+  })
+
+  it("arbitre avant d'écraser une vente en cours quand on reprend depuis le rail", async () => {
+    const userEvents = userEvent.setup()
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      throw new Error(`Unexpected request: ${url}`)
+    })
+    await db.products.put(localCoca)
+
+    renderPos()
+    await scanCoca(userEvents)
+    await userEvents.click(screen.getByRole("button", { name: /Suspendre/ }))
+    await waitFor(() => expect(screen.getByText("Panier vide")).toBeInTheDocument())
+
+    // Une nouvelle vente est commencée : reprendre ne doit jamais l'écraser
+    // en silence.
+    await scanCoca(userEvents)
+    await userEvents.click(screen.getByRole("button", { name: /Reprendre le panier/ }))
+
+    expect(
+      await screen.findByRole("heading", { name: "Panier actuel non vide" }),
+    ).toBeInTheDocument()
+    await userEvents.click(
+      screen.getByRole("button", { name: "Mettre en attente et reprendre" }),
+    )
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1"),
+    )
+    // La vente écartée est elle-même retrouvable dans le rail.
+    expect(screen.getByRole("button", { name: /Suspendre/ })).toBeInTheDocument()
   })
 })
 
@@ -595,7 +631,7 @@ describe("POS keyboard shortcuts", () => {
     const userEvents = userEvent.setup()
     renderPos()
     await scanCoca(userEvents)
-    await userEvents.click(screen.getByRole("button", { name: "Modifier le prix" }))
+    await userEvents.click(screen.getByRole("button", { name: `Modifier le prix de ${coca.name}` }))
     expect(screen.getByRole("heading", { name: "Modifier le prix" })).toBeInTheDocument()
 
     await userEvents.keyboard("{F1}")
@@ -619,7 +655,7 @@ describe("POS keyboard shortcuts", () => {
     await userEvents.keyboard("{Escape}")
     await waitFor(() => expect(scanner).toHaveFocus())
 
-    await userEvents.click(screen.getByRole("button", { name: "Modifier le prix" }))
+    await userEvents.click(screen.getByRole("button", { name: `Modifier le prix de ${coca.name}` }))
     const priceInput = screen.getByLabelText("Prix pour cette vente")
     await userEvents.clear(priceInput)
     await userEvents.type(priceInput, "450{Enter}")

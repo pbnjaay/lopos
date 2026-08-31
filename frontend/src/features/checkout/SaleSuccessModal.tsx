@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react"
 import { Button, buttonClassName } from "../../components/ui/Button"
 import { Money } from "../../components/ui/Money"
 import { useDialogFocusTrap } from "../../components/ui/useDialogFocusTrap"
+import { withSaleOrigin } from "../sales/origin"
 import type { ReceiptView } from "../sales/receiptView"
 
 type SaleSuccessModalProps = {
@@ -98,7 +99,10 @@ export function SaleSuccessModal({ sale, cashSessionId, onNewSale, onPrintTicket
               d'encaissement et repart d'un état propre. */}
           <a
             className={buttonClassName({ variant: "secondary" })}
-            href={`/sales/${encodeURIComponent(sale.id)}/receipt?${cashSessionId ? `cash_session_id=${encodeURIComponent(cashSessionId)}&` : ""}from=pos`}
+            href={withSaleOrigin(
+              `/sales/${encodeURIComponent(sale.id)}/receipt${cashSessionId ? `?cash_session_id=${encodeURIComponent(cashSessionId)}` : ""}`,
+              "pos",
+            )}
             onClick={onPrintTicket}
           >
             Imprimer le ticket

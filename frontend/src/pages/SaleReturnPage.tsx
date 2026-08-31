@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 
 import { createSaleReturn, getSaleReceipt } from "../api/sales";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -19,6 +19,7 @@ import {
   saleReceiptQueryKey,
   saleReturnReceiptQueryKey,
 } from "../features/sales/queries";
+import { readSaleOrigin, withSaleOrigin } from "../features/sales/origin";
 import type { PaymentMethod, SaleReceipt, SaleReturn } from "../types/api";
 import { describeErrorShort } from "../utils/errorCopy";
 import { formatBackendMoney } from "../utils/money";
@@ -39,6 +40,8 @@ const refundLabels: Record<PaymentMethod, string> = {
 
 export function SaleReturnPage() {
   const { saleId } = useParams<{ saleId: string }>();
+  const [searchParams] = useSearchParams();
+  const origin = readSaleOrigin(searchParams);
   const user = useCurrentUser().data!;
   const { ownSession } = usePosSession(user);
   const online = useNetworkStatus();
@@ -200,7 +203,7 @@ export function SaleReturnPage() {
     return (
       <main className="operational-page operational-page-narrow">
         <PageHeader
-          backTo={`/sales/${sale.id}`}
+          backTo={withSaleOrigin(`/sales/${sale.id}`, origin)}
           backLabel="Retour à la vente"
           eyebrow={`Retour ${completedReturn.reference}`}
           title={`Ticket ${sale.id.slice(0, 8).toUpperCase()}`}
@@ -239,11 +242,11 @@ export function SaleReturnPage() {
           <div className="return-success-actions">
             <ButtonLink
               variant="secondary"
-              to={`/returns/${completedReturn.id}/receipt?print=1`}
+              to={withSaleOrigin(`/returns/${completedReturn.id}/receipt?print=1`, origin)}
             >
               Imprimer le ticket
             </ButtonLink>
-            <ButtonLink variant="primary" to={`/sales/${sale.id}`}>
+            <ButtonLink variant="primary" to={withSaleOrigin(`/sales/${sale.id}`, origin)}>
               Retour à la vente
             </ButtonLink>
           </div>
@@ -276,7 +279,7 @@ export function SaleReturnPage() {
   return (
     <main className="operational-page">
       <PageHeader
-        backTo={`/sales/${sale.id}`}
+        backTo={withSaleOrigin(`/sales/${sale.id}`, origin)}
         backLabel="Retour à la vente"
         eyebrow="Retour marchandise"
         title={`Ticket ${sale.id.slice(0, 8).toUpperCase()}`}

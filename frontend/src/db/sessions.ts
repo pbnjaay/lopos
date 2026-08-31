@@ -36,7 +36,13 @@ export async function saveLocalCashSession(
   cashier: Pick<CurrentUser, "id" | "username" | "first_name">,
   database: PosDatabase = db,
 ): Promise<LocalCashSession> {
+  const existing = await database.cashSessions.get(session.id)
   const localSession = buildLocalCashSession(session, register, cashier)
+  // Le nom de la boutique ne vient pas de la session serveur : il est écrit
+  // séparément une fois le magasin chargé. Un rafraîchissement de session
+  // écrase l'enregistrement entier, il doit donc reporter ce nom — sinon
+  // l'en-tête et le repli hors ligne le reperdent à chaque reconnexion.
+  if (existing?.storeName) localSession.storeName = existing.storeName
   await database.cashSessions.put(localSession)
   return localSession
 }

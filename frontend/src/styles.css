@@ -52,6 +52,14 @@
   --control-md: 3rem;
   --control-lg: 3.5rem;
 
+  /* Chrome de l'application - hauteurs reelles du header et de la barre de
+     navigation, declarees une fois pour que les surfaces collantes puissent
+     s'y soustraire au lieu de les recouvrir. La barre de navigation vaut 0
+     tant qu'elle est une colonne laterale ; elle ne prend de la hauteur
+     qu'une fois passee en bas de l'ecran (voir max-width: 1199px). */
+  --app-header-height: 4.5rem;
+  --app-bottom-nav-height: 0rem;
+
   /* Tons semantiques - reprennent strictement les couleurs deja en place. */
   --color-danger: #9a241c;
   --color-danger-surface: #fff0ee;
@@ -533,7 +541,7 @@ input::placeholder {
   position: sticky;
   z-index: 50;
   top: 0;
-  min-height: 4.5rem;
+  min-height: var(--app-header-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -546,7 +554,7 @@ input::placeholder {
 }
 
 .app-frame {
-  min-height: calc(100vh - 4.5rem);
+  min-height: calc(100vh - var(--app-header-height));
   display: grid;
   grid-template-columns: 6rem minmax(0, 1fr);
 }
@@ -558,8 +566,8 @@ input::placeholder {
 .app-navigation {
   position: sticky;
   z-index: 40;
-  top: 4.5rem;
-  height: calc(100vh - 4.5rem);
+  top: var(--app-header-height);
+  height: calc(100vh - var(--app-header-height));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -737,12 +745,34 @@ input::placeholder {
 }
 
 .app-header-status {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* La marque reste calee sur la colonne de navigation (6rem) ; le contexte
+   de caisse s'ecoule ensuite, dans le meme alignement que le contenu. */
+.app-header-status .brand-link {
   width: 6rem;
   flex: 0 0 6rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-3);
+}
+
+/* Boutique et caisse dans le chrome global : l'identite du point de vente
+   reste lisible toute la journee sans occuper un titre de page entier. */
+.app-header-context {
+  overflow: hidden;
+  max-width: min(30ch, 32vw);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .app-header-right {
@@ -1380,18 +1410,20 @@ a.list-row:active {
   border: 0;
 }
 
+/* Le POS est un poste de travail, pas un document : il occupe exactement la
+   hauteur disponible et ne defile jamais dans son ensemble. Seules ses deux
+   colonnes defilent, chacune de son cote, ce qui garde en permanence a
+   l'ecran le champ de scan, le total et ENCAISSER. */
 .pos-page {
   width: min(100%, var(--content-max-width-wide));
-  margin: 0 auto;
-  padding: var(--space-6);
-}
-
-.pos-heading {
+  height: calc(
+    100dvh - var(--app-header-height) - var(--app-bottom-nav-height)
+  );
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: var(--space-4);
-  margin-bottom: var(--space-5);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-6);
 }
 
 .closing-sheet {
@@ -1748,7 +1780,8 @@ a.list-row:active {
 .receipt-totals dd,
 .sale-amounts dd,
 .cart-line-total,
-.cart-total-block strong,
+.cart-item-unit,
+.cart-total-amount strong,
 .payment-total strong,
 .change-preview strong,
 .quantity-value,
@@ -2555,12 +2588,9 @@ a.list-row:active {
   }
 }
 
-.pos-heading h1 {
-  margin: 0;
-}
-
 .pos-notice {
-  margin-bottom: var(--space-4);
+  flex: 0 0 auto;
+  margin: 0;
 }
 
 .network-status {
@@ -2613,26 +2643,36 @@ a.list-row:active {
   color: #8a4b0b;
 }
 
+/* Le panier passe devant : une fois la vente commencee, c'est lui que le
+   caissier lit, corrige et encaisse. Le catalogue devient un rail de
+   saisie, assez large pour un nom de produit et pas davantage. */
+.pos-grid {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: minmax(17rem, 34fr) minmax(0, 66fr);
+  gap: var(--space-4);
+  align-items: stretch;
+  min-height: 0;
+}
+
+/* Le rail epouse son contenu au lieu d'etirer une carte vide sur toute la
+   hauteur : au demarrage d'une session, il ne reste que le champ de scan. */
 .product-search {
-  padding: 1.75rem;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-self: start;
+  gap: var(--space-3);
+  min-height: 0;
+  max-height: 100%;
+  padding: var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-}
-
-.pos-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(24rem, 0.9fr);
-  gap: var(--space-4-5);
-  align-items: start;
 }
 
 .product-search form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-3);
-  margin-top: var(--space-5);
 }
 
 .product-search form .button {
@@ -2642,46 +2682,68 @@ a.list-row:active {
   gap: var(--space-2);
 }
 
-.product-search input {
-  width: 100%;
+/* Le champ est la porte d'entree de chaque vente : une seule commande,
+   pleine largeur du rail, avec la marque du scan a gauche. */
+.product-search-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
   min-height: var(--control-lg);
-  padding: var(--space-3) var(--space-4);
+  padding-left: var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: var(--color-surface-muted);
-  color: inherit;
-  font-size: var(--text-card-title);
+  color: var(--color-text-muted);
   transition:
     border-color 120ms ease,
     background-color 120ms ease,
     box-shadow 120ms ease;
 }
 
-.product-search input:hover {
+.product-search-field:hover {
   border-color: var(--color-border-strong);
 }
 
-.product-search input:focus {
-  outline: 0;
+.product-search-field:focus-within {
   border-color: var(--color-primary);
   background: var(--color-surface);
   box-shadow: 0 0 0 3px rgb(23 107 77 / 10%);
 }
 
-.search-hint,
-.empty-search,
-.product-result span {
-  color: #527064;
+.product-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: calc(var(--control-lg) - 2px);
+  padding: 0 var(--space-3) 0 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-card-title);
 }
 
+.product-search input:focus-visible {
+  outline: 0;
+}
+
+.product-result span {
+  color: var(--color-text-muted);
+}
+
+/* Aide sous un champ de recherche - reste utilisee par la page Ventes. */
 .search-hint {
   margin: 0.6rem 0 0;
+  color: var(--color-text-muted);
   font-size: var(--text-secondary);
 }
 
+/* Plus de hauteur reservee : une zone vide de 9rem tenue au chaud pour
+   « les resultats apparaitront ici » coutait plus de place que les
+   resultats eux-memes. */
 .search-results {
-  min-height: 9rem;
-  margin-top: var(--space-5);
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .product-list {
@@ -2744,48 +2806,42 @@ a.list-row:active {
   font-weight: 700;
 }
 
+/* Le panneau remplit sa colonne : trois rangees fixes — en-tete, liste
+   defilante, pied — de sorte que le total et ENCAISSER restent a l'ecran
+   quel que soit le nombre d'articles. */
 .cart-panel {
-  position: sticky;
-  top: 5.5rem;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  max-height: calc(100vh - 2rem);
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-}
-
-.cart-header,
-.cart-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-4-5);
 }
 
 .cart-header {
-  border-bottom: 1px solid #e1e8e4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .cart-header h2 {
   margin: 0;
-  font-size: var(--text-section-title);
+  font-size: var(--text-card-title);
 }
 
 .cart-title-row {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.55rem;
-  margin-top: 0.3rem;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .cart-header-actions {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
 }
@@ -2795,119 +2851,290 @@ a.list-row:active {
   gap: var(--space-2);
 }
 
-/* Le bouton partage une cellule de grille avec le compteur de quantite :
-   il doit pouvoir retrecir au lieu de deborder. */
-.cart-edit-price {
-  min-width: 0;
+/* ==========================================================================
+   Rail du POS - au repos, la colonne de recherche affiche ce qui attend le
+   caissier : paniers suspendus a reprendre, derniers tickets a rouvrir.
+   C'est la meme surface que les resultats de recherche, jamais les deux a
+   la fois, donc aucune hauteur supplementaire.
+   ========================================================================== */
+
+.pos-rail-rest {
+  display: grid;
+  align-content: start;
+  gap: var(--space-5);
 }
 
-.empty-cart {
-  min-height: 13rem;
+.pos-rail-section {
   display: grid;
-  place-content: center;
-  gap: 0.4rem;
-  padding: var(--space-6);
-  color: #527064;
+  gap: var(--space-2);
+}
+
+.pos-rail-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.pos-rail-section-header h2 {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.pos-rail-count {
+  display: inline-block;
+  min-width: 1.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--color-surface-accent);
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
   text-align: center;
 }
 
-.empty-cart-icon {
-  width: 3.25rem;
-  height: 3.25rem;
+.pos-rail-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.pos-rail-link:hover {
+  text-decoration: underline;
+}
+
+/* Paniers suspendus : un bloc borde, parce que c'est un travail en cours
+   sur lequel on agit. Deux rangees seulement. */
+.pos-rail-list {
   display: grid;
-  place-items: center;
-  justify-self: center;
-  margin-bottom: 0.35rem;
-  border-radius: 999px;
-  background: #edf4f0;
-  color: #527064;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.empty-cart-icon svg {
-  width: 1.25rem;
-  height: 1.25rem;
+.pos-rail-card {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-subtle);
 }
 
+.pos-rail-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.pos-rail-card-head > span {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pos-rail-card-head > strong {
+  flex: 0 0 auto;
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* « Reprendre » porte la rangee, la corbeille se range a l'oppose : deux
+   actions de poids tres differents ne se touchent pas. */
+.pos-rail-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* Dernieres ventes : de vraies lignes, separees par un filet. Aucune carte
+   supplementaire dans un panneau qui en est deja une. */
+.pos-rail-lines {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pos-rail-lines > li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.pos-rail-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-md);
+  padding: var(--space-1) var(--space-1) var(--space-1) 0;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  text-decoration: none;
+}
+
+.pos-rail-line:hover {
+  background: var(--color-surface-muted);
+}
+
+.pos-rail-line > svg {
+  color: var(--color-text-muted);
+}
+
+.pos-rail-line-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.pos-rail-line-label {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pos-rail-line-amount {
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Etat vide compact : deux lignes, pas d'illustration. Le caissier doit
+   voir le reste de son poste de travail, pas une page d'accueil. */
+.empty-cart {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-6);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* Le panier se lit comme un tableau, pas comme une pile de cartes : une
+   ligne par article, colonnes alignees, filet entre les lignes. C'est ce
+   qui fait passer une ligne de 128 px a 56 px sans rien retirer. */
 .cart-list {
   display: grid;
   align-content: start;
-  gap: var(--space-2);
   margin: 0;
-  padding: var(--space-3);
+  padding: 0;
   overflow-y: auto;
   list-style: none;
   scrollbar-gutter: stable;
 }
 
+/* Chaque ligne est sa propre grille : les colonnes sont donc dimensionnees
+   en dur, sinon chacune se cale sur son propre contenu et rien ne s'aligne
+   d'une ligne a l'autre.
+   Le produit est plafonne et la quantite le suit immediatement : la
+   respiration est reportee dans une piste vide avant les montants, qui
+   restent cales a droite comme toute colonne de nombres. Sans ce plafond,
+   le nom prenait toute la largeur disponible et repoussait la quantite
+   loin du produit qu'elle concerne. */
 .cart-item {
   display: grid;
-  gap: 0.7rem;
-  padding: var(--space-4);
-  border: 1px solid #e1e8e4;
-  border-radius: var(--radius-control);
-  background: var(--color-surface-subtle);
-}
-
-.cart-item-heading,
-.cart-item-actions {
-  display: flex;
+  grid-template-columns:
+    minmax(9rem, 24rem) auto minmax(var(--space-4), 1fr) 7.5rem 5.5rem;
+  grid-template-areas: "identity quantity . total controls";
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  min-height: 3.5rem;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
 }
 
-.cart-item-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
+.cart-item-identity {
+  grid-area: identity;
+}
+
+.cart-item > .quantity-control {
+  grid-area: quantity;
+}
+
+.cart-line-total {
+  grid-area: total;
+}
+
+.cart-item-controls {
+  grid-area: controls;
+}
+
+.cart-item:last-child {
+  border-bottom: 0;
+}
+
+.cart-item:hover {
+  background: var(--color-surface-subtle);
 }
 
 .cart-item-identity {
   display: grid;
-  gap: var(--space-1);
+  gap: 0;
   min-width: 0;
 }
 
-.cart-item-name-row {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 0.45rem;
-  min-width: 0;
-}
-
-.cart-item-name-row strong {
-  display: -webkit-box;
-  flex: 1 1 auto;
+/* Nom sur une ligne, tronque, avec le nom complet en info-bulle : dans un
+   tableau, une ligne qui grandit desaligne toutes les autres. */
+.cart-item-identity strong {
   overflow: hidden;
   min-width: 0;
-  line-height: 1.25;
+  line-height: 1.3;
+  white-space: nowrap;
   text-overflow: ellipsis;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
-.cart-item-heading span {
-  color: #527064;
-  font-size: var(--text-secondary);
+.cart-item-unit {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.cart-item-unit-overridden {
+  color: var(--color-warning);
+  font-weight: 700;
+}
+
+.cart-item-unit s {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.cart-item > .quantity-control {
+  width: 9.5rem;
 }
 
 .cart-line-total {
-  flex: 0 0 auto;
   font-size: var(--text-card-title);
+  text-align: right;
+  white-space: nowrap;
 }
 
-.cart-item-corner {
+.cart-item-controls {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-}
-
-.cart-remove-corner {
-  width: var(--control-sm);
-  height: var(--control-sm);
-  min-width: var(--control-sm);
+  justify-content: flex-end;
+  gap: var(--space-1);
 }
 
 .quantity-control {
@@ -3026,34 +3253,18 @@ a.list-row:active {
   background: #feecea;
 }
 
-.price-override-note {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  margin: -0.25rem 0 0;
-  color: #8a4b0b;
-  font-size: var(--text-caption);
-  font-weight: 700;
-}
-
-.price-override-note span {
-  color: #718078;
-  text-decoration: line-through;
-}
-
+/* Total et ENCAISSER cote a cote : la colonne panier est desormais assez
+   large pour les tenir sur une ligne, ce qui rend au panier la hauteur que
+   le pied empilait. Rien d'autre dans ce pied — le compteur d'articles est
+   deja dans l'en-tete, il n'a pas a concurrencer le total. */
 .cart-summary {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(13rem, 20rem);
+  align-items: center;
   gap: var(--space-4);
-  border-top: 2px solid #d5e1db;
+  padding: var(--space-4);
+  border-top: 1px solid var(--color-border-strong);
   background: var(--color-surface-accent);
-}
-
-.cart-total-block {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-4);
 }
 
 .cart-total-amount {
@@ -3061,15 +3272,6 @@ a.list-row:active {
   gap: 0.2rem;
   font-size: var(--text-card-title);
   text-transform: uppercase;
-}
-
-.cart-total-block small {
-  padding-bottom: var(--space-1);
-  color: #527064;
-  font-size: var(--text-eyebrow);
-  font-weight: 600;
-  text-align: right;
-  text-transform: none;
 }
 
 .checkout-button-group {
@@ -3087,12 +3289,22 @@ a.list-row:active {
   text-transform: none;
 }
 
-/* Un cran au-dessus de --text-amount-hero : le panneau panier est deux fois
-   plus etroit que la modale de paiement, le total y a besoin de ce
-   supplement pour peser autant a l'oeil. Ecart assume, pas oublie. */
+/* Deux crans au-dessus de --text-amount-hero. Le total a payer est la
+   derniere chose lue avant d'encaisser : dans un pied qui ne porte plus que
+   lui et le bouton, il peut prendre toute la place que son importance
+   justifie. Ecart assume, pas oublie. */
 .cart-summary strong {
   color: #12372a;
-  font-size: 1.65rem;
+  font-size: 2rem;
+  line-height: 1.15;
+}
+
+/* Le libelle recule d'autant : c'est le montant qu'on lit, pas son titre. */
+.cart-total-amount > span {
+  color: var(--color-text-muted);
+  font-size: var(--text-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.07em;
 }
 
 .checkout-button {
@@ -3530,6 +3742,12 @@ a.list-row:active {
 /* Sous 1200px, la navigation laterale devient une barre basse unique -
    meme hauteur, meme etat actif, meme zone de securite. */
 @media (max-width: 1199px) {
+  /* La navigation passe en barre fixe en bas : elle occupe desormais de la
+     hauteur, et tout ce qui colle a l'ecran doit la retrancher. */
+  :root {
+    --app-bottom-nav-height: 4.25rem;
+  }
+
   .app-frame {
     display: block;
   }
@@ -3546,7 +3764,7 @@ a.list-row:active {
     bottom: 0;
     left: 0;
     width: 100%;
-    height: 4.25rem;
+    height: var(--app-bottom-nav-height);
     flex-direction: row;
     justify-content: center;
     gap: var(--space-2);
@@ -3559,12 +3777,24 @@ a.list-row:active {
     box-shadow: 0 -0.35rem 1.5rem rgb(18 55 42 / 7%);
   }
 
+  /* En barre basse le lien passe en rangee icone + libelle : sans consigne
+     d'alignement, flex etire et cale a gauche, et le contenu flottait dans
+     son cadre au lieu d'y etre centre. */
   .app-navigation-link {
     width: min(10rem, 32vw);
     min-height: 3.25rem;
     display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
     padding: 0.5rem 0.85rem;
     font-size: var(--text-caption);
+  }
+
+  .app-navigation-link svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex: 0 0 auto;
   }
 
   .app-navigation-link-active::before {
@@ -3584,14 +3814,37 @@ a.list-row:active {
   }
 }
 
+/* Sous 960px les deux colonnes s'empilent : le poste de travail redevient
+   un document qui defile, et le panier reprend sa hauteur naturelle. */
 @media (max-width: 960px) {
-  .pos-grid {
-    grid-template-columns: 1fr;
+  .pos-page {
+    height: auto;
+    min-height: calc(
+      100dvh - var(--app-header-height) - var(--app-bottom-nav-height)
+    );
   }
 
+  .pos-grid {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .product-search,
   .cart-panel {
-    position: static;
-    max-height: none;
+    min-height: 0;
+  }
+
+  .search-results,
+  .cart-list {
+    overflow-y: visible;
+  }
+}
+
+@media (min-width: 961px) {
+  /* Le POS gere lui-meme sa hauteur : la reserve laissee sous les pages qui
+     defilent creerait ici un vide sous le poste de travail. */
+  .app-content:has(> .pos-page) {
+    padding-bottom: 0;
   }
 }
 
@@ -3631,6 +3884,18 @@ a.list-row:active {
       );
   }
 
+  /* Les colonnes du panier suivent l'elargissement des pas tactiles, sinon
+     le compteur et les deux boutons debordent sur leurs voisins. */
+  .cart-item {
+    grid-template-columns:
+      minmax(9rem, 24rem) auto minmax(var(--space-4), 1fr) 7.5rem 6.5rem;
+    min-height: 4rem;
+  }
+
+  .cart-item > .quantity-control {
+    width: 10.5rem;
+  }
+
   .list-row {
     min-height: 3.25rem;
   }
@@ -3657,10 +3922,16 @@ a.list-row:active {
     padding-inline: var(--space-4);
   }
 
-  .app-header-status {
+  .app-header-status .brand-link {
     width: auto;
     flex-basis: auto;
     justify-content: flex-start;
+  }
+
+  /* Le caissier connait sa boutique : sur telephone, la place va au reseau
+     et au menu de session. */
+  .app-header-context {
+    display: none;
   }
 
   .app-header-right {
@@ -3706,24 +3977,37 @@ a.list-row:active {
   }
 
   .product-search {
-    padding: var(--space-4);
-  }
-
-  .product-search form {
-    grid-template-columns: 1fr;
+    padding: var(--space-3);
   }
 
   .product-result {
     align-items: flex-start;
   }
 
-  .pos-heading {
-    align-items: flex-start;
+  /* Telephone : la ligne passe sur deux rangees plutot que de comprimer
+     quatre colonnes. Produit et prix unitaire occupent la premiere, les
+     commandes et le total la seconde, toutes au format tactile. */
+  .cart-item {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "identity identity identity"
+      "quantity total    controls";
+    gap: var(--space-2) var(--space-3);
+    min-height: 0;
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .cart-item > .quantity-control {
+    width: auto;
+  }
+
+  .cart-item-controls {
+    justify-self: end;
   }
 
   .cart-summary {
     align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .checkout-button {
@@ -3742,23 +4026,10 @@ a.list-row:active {
   }
 
   .toast-viewport {
-    top: calc(4.5rem + var(--space-2));
+    top: calc(var(--app-header-height) + var(--space-2));
     right: var(--space-3);
     left: var(--space-3);
     width: auto;
-  }
-
-  .cart-item-heading,
-  .cart-item-actions {
-    align-items: flex-start;
-  }
-
-  .cart-item-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .cart-edit-price {
-    margin-left: 0;
   }
 
   .icon-button {

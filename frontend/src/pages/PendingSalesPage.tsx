@@ -12,6 +12,7 @@ import { SkeletonRows } from "../components/ui/Skeleton"
 import { useToast } from "../components/ui/Toast"
 import { listConflictLocalSales, listPendingLocalSales } from "../db/sales"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
+import { withSaleOrigin } from "../features/sales/origin"
 import { describeSyncOutcome } from "../features/sync/syncCopy"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
 import { formatDate, formatTime } from "../utils/date"
@@ -102,7 +103,7 @@ export function PendingSalesPage() {
                 <ListRow
                   key={sale.id}
                   tone="warning"
-                  to={`/sales/${encodeURIComponent(sale.id)}/receipt?from=pending`}
+                  to={withSaleOrigin(`/sales/${encodeURIComponent(sale.id)}/receipt`, "pending")}
                   leading={formatTime(sale.createdAt)}
                   title={<Money value={sale.total} />}
                   meta={formatDate(sale.createdAt)}
@@ -132,7 +133,7 @@ export function PendingSalesPage() {
               {sales.map((sale) => (
                 <ListRow
                   key={sale.id}
-                  to={`/sales/${encodeURIComponent(sale.id)}/receipt?from=pending`}
+                  to={withSaleOrigin(`/sales/${encodeURIComponent(sale.id)}/receipt`, "pending")}
                   leading={formatTime(sale.createdAt)}
                   title={<Money value={sale.total} />}
                   meta={

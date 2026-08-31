@@ -13,6 +13,7 @@ import { useFocusOnMount } from "../hooks/useFocusOnMount";
 import { useCurrentUser } from "../features/auth/queries";
 import { usePosSession } from "../features/cash-session/queries";
 import { saleReturnReceiptQueryKey } from "../features/sales/queries";
+import { readSaleOrigin, withSaleOrigin } from "../features/sales/origin";
 import type { PaymentMethod } from "../types/api";
 import { formatDateTime } from "../utils/date";
 import { formatBackendMoney } from "../utils/money";
@@ -86,7 +87,7 @@ export function SaleReturnReceiptPage() {
     <main className="operational-page operational-page-narrow receipt-screen-page">
       <div className="no-print">
         <PageHeader
-          backTo={`/sales/${saleReturn.original_sale_id}`}
+          backTo={withSaleOrigin(`/sales/${saleReturn.original_sale_id}`, readSaleOrigin(searchParams))}
           backLabel="Retour à la vente"
           eyebrow={`Retour ${saleReturn.reference}`}
           title="Ticket de retour"

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 
 import { getSaleReceipt } from "../api/sales";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -14,6 +14,11 @@ import { useCurrentUser } from "../features/auth/queries";
 import { usePosSession } from "../features/cash-session/queries";
 import { useNetworkStatus } from "../features/offline/useNetworkStatus";
 import { saleReceiptQueryKey } from "../features/sales/queries";
+import {
+  readSaleOrigin,
+  saleOriginBack,
+  withSaleOrigin,
+} from "../features/sales/origin";
 import { formatDateTime } from "../utils/date";
 import { formatBackendMoney } from "../utils/money";
 import { backendQuantityToMilli, formatQuantity } from "../utils/quantity";
@@ -26,6 +31,9 @@ const paymentLabels = {
 
 export function SaleDetailPage() {
   const { saleId } = useParams<{ saleId: string }>();
+  const [searchParams] = useSearchParams();
+  const origin = readSaleOrigin(searchParams);
+  const backDestination = saleOriginBack(origin);
   const user = useCurrentUser().data!;
   const { ownSession } = usePosSession(user);
   const online = useNetworkStatus();
@@ -67,8 +75,8 @@ export function SaleDetailPage() {
   return (
     <main className="operational-page">
       <PageHeader
-        backTo="/sales"
-        backLabel="Retour aux ventes"
+        backTo={backDestination.to}
+        backLabel={backDestination.label}
         eyebrow="Vente"
         title={`Ticket ${sale.id.slice(0, 8).toUpperCase()}`}
         context={`${sale.store.name} · ${sale.cash_register.name}`}
@@ -77,7 +85,10 @@ export function SaleDetailPage() {
             <ButtonLink
               variant="secondary"
               size="sm"
-              to={`/sales/${sale.id}/receipt?cash_session_id=${ownSession!.id}&from=detail`}
+              to={withSaleOrigin(
+                `/sales/${sale.id}/receipt?cash_session_id=${ownSession!.id}`,
+                origin,
+              )}
             >
               <ReceiptIcon />
               <span>Voir le ticket</span>
@@ -86,7 +97,7 @@ export function SaleDetailPage() {
               <ButtonLink
                 variant="primary"
                 size="sm"
-                to={`/sales/${sale.id}/return`}
+                to={withSaleOrigin(`/sales/${sale.id}/return`, origin)}
               >
                 <RotateCcwIcon />
                 <span>Effectuer un retour</span>

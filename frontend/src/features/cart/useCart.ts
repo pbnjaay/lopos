@@ -47,11 +47,33 @@ export function useCart(cashSessionId: string | null = null, storeId: string | n
   const cart = activeCartQuery.data ?? null
   const items = (cart?.items as CartItem[] | undefined) ?? []
 
+  /**
+   * Chemin normal : mise à jour optimiste immédiate, puis écriture Dexie.
+   * C'est ce qui rend le scan instantané, il ne doit rien attendre.
+   *
+   * Chemin froid : au tout premier instant du POS, le scanner peut émettre
+   * son code avant que la lecture du panier actif n'ait répondu. Abandonner
+   * la mutation perdait l'article en silence — le champ se vidait, rien
+   * n'entrait dans le panier. On écrit alors dans Dexie d'abord, puis on
+   * relit : une lecture encore en vol ne peut plus réécrire un panier vide
+   * par-dessus l'ajout, puisque la relecture part de la source de vérité.
+   */
   function mutateItems(mutator: (items: CartItem[]) => CartItem[]): Promise<void> {
-    if (!cashSessionId || !cart) return Promise.resolve()
-    const nextItems = mutator(items)
-    queryClient.setQueryData(activeCartQueryKey(cashSessionId), { ...cart, items: nextItems })
-    return saveActiveCartItems(cashSessionId, nextItems)
+    if (!cashSessionId) return Promise.resolve()
+    const queryKey = activeCartQueryKey(cashSessionId)
+
+    if (cart) {
+      const nextItems = mutator(items)
+      queryClient.setQueryData(queryKey, { ...cart, items: nextItems })
+      return saveActiveCartItems(cashSessionId, nextItems)
+    }
+
+    return (async () => {
+      const activeCart = await ensureActiveCart(cashSessionId)
+      const nextItems = mutator((activeCart.items as CartItem[] | undefined) ?? [])
+      await saveActiveCartItems(cashSessionId, nextItems)
+      await queryClient.invalidateQueries({ queryKey })
+    })()
   }
 
   async function holdCart(): Promise<void> {

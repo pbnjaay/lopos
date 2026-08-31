@@ -8,6 +8,7 @@ import { Button } from "../components/ui/Button"
 import { Money } from "../components/ui/Money"
 import { RouteError, RouteLoading } from "../components/ui/RouteState"
 import { getLocalSaleById } from "../db/sales"
+import { readSaleOrigin, saleOriginBack } from "../features/sales/origin"
 import { receiptViewFromApiReceipt, receiptViewFromLocalSale } from "../features/sales/receiptView"
 import { formatDateTime } from "../utils/date"
 import { formatMoney } from "../utils/money"
@@ -51,12 +52,16 @@ export function SaleReceiptPage() {
   const isCash = receipt.payment.method === "CASH"
   const hasReturns = receipt.returnedTotal > 0
   const isFullyReturned = hasReturns && receipt.returnedTotal >= receipt.total
-  const source = searchParams.get("from")
-  const backDestination = source === "pos"
-    ? { to: "/pos", label: "Retour au point de vente" }
-    : source === "pending" || receipt.isPendingSync
-      ? { to: "/sales/pending", label: "Retour aux ventes en attente" }
-      : { to: `/sales/${receipt.id}`, label: "Retour à la vente" }
+  // Une vente pas encore synchronisée n'a pas de page de détail côté
+  // serveur : sans provenance explicite, c'est l'outbox qui fait office
+  // d'écran parent. Partout ailleurs, on remonte à la vente elle-même.
+  const origin = readSaleOrigin(searchParams)
+  const backDestination =
+    origin !== null
+      ? saleOriginBack(origin)
+      : receipt.isPendingSync
+        ? saleOriginBack("pending")
+        : { to: `/sales/${receipt.id}`, label: "Retour à la vente" }
 
   return (
     <main className="operational-page operational-page-narrow receipt-screen-page">

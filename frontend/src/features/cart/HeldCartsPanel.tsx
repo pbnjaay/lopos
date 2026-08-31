@@ -13,9 +13,17 @@ import { getCartTotal } from "./cartState"
 
 export type ResumeStrategy = "direct" | "hold" | "clear"
 
+/**
+ * Panier déjà désigné dans le rail : la modale s'ouvre alors directement sur
+ * la confirmation attendue, sans refaire choisir dans une liste où le
+ * caissier vient de pointer.
+ */
+export type HeldCartAction = { type: "resume" | "delete"; cartId: string }
+
 type HeldCartsDialogProps = {
   carts: LocalCart[]
   activeItemCount: number
+  initialAction?: HeldCartAction | null
   onClose: () => void
   onResume: (cartId: string, strategy: ResumeStrategy) => void
   onDelete: (cartId: string) => void
@@ -39,8 +47,24 @@ function cartLabel(cart: LocalCart): string {
  * `Dialog` pour un parcours à étapes : Échap recule d'un pas au lieu de tout
  * fermer.
  */
-export function HeldCartsDialog({ carts, activeItemCount, onClose, onResume, onDelete }: HeldCartsDialogProps) {
-  const [step, setStep] = useState<Step>({ name: "list" })
+export function HeldCartsDialog({
+  carts,
+  activeItemCount,
+  initialAction = null,
+  onClose,
+  onResume,
+  onDelete,
+}: HeldCartsDialogProps) {
+  const [step, setStep] = useState<Step>(() => {
+    const preselected = initialAction
+      ? carts.find((candidate) => candidate.id === initialAction.cartId)
+      : undefined
+    if (!preselected) return { name: "list" }
+    if (initialAction?.type === "delete") return { name: "delete-confirm", cart: preselected }
+    return activeItemCount > 0
+      ? { name: "resume-confirm", cart: preselected }
+      : { name: "list" }
+  })
   const holdAndResumeRef = useRef<HTMLButtonElement>(null)
   const cancelDeleteRef = useRef<HTMLButtonElement>(null)
 

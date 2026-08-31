@@ -160,6 +160,25 @@ export async function getLocalSaleById(
   return sale ?? null
 }
 
+/**
+ * Dernières ventes encaissées sur ce terminal pour la session en cours, la
+ * plus récente d'abord. Sert le rail du POS : retrouver et réimprimer le
+ * ticket qu'on vient de faire ne doit demander ni réseau ni changement de
+ * page. Les ventes d'un autre terminal n'y figurent donc pas — c'est bien
+ * « mes dernières ventes », pas l'historique de la boutique.
+ */
+export async function listRecentLocalSales(
+  cashSessionId: string,
+  limit = 3,
+  database: PosDatabase = db,
+): Promise<LocalSale[]> {
+  const sales = await database.localSales
+    .where("cashSessionId")
+    .equals(cashSessionId)
+    .sortBy("createdAt")
+  return sales.reverse().slice(0, limit)
+}
+
 export async function listPendingLocalSales(
   database: PosDatabase = db,
 ): Promise<LocalSale[]> {

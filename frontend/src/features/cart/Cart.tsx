@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 
-import { CartIcon, PauseIcon, PencilIcon, TrashIcon, XIcon } from "../../components/ui/Icons"
+import { PauseIcon, PencilIcon, TrashIcon, XIcon } from "../../components/ui/Icons"
 import { Badge } from "../../components/ui/Badge"
 import { Button } from "../../components/ui/Button"
 import { Dialog, DialogBody, DialogFooter } from "../../components/ui/Dialog"
@@ -9,7 +9,7 @@ import { Money } from "../../components/ui/Money"
 import { QuantityControl } from "../../components/ui/QuantityControl"
 import { formatMoney } from "../../utils/money"
 import type { CartItem } from "./cartState"
-import { formatQuantity, lineTotal } from "../../utils/quantity"
+import { lineTotal } from "../../utils/quantity"
 import { PriceDialog } from "./CartDialogs"
 
 type CartProps = {
@@ -25,6 +25,14 @@ type CartProps = {
   onSuspend: () => void
   onDialogOpenChange?: (isOpen: boolean) => void
   onInteractionComplete?: () => void
+}
+
+function itemQuantityMilli(item: CartItem): number {
+  return item.quantityMilli ?? (item.quantity ?? 0) * 1000
+}
+
+function isPriceOverridden(item: CartItem): boolean {
+  return item.unitPrice !== (item.catalogUnitPrice ?? item.unitPrice)
 }
 
 export function Cart({
@@ -70,84 +78,75 @@ export function Cart({
   return (
     <>
     <section className="cart-panel" aria-labelledby="cart-title">
+      {/* En-tête sur une seule ligne : le panier est la surface de travail,
+          il n'a pas besoin d'un eyebrow pour dire ce qu'il est. */}
       <header className="cart-header">
-        <div>
-          <p className="eyebrow">Panier</p>
-          <div className="cart-title-row">
-            <h2 id="cart-title">Vente en cours</h2>
-            {items.length > 0 ? (
-              <Badge tone="accent">{items.length} produit{items.length > 1 ? "s" : ""}</Badge>
-            ) : null}
-          </div>
+        <div className="cart-title-row">
+          <h2 id="cart-title">Vente en cours</h2>
+          {items.length > 0 ? (
+            <Badge tone="accent">{items.length} produit{items.length > 1 ? "s" : ""}</Badge>
+          ) : null}
         </div>
         <div className="cart-header-actions">
+          {/* Suspendre est productif, vider est destructif et rare : le
+              premier garde un libellé, le second se réduit à une icône.
+              Retirer les articles n'est pas une suppression définitive — le
+              caissier les rescanne — donc le rouge reste sur la
+              confirmation qui suit, pas sur le bouton. */}
           {items.length > 0 ? (
-            <Button variant="ghost" size="sm" title="Mettre la vente en attente" onClick={onSuspend}>
+            <Button
+              variant="secondary"
+              size="sm"
+              title="Mettre la vente en attente"
+              onClick={onSuspend}
+            >
               <PauseIcon />
               Suspendre
             </Button>
           ) : null}
-          {/* Retirer les articles d'une vente en cours n'est pas une suppression
-              définitive : le caissier les rescanne. Le rouge reste pour la
-              confirmation qui suit. */}
           {items.length > 0 ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              title="Vider le panier"
+            <IconButton
+              label="Vider la vente en cours"
+              title="Vider la vente"
+              icon={<TrashIcon />}
               onClick={() => setIsClearConfirming(true)}
-            >
-              <TrashIcon />
-              Vider
-            </Button>
+            />
           ) : null}
         </div>
       </header>
 
       {items.length === 0 ? (
         <div className="empty-cart">
-          <span className="empty-cart-icon" aria-hidden="true"><CartIcon /></span>
           <strong>Panier vide</strong>
-          <span>Scannez un article ou sélectionnez-le dans le catalogue.</span>
+          <span>Scannez ou recherchez un produit pour commencer.</span>
         </div>
       ) : (
         <ul className="cart-list">
-          {items.map((item) => (
-            <li key={item.productId} className="cart-item">
-              <div className="cart-item-heading">
+          {items.map((item) => {
+            const quantityMilli = itemQuantityMilli(item)
+            const overridden = isPriceOverridden(item)
+            const unitLabel = item.saleUnit === "KG" ? "kg" : "unité"
+            return (
+              <li key={item.productId} className="cart-item">
+                {/* Le prix unitaire est explicitement libellé « / unité » ou
+                    « / kg » et vit sous le nom : à quantité 1 il porte le
+                    même montant que le total de ligne, et seule cette
+                    étiquette dit lequel est lequel. Il tient dans la hauteur
+                    du compteur de quantité, la ligne ne grandit donc pas. */}
                 <div className="cart-item-identity">
-                  <div className="cart-item-name-row">
-                    <strong title={item.name}>{item.name}</strong>
-                    {item.unitPrice !== (item.catalogUnitPrice ?? item.unitPrice) ? (
-                      <Badge tone="warning">Prix modifié</Badge>
-                    ) : null}
-                  </div>
-                  <span>
-                    {formatQuantity(item.quantityMilli ?? (item.quantity ?? 0) * 1000, item.saleUnit ?? "UNIT")} × {formatMoney(item.unitPrice)}{item.saleUnit === "KG" ? "/kg" : ""}
+                  <strong title={item.name}>{item.name}</strong>
+                  <span
+                    className={
+                      overridden ? "cart-item-unit cart-item-unit-overridden" : "cart-item-unit"
+                    }
+                  >
+                    {formatMoney(item.unitPrice)} / {unitLabel}
+                    {overridden ? <s>{formatMoney(item.catalogUnitPrice!)}</s> : null}
                   </span>
                 </div>
-                <div className="cart-item-corner">
-                  <strong className="cart-line-total">
-                    <Money value={lineTotal(item.unitPrice, item.quantityMilli ?? (item.quantity ?? 0) * 1000)} />
-                  </strong>
-                  <IconButton
-                    label={`Supprimer ${item.name} du panier`}
-                    title="Supprimer l’article"
-                    icon={<XIcon />}
-                    tone="danger"
-                    shape="round"
-                    className="cart-remove-corner"
-                    onClick={() => {
-                      onRemove(item.productId)
-                      finishInteraction()
-                    }}
-                  />
-                </div>
-              </div>
 
-              <div className="cart-item-actions">
                 <QuantityControl
-                  valueMilli={item.quantityMilli ?? (item.quantity ?? 0) * 1000}
+                  valueMilli={quantityMilli}
                   saleUnit={item.saleUnit ?? "UNIT"}
                   minimumMilli={item.saleUnit === "KG" ? 100 : 1000}
                   maximumMilli={item.stockMilli ?? (item.stock ?? 0) * 1000}
@@ -156,43 +155,47 @@ export function Cart({
                   increaseLabel={`Augmenter ${item.name}`}
                   onDecrease={() => onDecrement(item.productId)}
                   onIncrease={() => onIncrement(item.productId)}
-                  onCommit={(quantityMilli) => onQuantityChange(item.productId, quantityMilli)}
+                  onCommit={(nextQuantityMilli) =>
+                    onQuantityChange(item.productId, nextQuantityMilli)
+                  }
                   onEditingChange={(isEditing) => {
                     setEditingQuantityProductId(isEditing ? item.productId : null)
                     if (!isEditing) finishInteraction()
                   }}
                 />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="cart-edit-price"
-                  aria-label="Modifier le prix"
-                  title="Modifier le prix"
-                  onClick={() => setPriceProductId(item.productId)}
-                >
-                  <PencilIcon />
-                  Prix
-                </Button>
-              </div>
-              {item.unitPrice !== (item.catalogUnitPrice ?? item.unitPrice) ? (
-                <p className="price-override-note">
-                  Prix catalogue : <span>{formatMoney(item.catalogUnitPrice!)}{item.saleUnit === "KG" ? "/kg" : ""}</span>
-                </p>
-              ) : null}
-            </li>
-          ))}
+
+                <strong className="cart-line-total">
+                  <Money value={lineTotal(item.unitPrice, quantityMilli)} />
+                </strong>
+
+                <div className="cart-item-controls">
+                  <IconButton
+                    label={`Modifier le prix de ${item.name}`}
+                    title="Modifier le prix"
+                    icon={<PencilIcon />}
+                    onClick={() => setPriceProductId(item.productId)}
+                  />
+                  <IconButton
+                    label={`Supprimer ${item.name} du panier`}
+                    title="Supprimer l’article"
+                    icon={<XIcon />}
+                    tone="danger"
+                    onClick={() => {
+                      onRemove(item.productId)
+                      finishInteraction()
+                    }}
+                  />
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
 
       <footer className="cart-summary">
-        <div className="cart-total-block">
-          <div className="cart-total-amount">
-            <span>Total à payer</span>
-            <strong><Money value={total} /></strong>
-          </div>
-          {items.length > 0 ? (
-            <small>{items.length} produit{items.length > 1 ? "s" : ""} dans la vente</small>
-          ) : null}
+        <div className="cart-total-amount">
+          <span>Total à payer</span>
+          <strong><Money value={total} /></strong>
         </div>
         <div className="checkout-button-group">
           <Button

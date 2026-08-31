@@ -1,4 +1,12 @@
-import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react"
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react"
 import { useQuery } from "@tanstack/react-query"
 
 import { useDebouncedValue } from "../../hooks/useDebouncedValue"
@@ -6,7 +14,6 @@ import { Button } from "../../components/ui/Button"
 import { EmptyState } from "../../components/ui/EmptyState"
 import { InlineAlert } from "../../components/ui/InlineAlert"
 import { Money } from "../../components/ui/Money"
-import { SectionHeader } from "../../components/ui/SectionHeader"
 import { Skeleton } from "../../components/ui/Skeleton"
 import { BarcodeIcon } from "../../components/ui/Icons"
 import { describeErrorShort } from "../../utils/errorCopy"
@@ -17,9 +24,15 @@ import { formatQuantity } from "../../utils/quantity"
 type ProductSearchProps = {
   storeId: string
   onProductSelect: (product: CatalogProduct) => void
+  /**
+   * Ce que le rail affiche tant qu'aucune recherche n'est en cours. La
+   * surface qui portait « les résultats apparaîtront ici » travaille ainsi
+   * toute la journée au lieu d'attendre une frappe.
+   */
+  restContent?: ReactNode
 }
 
-export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) {
+export function ProductSearch({ storeId, onProductSelect, restContent }: ProductSearchProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [input, setInput] = useState("")
   const [barcode, setBarcode] = useState<string | null>(null)
@@ -98,33 +111,31 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
   }, [barcode, handleProductSelect, productsQuery.data, productsQuery.isFetching])
 
   return (
-    <section className="product-search" aria-labelledby="product-search-title">
-      <SectionHeader eyebrow="Catalogue" title="Rechercher un produit" titleId="product-search-title" />
-
+    <section className="product-search" aria-label="Recherche de produits">
+      {/* Un seul champ, plein rail : le scanner valide par Entrée, ce qui
+          soumet le formulaire et déclenche la recherche exacte par code —
+          exactement ce que faisait le bouton « Chercher le code », qui ne
+          servait donc qu'à cliquer ce qu'Entrée fait déjà. La recherche par
+          nom couvre aussi les codes-barres. */}
       <form role="search" onSubmit={handleSubmit}>
         <label className="visually-hidden" htmlFor="product-search-input">
           Scanner un code-barres ou rechercher par nom
         </label>
-        <input
-          ref={inputRef}
-          id="product-search-input"
-          autoComplete="off"
-          autoFocus
-          enterKeyHint="done"
-          placeholder="Scanner ou rechercher un produit"
-          value={input}
-          onChange={(event) => handleChange(event.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-        <Button variant="secondary" size="lg" type="submit" disabled={!input.trim()}>
+        <div className="product-search-field">
           <BarcodeIcon />
-          Chercher le code
-        </Button>
+          <input
+            ref={inputRef}
+            id="product-search-input"
+            autoComplete="off"
+            autoFocus
+            enterKeyHint="done"
+            placeholder="Scanner ou rechercher"
+            value={input}
+            onChange={(event) => handleChange(event.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+        </div>
       </form>
-
-      <p className="search-hint">
-        Saisissez un nom (flèches + Entrée pour valider), ou scannez un code-barres.
-      </p>
 
       <div className="search-results" aria-live="polite">
         {/* Squelettes plutôt qu'un « Recherche… » : la structure des
@@ -202,9 +213,7 @@ export function ProductSearch({ storeId, onProductSelect }: ProductSearchProps) 
             ))}
           </ul>
         ) : null}
-        {!term && !productsQuery.isFetching ? (
-          <p className="empty-search">Les résultats apparaîtront ici.</p>
-        ) : null}
+        {!term && !productsQuery.isFetching ? restContent ?? null : null}
       </div>
     </section>
   )

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { getStore } from "../api/stores"
-import { Badge } from "../components/ui/Badge"
 import { Button } from "../components/ui/Button"
 import { ErrorState } from "../components/ui/ErrorState"
 import { InlineAlert } from "../components/ui/InlineAlert"
@@ -28,7 +27,12 @@ import { useCurrentUser } from "../features/auth/queries"
 import { Cart } from "../features/cart/Cart"
 import { QuantityDialog } from "../features/cart/CartDialogs"
 import { useCart } from "../features/cart/useCart"
-import { HeldCartsDialog, type ResumeStrategy } from "../features/cart/HeldCartsPanel"
+import {
+  HeldCartsDialog,
+  type HeldCartAction,
+  type ResumeStrategy,
+} from "../features/cart/HeldCartsPanel"
+import { HeldCartsSection } from "../features/cart/HeldCartsSection"
 import { usePosSession } from "../features/cash-session/queries"
 import { CashPaymentModal } from "../features/checkout/CashPaymentModal"
 import { MobileMoneyConfirmation } from "../features/checkout/MobileMoneyConfirmation"
@@ -40,6 +44,7 @@ import { pendingSalesCountQueryKey } from "../features/offline/usePendingSalesCo
 import { ProductSearch } from "../features/products/ProductSearch"
 import { useProductCatalog } from "../features/products/queries"
 import type { CatalogProduct } from "../features/products/types"
+import { RecentSalesSection, recentSalesQueryKey } from "../features/sales/RecentSalesSection"
 import { type ReceiptView, receiptViewFromLocalSale } from "../features/sales/receiptView"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
 import type { PaymentMethod } from "../types/api"
@@ -83,6 +88,7 @@ export function PosPage() {
   const [weighedProduct, setWeighedProduct] = useState<CatalogProduct | null>(null)
   const [isCartDialogOpen, setIsCartDialogOpen] = useState(false)
   const [isHeldCartsOpen, setIsHeldCartsOpen] = useState(false)
+  const [heldCartAction, setHeldCartAction] = useState<HeldCartAction | null>(null)
   const [lastPaymentMethod, setLastPaymentMethod] = useState<PaymentMethod | null>(
     getLastPaymentMethod,
   )
@@ -96,10 +102,12 @@ export function PosPage() {
 
   useEffect(() => {
     if (!ownSession || !storeQuery.data) return
-    void updateLocalCashSessionStoreName(ownSession.id, storeQuery.data.name).catch(
-      () => undefined,
-    )
-  }, [ownSession, storeQuery.data])
+    void updateLocalCashSessionStoreName(ownSession.id, storeQuery.data.name)
+      // L'en-tête global lit ce nom depuis Dexie : sans invalidation il
+      // resterait sur « Caisse 01 » seul jusqu'au prochain rechargement.
+      .then(() => queryClient.invalidateQueries({ queryKey: ["local-cash-session"] }))
+      .catch(() => undefined)
+  }, [ownSession, queryClient, storeQuery.data])
 
   // Lue depuis Dexie au moment du submit, jamais depuis un cache React Query
   // potentiellement figé : c'était la cause de la « première vente hors
@@ -143,6 +151,9 @@ export function PosPage() {
       setLastPaymentMethod(sale.payment.method)
       void queryClient.invalidateQueries({ queryKey: ["products"] })
       void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })
+      void queryClient.invalidateQueries({
+        queryKey: recentSalesQueryKey(ownSession?.id ?? null),
+      })
       // Hors ligne, conserver la vente dans l’outbox et laisser le compteur
       // global refléter toutes les ventes en attente. La reconnexion déclenche
       // déjà une synchronisation groupée via SyncStatusProvider.
@@ -216,10 +227,40 @@ export function PosPage() {
 
   function handleDeleteHeldCart(cartId: string) {
     void cart.deleteHeldCart(cartId)
+    // Une suppression demandée depuis le rail n'avait qu'une confirmation à
+    // obtenir : une fois donnée, on rend la main à la caisse plutôt que de
+    // laisser une liste ouverte que personne n'a demandée.
+    if (heldCartAction?.type === "delete") closeHeldCarts()
+  }
+
+  // Reprise depuis le rail : un panier vide reprend directement, un panier
+  // en cours passe par l'arbitrage existant — jamais d'écrasement silencieux
+  // de la vente commencée.
+  function handleRailResume(cartId: string) {
+    if (cart.items.length > 0) {
+      setHeldCartAction({ type: "resume", cartId })
+      setIsHeldCartsOpen(true)
+      return
+    }
+    void handleResumeHeldCart(cartId, "direct")
+  }
+
+  // Supprimer reste destructif : le rail déclenche la confirmation, il ne
+  // supprime jamais au clic.
+  function handleRailDelete(cartId: string) {
+    setHeldCartAction({ type: "delete", cartId })
+    setIsHeldCartsOpen(true)
+  }
+
+  function closeHeldCarts() {
+    setIsHeldCartsOpen(false)
+    setHeldCartAction(null)
+    focusProductSearch()
   }
 
   async function handleResumeHeldCart(cartId: string, strategy: ResumeStrategy) {
     setIsHeldCartsOpen(false)
+    setHeldCartAction(null)
     if (strategy === "hold") await cart.holdCart()
     else if (strategy === "clear") await cart.clearCart()
 
@@ -290,18 +331,10 @@ export function PosPage() {
 
   return (
     <main className="pos-page">
-      <header className="pos-heading">
-        <div>
-          <p className="eyebrow">Point de vente</p>
-          <h1>{storeQuery.data?.name ?? localSession?.storeName ?? "Magasin"}</h1>
-          <p className="metadata">{selectedRegister?.name ?? "Caisse"}</p>
-        </div>
-        {cart.heldCarts.count > 0 ? (
-          <Button variant="ghost" size="sm" onClick={() => setIsHeldCartsOpen(true)}>
-            En attente <Badge tone="accent">{cart.heldCarts.count}</Badge>
-          </Button>
-        ) : null}
-      </header>
+      <h1 className="visually-hidden">
+        Point de vente — {storeQuery.data?.name ?? localSession?.storeName ?? "Magasin"},{" "}
+        {selectedRegister?.name ?? "Caisse"}
+      </h1>
 
       {catalog.status === "catalogue_syncing" ? (
         <InlineAlert className="pos-notice">
@@ -330,6 +363,20 @@ export function PosPage() {
             <ProductSearch
               storeId={selectedRegister.store_id}
               onProductSelect={handleAddProduct}
+              // Au repos, le rail travaille : ce qui attend le caissier y est
+              // déjà, et reprendre un panier ou rouvrir un ticket ne demande
+              // ni modale ni changement de page.
+              restContent={
+                <div className="pos-rail-rest">
+                  <HeldCartsSection
+                    carts={cart.heldCarts.list}
+                    onResume={handleRailResume}
+                    onDelete={handleRailDelete}
+                    onSeeAll={() => setIsHeldCartsOpen(true)}
+                  />
+                  <RecentSalesSection cashSessionId={ownSession?.id ?? null} />
+                </div>
+              }
             />
           ) : <div />}
           <Cart
@@ -442,10 +489,8 @@ export function PosPage() {
         <HeldCartsDialog
           carts={cart.heldCarts.list}
           activeItemCount={cart.items.length}
-          onClose={() => {
-            setIsHeldCartsOpen(false)
-            focusProductSearch()
-          }}
+          initialAction={heldCartAction}
+          onClose={closeHeldCarts}
           onResume={(cartId, strategy) => void handleResumeHeldCart(cartId, strategy)}
           onDelete={handleDeleteHeldCart}
         />
