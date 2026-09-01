@@ -104,6 +104,26 @@ UNFOLD = {
     "SITE_SUBHEADER": "Administration du point de vente",
     "SITE_SYMBOL": "point_of_sale",
     "DASHBOARD_CALLBACK": "apps.dashboard.views.manager_dashboard_callback",
+    # Rampe verte LoPOS (dérivée par OKLCH du vert de marque du POS, #176b4d,
+    # place au niveau 600 - celui que consomment bg-primary-600/text-primary-600,
+    # y compris les boutons custom des admin.py qui codent ces classes en dur).
+    # Remplace le violet par defaut d'Unfold sans toucher un seul template.
+    "COLORS": {
+        "primary": {
+            "50": "oklch(97% .012 163.9)",
+            "100": "oklch(93.5% .022 163.9)",
+            "200": "oklch(88% .038 163.9)",
+            "300": "oklch(80% .058 163.9)",
+            "400": "oklch(70% .075 163.9)",
+            "500": "oklch(58.5% .088 163.9)",
+            "600": "oklch(47.1% .092 163.9)",
+            "700": "oklch(39.5% .085 163.9)",
+            "800": "oklch(33% .075 163.9)",
+            "900": "oklch(27.5% .062 163.9)",
+            "950": "oklch(20% .045 163.9)",
+        },
+    },
+    "BORDER_RADIUS": "8px",
     "SIDEBAR": {
         "show_search": True,
         "show_all_applications": False,

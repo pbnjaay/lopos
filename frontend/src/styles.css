@@ -6,20 +6,25 @@
      subtle : sections et panneaux qui contiennent d'autres blocs
      accent : ce qui porte le total ou l'action (pied du panier, total a
               payer, monnaie a rendre) — le vert y est de l'information. */
-  --color-surface-muted: #f1f3f2;
+  --color-surface-muted: #eef1ef;
   --color-surface-subtle: #f8faf9;
   --color-surface-accent: #f4f8f6;
   --color-text: #17211c;
-  --color-text-muted: #527064;
+  --color-text-muted: #5a6b60;
   --color-primary: #176b4d;
   --color-primary-hover: #0f563c;
-  --color-border: #dce4df;
-  --color-border-strong: #b7c5be;
-  --radius-sm: 0.55rem;
-  --radius-control: 0.65rem;
-  --radius-card: 1rem;
-  --shadow-card: 0 0.75rem 2rem rgb(18 55 42 / 6%);
-  --shadow-popover: 0 0.8rem 2rem rgb(18 55 42 / 14%);
+  --color-border: #dde2df;
+  --color-border-strong: #c2ccc6;
+  /* Rayons resserres vers la grammaire Unfold (rounded-default = 8px cote
+     admin) sans perdre la hierarchie a 3 niveaux du POS. */
+  --radius-sm: 0.5rem;
+  --radius-control: 0.625rem;
+  --radius-card: 0.875rem;
+  /* Ombres quasi imperceptibles, dans l'esprit d'Unfold qui structure par
+     bordure/fond plutot que par shadow — gardees tres legeres uniquement
+     pour distinguer une carte du fond de page. */
+  --shadow-card: 0 1px 2px rgb(20 40 30 / 4%), 0 6px 16px rgb(20 40 30 / 4%);
+  --shadow-popover: 0 0.6rem 1.5rem rgb(18 55 42 / 12%);
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -61,13 +66,15 @@
   --app-bottom-nav-height: 0rem;
 
   /* Tons semantiques - reprennent strictement les couleurs deja en place. */
-  --color-danger: #9a241c;
+  --color-danger: #b3261e;
   --color-danger-surface: #fff0ee;
   --color-danger-border: #e6c3bf;
   --color-warning: #8a4b0b;
   --color-warning-surface: #fdf1de;
   --color-warning-border: #d6b986;
-  --color-success: #12563f;
+  /* Le succes reprend exactement le vert de marque : un second vert quasi
+     identique (#12563f) n'apportait pas d'information supplementaire. */
+  --color-success: var(--color-primary);
   --color-success-surface: #dff5e9;
   --color-success-border: #b8dfca;
   --color-info-surface: #f3f5f4;
@@ -211,7 +218,7 @@ strong {
   border: 1px solid #c9ddd3;
   border-radius: var(--radius-control);
   background: var(--color-surface-accent);
-  color: #527064;
+  color: var(--color-text-muted);
 }
 
 .opening-review strong {
@@ -243,7 +250,7 @@ strong {
   padding: 0.7rem 0.9rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  background: var(--color-surface-muted);
+  background: var(--color-surface);
   color: var(--color-text);
   font-size: var(--text-body);
   transition:
@@ -312,7 +319,7 @@ input::placeholder {
   position: absolute;
   top: 50%;
   right: 1rem;
-  color: #527064;
+  color: var(--color-text-muted);
   font-size: var(--text-secondary);
   transform: translateY(-50%);
 }
@@ -381,7 +388,7 @@ input::placeholder {
 .button-primary {
   background: var(--color-primary);
   color: #fff;
-  box-shadow: 0 0.25rem 0.75rem rgb(23 107 77 / 16%);
+  box-shadow: 0 0.15rem 0.4rem rgb(23 107 77 / 12%);
 }
 
 .button-primary:hover:not(:disabled) {
@@ -389,14 +396,14 @@ input::placeholder {
 }
 
 .button-secondary {
-  border-color: var(--color-border);
-  background: var(--color-surface-muted);
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
   color: var(--color-text);
 }
 
 .button-secondary:hover:not(:disabled) {
   border-color: var(--color-border-strong);
-  background: #e8ebe9;
+  background: var(--color-surface-muted);
 }
 
 .button-ghost {
@@ -656,7 +663,7 @@ input::placeholder {
   align-items: center;
   gap: var(--space-2);
   padding: 0.55rem 0.75rem;
-  border: 1px solid #dce4df;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: #fff;
   color: #244b3d;
@@ -693,7 +700,7 @@ input::placeholder {
   display: grid;
   gap: var(--space-1);
   padding: var(--space-2);
-  border: 1px solid #dce4df;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: #fff;
   box-shadow: var(--shadow-popover);
@@ -726,7 +733,7 @@ input::placeholder {
   width: 1.125rem;
   height: 1.125rem;
   flex: 0 0 auto;
-  color: #527064;
+  color: var(--color-text-muted);
 }
 
 .session-menu-item:disabled {
@@ -1007,11 +1014,6 @@ input::placeholder {
 .badge-neutral {
   background: var(--color-surface-muted);
   color: #526159;
-}
-
-.badge-accent {
-  background: #e6f4ed;
-  color: var(--color-success);
 }
 
 .badge-success {
@@ -1449,7 +1451,7 @@ a.list-row:active {
 }
 
 .closing-summary dt {
-  color: #527064;
+  color: var(--color-text-muted);
 }
 
 .closing-summary dd {
@@ -1513,7 +1515,7 @@ a.list-row:active {
   padding: var(--space-3) 5.25rem var(--space-3) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  background: var(--color-surface-muted);
+  background: var(--color-surface);
   color: inherit;
   font-size: var(--text-card-title);
   font-weight: 800;
@@ -1528,13 +1530,13 @@ a.list-row:active {
 }
 
 .counted-cash-field small {
-  color: #527064;
+  color: var(--color-text-muted);
   font-size: var(--text-secondary);
   font-weight: 500;
 }
 
 .counted-cash-field .field-error {
-  color: #9a241c;
+  color: var(--color-danger);
   font-weight: 700;
 }
 
@@ -1621,11 +1623,11 @@ a.list-row:active {
 }
 
 .cash-difference-shortage dd {
-  color: #9a241c;
+  color: var(--color-danger);
 }
 
 .cash-difference-surplus dd {
-  color: #176b4d;
+  color: var(--color-success);
 }
 
 .cash-difference-balanced dd {
@@ -1669,7 +1671,7 @@ a.list-row:active {
   display: grid;
   gap: 0.35rem;
   margin-top: 0;
-  color: #527064;
+  color: var(--color-text-muted);
 }
 
 .report-identity strong {
@@ -1695,8 +1697,8 @@ a.list-row:active {
 
 .sales-filters input,
 .sales-filters select {
-  border-color: transparent;
-  background: var(--color-surface-muted);
+  border-color: var(--color-border);
+  background: var(--color-surface);
 }
 
 .sales-filters input:hover,
@@ -1871,7 +1873,7 @@ a.list-row:active {
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: #fff;
-  box-shadow: 0 0.25rem 0.75rem rgb(23 107 77 / 18%);
+  box-shadow: 0 0.15rem 0.4rem rgb(23 107 77 / 14%);
 }
 
 .sales-pagination-button:disabled {
@@ -1903,7 +1905,7 @@ a.list-row:active {
   gap: 0;
   margin: 0;
   padding: 0;
-  border-top: 1px solid #dce4df;
+  border-top: 1px solid var(--color-border);
   list-style: none;
 }
 
@@ -1926,7 +1928,7 @@ a.list-row:active {
 }
 
 .sale-detail-items span {
-  color: #527064;
+  color: var(--color-text-muted);
   font-size: var(--text-secondary);
 }
 
@@ -1950,7 +1952,7 @@ a.list-row:active {
 
 .sale-detail-net {
   padding-top: var(--space-3);
-  border-top: 1px solid #b7c5be;
+  border-top: 1px solid var(--color-border-strong);
   font-size: var(--text-card-title);
 }
 
@@ -2000,7 +2002,7 @@ a.list-row:active {
 }
 
 .return-item > header span {
-  color: #527064;
+  color: var(--color-text-muted);
   font-size: var(--text-secondary);
 }
 
@@ -2136,7 +2138,7 @@ a.list-row:active {
 }
 
 .return-total span {
-  color: #527064;
+  color: var(--color-text-muted);
   font-size: var(--text-caption);
   font-weight: 700;
   text-transform: uppercase;
@@ -2619,7 +2621,7 @@ a.list-row:active {
   justify-content: center;
   padding: 0.4rem 0.65rem;
   background: transparent;
-  color: #527064;
+  color: var(--color-text-muted);
 }
 
 .network-status > svg {
@@ -2629,8 +2631,8 @@ a.list-row:active {
 }
 
 .network-status-online {
-  background: #dff5e9;
-  color: #12563f;
+  background: var(--color-success-surface);
+  color: var(--color-success);
 }
 
 .network-status-offline {
@@ -2693,7 +2695,7 @@ a.list-row:active {
   padding-left: var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  background: var(--color-surface-muted);
+  background: var(--color-surface);
   color: var(--color-text-muted);
   transition:
     border-color 120ms ease,
@@ -3179,7 +3181,7 @@ a.list-row:active {
   min-width: 0;
   padding: 0 0.55rem;
   border: 0;
-  border-inline: 1px solid #dce4df;
+  border-inline: 1px solid var(--color-border);
   border-radius: 0;
   background: #fff;
   color: #17211c;
@@ -3204,7 +3206,7 @@ a.list-row:active {
   position: absolute;
   top: 50%;
   right: 0.55rem;
-  color: #527064;
+  color: var(--color-text-muted);
   font-size: var(--text-caption);
   font-weight: 700;
   pointer-events: none;
@@ -3282,7 +3284,7 @@ a.list-row:active {
 
 .checkout-shortcuts-hint {
   margin: 0;
-  color: #527064;
+  color: var(--color-text-muted);
   font-size: var(--text-eyebrow);
   font-weight: 600;
   text-align: center;
@@ -3425,7 +3427,7 @@ a.list-row:active {
 }
 
 .dialog-product-summary span {
-  color: #527064;
+  color: var(--color-text-muted);
   font-size: var(--text-secondary);
 }
 
@@ -3441,7 +3443,7 @@ a.list-row:active {
   padding: 0.75rem 7rem 0.75rem 1rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  background: var(--color-surface-muted);
+  background: var(--color-surface);
   color: inherit;
   font-size: var(--text-amount-sm);
   font-weight: 700;
@@ -3451,7 +3453,7 @@ a.list-row:active {
   position: absolute;
   top: 50%;
   right: 1rem;
-  color: #527064;
+  color: var(--color-text-muted);
   font-size: var(--text-secondary);
   font-weight: 600;
   transform: translateY(-50%);
@@ -3463,9 +3465,9 @@ a.list-row:active {
   padding: 0.4rem 0;
   border: 0;
   background: transparent;
-  color: #176b4d;
+  color: var(--color-primary);
   cursor: pointer;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 /* Le paiement especes empile total, champ, pave, montants rapides et
@@ -3488,7 +3490,7 @@ a.list-row:active {
   gap: var(--space-4);
   min-height: 5rem;
   padding: 1rem 1.15rem;
-  border: 1px solid #dce4df;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: #fff;
   color: inherit;
@@ -3528,7 +3530,7 @@ a.list-row:active {
   height: 1.6rem;
   padding: 0 0.35rem;
   flex-shrink: 0;
-  border: 1px solid #dce4df;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface-muted);
   color: #526159;
@@ -3542,7 +3544,7 @@ a.list-row:active {
 }
 
 .payment-method-copy small {
-  color: #527064;
+  color: var(--color-text-muted);
   font-size: var(--text-secondary);
 }
 
@@ -3556,13 +3558,13 @@ a.list-row:active {
   display: grid;
   gap: var(--space-2);
   padding: var(--space-4-5);
-  border: 1px solid #dce4df;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: var(--color-surface-subtle);
 }
 
 .mobile-payment-instructions span {
-  color: #527064;
+  color: var(--color-text-muted);
 }
 
 .payment-total,
@@ -3575,7 +3577,7 @@ a.list-row:active {
 }
 
 .payment-total {
-  border: 1px solid #dce4df;
+  border: 1px solid var(--color-border);
   background: var(--color-surface-accent);
   color: #17211c;
 }
@@ -3595,14 +3597,14 @@ a.list-row:active {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.4rem;
   padding: 0.45rem;
-  border: 1px solid #dce4df;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: var(--color-surface-subtle);
 }
 
 .numeric-keypad-key {
   min-height: 2.4rem;
-  border: 1px solid #dce4df;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: #fff;
   color: inherit;
@@ -3646,7 +3648,7 @@ a.list-row:active {
 }
 
 .change-preview {
-  border: 1px solid #dce4df;
+  border: 1px solid var(--color-border);
   background: var(--color-surface-accent);
   color: #17211c;
 }
@@ -3717,7 +3719,7 @@ a.list-row:active {
 }
 
 .sale-amounts dt {
-  color: #527064;
+  color: var(--color-text-muted);
 }
 
 .sale-amounts dd {

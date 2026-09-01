@@ -84,7 +84,7 @@ export function Cart({
         <div className="cart-title-row">
           <h2 id="cart-title">Vente en cours</h2>
           {items.length > 0 ? (
-            <Badge tone="accent">{items.length} produit{items.length > 1 ? "s" : ""}</Badge>
+            <Badge tone="neutral">{items.length} produit{items.length > 1 ? "s" : ""}</Badge>
           ) : null}
         </div>
         <div className="cart-header-actions">

@@ -332,7 +332,7 @@ export function SaleReturnPage() {
                           )}
                         </span>
                       </div>
-                      <Badge tone={isUnavailable ? "neutral" : "accent"}>
+                      <Badge tone={isUnavailable ? "neutral" : "success"}>
                         {isUnavailable
                           ? "Entièrement retourné"
                           : `${formatQuantity(returnableMilli, saleUnit)} disponible${saleUnit === "UNIT" && returnableMilli > 1000 ? "s" : ""}`}
