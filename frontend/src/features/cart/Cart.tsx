@@ -9,8 +9,20 @@ import { Money } from "../../components/ui/Money"
 import { QuantityControl } from "../../components/ui/QuantityControl"
 import { formatMoney } from "../../utils/money"
 import type { CartItem } from "./cartState"
+import type { PaymentMethod } from "../../types/api"
 import { lineTotal } from "../../utils/quantity"
 import { PriceDialog } from "./CartDialogs"
+
+/** Meme ordre et memes raccourcis que la modale de choix du paiement. */
+const checkoutMethods: Array<{
+  method: PaymentMethod
+  shortcut: "F1" | "F2" | "F3"
+  label: string
+}> = [
+  { method: "CASH", shortcut: "F1", label: "Espèces" },
+  { method: "WAVE", shortcut: "F2", label: "Wave" },
+  { method: "ORANGE_MONEY", shortcut: "F3", label: "Orange Money" },
+]
 
 type CartProps = {
   items: CartItem[]
@@ -21,7 +33,9 @@ type CartProps = {
   onPriceChange: (productId: string, unitPrice: number) => void
   onRemove: (productId: string) => void
   onClear: () => void
-  onCheckout: () => void
+  onCheckoutMethod: (method: PaymentMethod) => void
+  /** Moyen de paiement le plus recent, mis en avant dans le pied du panier. */
+  lastUsedMethod?: PaymentMethod | null
   onSuspend: () => void
   onDialogOpenChange?: (isOpen: boolean) => void
   onInteractionComplete?: () => void
@@ -44,7 +58,8 @@ export function Cart({
   onPriceChange,
   onRemove,
   onClear,
-  onCheckout,
+  onCheckoutMethod,
+  lastUsedMethod = null,
   onSuspend,
   onDialogOpenChange,
   onInteractionComplete,
@@ -197,20 +212,28 @@ export function Cart({
           <span>Total à payer</span>
           <strong><Money value={total} /></strong>
         </div>
-        <div className="checkout-button-group">
-          <Button
-            variant="primary"
-            size="lg"
-            block
-            className="checkout-button"
-            disabled={items.length === 0}
-            onClick={onCheckout}
-          >
-            Encaisser
-          </Button>
-          {items.length > 0 ? (
-            <p className="checkout-shortcuts-hint">F1 Espèces · F2 Wave · F3 Orange Money</p>
-          ) : null}
+        {/* Les trois moyens de paiement sont l'action, pas un « Encaisser »
+            qui ouvrait une modale pour poser la même question. Les
+            raccourcis F1/F2/F3 menaient deja directement ici : l'ecran ne
+            fait qu'exposer le modele clavier qui existait. */}
+        <div className="checkout-methods">
+          {checkoutMethods.map(({ method, shortcut, label }) => (
+            <Button
+              key={method}
+              // L'ordre ne bouge jamais — c'est lui que la main memorise.
+              // Seul l'accent suit le moyen de paiement dominant du magasin,
+              // pour qu'une boutique a 94 % Wave n'ait pas son geste courant
+              // en bouton secondaire.
+              variant={method === (lastUsedMethod ?? "CASH") ? "primary" : "secondary"}
+              size="lg"
+              className="checkout-method"
+              disabled={items.length === 0}
+              onClick={() => onCheckoutMethod(method)}
+            >
+              {label}
+              <small>{shortcut}</small>
+            </Button>
+          ))}
         </div>
       </footer>
     </section>

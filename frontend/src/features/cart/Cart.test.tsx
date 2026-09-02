@@ -10,6 +10,7 @@ import { lineTotal } from "../../utils/quantity"
 import { Cart } from "./Cart"
 import { QuantityDialog } from "./CartDialogs"
 import type { CartItem } from "./cartState"
+import type { PaymentMethod } from "../../types/api"
 
 const coca: CartItem = {
   productId: "coca",
@@ -36,17 +37,21 @@ type Callbacks = {
   onPriceChange: ReturnType<typeof vi.fn>
   onRemove: ReturnType<typeof vi.fn>
   onClear: ReturnType<typeof vi.fn>
-  onCheckout: ReturnType<typeof vi.fn>
+  onCheckoutMethod: ReturnType<typeof vi.fn>
   onSuspend: ReturnType<typeof vi.fn>
 }
 
-function renderCart(items: CartItem[], overrides: Partial<Callbacks> = {}) {
+function renderCart(
+  items: CartItem[],
+  overrides: Partial<Callbacks> = {},
+  lastUsedMethod: PaymentMethod | null = null,
+) {
   const callbacks: Callbacks = {
     onQuantityChange: vi.fn(),
     onPriceChange: vi.fn(),
     onRemove: vi.fn(),
     onClear: vi.fn(),
-    onCheckout: vi.fn(),
+    onCheckoutMethod: vi.fn(),
     onSuspend: vi.fn(),
     ...overrides,
   }
@@ -60,7 +65,8 @@ function renderCart(items: CartItem[], overrides: Partial<Callbacks> = {}) {
       onPriceChange={callbacks.onPriceChange}
       onRemove={callbacks.onRemove}
       onClear={callbacks.onClear}
-      onCheckout={callbacks.onCheckout}
+      onCheckoutMethod={callbacks.onCheckoutMethod}
+      lastUsedMethod={lastUsedMethod}
       onSuspend={callbacks.onSuspend}
     />,
   )
@@ -72,7 +78,9 @@ afterEach(cleanup)
 describe("Cart checkout action", () => {
   it("is disabled when the cart is empty", () => {
     renderCart([])
-    expect(screen.getByRole("button", { name: "Encaisser" })).toBeDisabled()
+    for (const label of [/Espèces/, /Wave/, /Orange Money/]) {
+      expect(screen.getByRole("button", { name: label })).toBeDisabled()
+    }
     expect(screen.queryByText("0 produit dans la vente")).not.toBeInTheDocument()
   })
 
@@ -82,8 +90,20 @@ describe("Cart checkout action", () => {
     expect(screen.getByRole("heading", { name: "Vente en cours" })).toBeInTheDocument()
     expect(screen.getByText("1 produit")).toBeInTheDocument()
     expect(screen.getAllByText("1 000 FCFA")).toHaveLength(2)
-    await user.click(screen.getByRole("button", { name: "Encaisser" }))
-    expect(callbacks.onCheckout).toHaveBeenCalledOnce()
+    await user.click(screen.getByRole("button", { name: /Wave/ }))
+    expect(callbacks.onCheckoutMethod).toHaveBeenCalledWith("WAVE")
+  })
+
+  it("met en avant le dernier moyen de paiement utilise, sans changer l'ordre", () => {
+    renderCart([coca], {}, "WAVE")
+    const buttons = screen.getAllByRole("button", { name: /Espèces|Wave|Orange Money/ })
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      "EspècesF1",
+      "WaveF2",
+      "Orange MoneyF3",
+    ])
+    expect(screen.getByRole("button", { name: /Wave/ })).toHaveClass("button-primary")
+    expect(screen.getByRole("button", { name: /Espèces/ })).toHaveClass("button-secondary")
   })
 })
 

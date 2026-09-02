@@ -153,6 +153,67 @@ export async function findLocalProductByBarcode(
   return product?.isActive ? product : null
 }
 
+/**
+ * Debut du catalogue, par ordre alphabetique. Sert de filet a la grille du
+ * POS quand aucune meilleure vente n'est connue (magasin neuf, ou terminal
+ * hors ligne qui n'a jamais recu de classement).
+ */
+export async function listLocalProducts(
+  storeId: string,
+  limit: number,
+  database: PosDatabase = db,
+): Promise<LocalProduct[]> {
+  const products = await database.products
+    .where("storeId")
+    .equals(storeId)
+    .filter((product) => product.isActive)
+    .sortBy("name")
+  return products.slice(0, limit)
+}
+
+export function topProductsKey(storeId: string): string {
+  return `top-products:${storeId}`
+}
+
+/**
+ * Classement des meilleures ventes, garde en local pour que la grille reste
+ * pertinente hors ligne. On ne stocke que des identifiants : prix et stock
+ * sont relus depuis le catalogue, qui a sa propre synchronisation.
+ */
+export async function saveTopProductIds(
+  storeId: string,
+  productIds: string[],
+  database: PosDatabase = db,
+): Promise<void> {
+  await database.metadata.put({
+    key: topProductsKey(storeId),
+    value: productIds,
+    updatedAt: new Date().toISOString(),
+  })
+}
+
+export async function getTopProductIds(
+  storeId: string,
+  database: PosDatabase = db,
+): Promise<string[]> {
+  const record = await database.metadata.get(topProductsKey(storeId))
+  return Array.isArray(record?.value) ? (record.value as string[]) : []
+}
+
+/** Produits correspondant a une liste d'identifiants, actifs uniquement. */
+export async function getLocalProductsByIds(
+  storeId: string,
+  productIds: string[],
+  database: PosDatabase = db,
+): Promise<LocalProduct[]> {
+  if (productIds.length === 0) return []
+  const found = await database.products
+    .where("[storeId+id]")
+    .anyOf(productIds.map((id) => [storeId, id] as [string, string]))
+    .toArray()
+  return found.filter((product) => product.isActive)
+}
+
 export async function searchLocalProducts(
   storeId: string,
   search: string,

@@ -190,7 +190,6 @@ async function scanCoca(userEvents: ReturnType<typeof userEvent.setup>) {
 }
 
 async function openCashPayment(userEvents: ReturnType<typeof userEvent.setup>) {
-  await userEvents.click(screen.getByRole("button", { name: "Encaisser" }))
   await userEvents.click(screen.getByRole("button", { name: /Espèces/ }))
 }
 
@@ -469,7 +468,6 @@ describe("POS sale workflow offline", () => {
     const userEvents = userEvent.setup()
     renderPos(localSession)
     await scanCoca(userEvents)
-    await userEvents.click(screen.getByRole("button", { name: "Encaisser" }))
     await userEvents.click(screen.getByRole("button", { name: /Wave/ }))
     await userEvents.click(screen.getByRole("button", { name: "Paiement reçu" }))
 
@@ -598,7 +596,7 @@ describe("POS keyboard shortcuts", () => {
       throw new Error(`Unexpected request: ${url}`)
     })
     renderPos()
-    await waitFor(() => expect(screen.getByRole("button", { name: "Encaisser" })).toBeDisabled())
+    await waitFor(() => expect(screen.getByRole("button", { name: /Espèces/ })).toBeDisabled())
 
     fireEvent.keyDown(window, { key: "F1" })
 
@@ -676,7 +674,6 @@ describe("POS keyboard shortcuts", () => {
 
     renderPos()
     const scanner = await scanCoca(userEvents)
-    await userEvents.click(screen.getByRole("button", { name: "Encaisser" }))
     await userEvents.click(screen.getByRole("button", { name: /Espèces/ }))
     expect(screen.getByRole("heading", { name: "Paiement en espèces" })).toBeInTheDocument()
 

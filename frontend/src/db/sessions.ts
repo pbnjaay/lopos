@@ -60,6 +60,19 @@ export async function getLocalCashSessionForRegister(
   return session ?? null
 }
 
+/**
+ * Session ouverte de ce terminal, quelle que soit la caisse. Le chrome de
+ * l'application en a besoin sans dependre de la caisse memorisee : celle-ci
+ * peut etre absente (premier demarrage, stockage vide) alors qu'une session
+ * est bel et bien ouverte, resolue par le reseau.
+ */
+export async function getOpenLocalCashSession(
+  database: PosDatabase = db,
+): Promise<LocalCashSession | null> {
+  const session = await database.cashSessions.where("status").equals("OPEN").first()
+  return session ?? null
+}
+
 export async function markLocalCashSessionClosed(
   cashRegisterId: string,
   database: PosDatabase = db,

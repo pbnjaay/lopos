@@ -7,6 +7,11 @@
      accent : ce qui porte le total ou l'action (pied du panier, total a
               payer, monnaie a rendre) — le vert y est de l'information. */
   --color-surface-muted: #eef1ef;
+  /* Troisieme niveau de surface : le chrome de l'application (en-tete,
+     barre de navigation). Ni le fond de page, ni un panneau blanc — sans
+     lui, la barre laterale blanche sur un fond quasi blanc se lisait comme
+     du contenu au lieu d'encadrer le poste de travail. */
+  --color-surface-chrome: #eaefec;
   --color-surface-subtle: #f8faf9;
   --color-surface-accent: #f4f8f6;
   --color-text: #17211c;
@@ -556,7 +561,10 @@ input::placeholder {
   padding: max(0.75rem, env(safe-area-inset-top))
     max(2rem, env(safe-area-inset-right)) 0.75rem 0;
   border-bottom: 1px solid var(--color-border);
-  background: rgb(255 255 255 / 94%);
+  /* Repli opaque d'abord : sans color-mix, un en-tete transparent laisserait
+     le contenu defiler derriere lui. */
+  background: var(--color-surface-chrome);
+  background: color-mix(in srgb, var(--color-surface-chrome) 94%, transparent);
   backdrop-filter: blur(12px);
 }
 
@@ -582,7 +590,7 @@ input::placeholder {
   align-self: start;
   padding: 1.5rem var(--space-3);
   border-right: 1px solid var(--color-border);
-  background: var(--color-surface);
+  background: var(--color-surface-chrome);
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -780,6 +788,36 @@ input::placeholder {
   font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* Etat de la session dans le chrome : ce qui fait qu'un poste de caisse se
+   lit comme un instrument et non comme une page. Chiffres a chasse fixe,
+   libelle discret au-dessus de la valeur. */
+.app-header-stats {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  margin: 0;
+  white-space: nowrap;
+}
+
+.app-header-stats > div {
+  display: grid;
+  gap: 0.05rem;
+}
+
+.app-header-stats dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-eyebrow);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.app-header-stats dd {
+  margin: 0;
+  font-size: var(--text-secondary);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .app-header-right {
@@ -2648,10 +2686,14 @@ a.list-row:active {
 /* Le panier passe devant : une fois la vente commencee, c'est lui que le
    caissier lit, corrige et encaisse. Le catalogue devient un rail de
    saisie, assez large pour un nom de produit et pas davantage. */
+/* Le rail porte desormais la grille produits : c'est lui la surface de
+   saisie, pas le panier. Il passe donc devant en largeur, le panier gardant
+   de quoi afficher confortablement une ligne complete (nom, pas de quantite,
+   total) et son pied TOTAL / ENCAISSER. */
 .pos-grid {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: minmax(17rem, 34fr) minmax(0, 66fr);
+  grid-template-columns: minmax(20rem, 1fr) minmax(21rem, 1fr);
   gap: var(--space-4);
   align-items: stretch;
   min-height: 0;
@@ -2662,7 +2704,7 @@ a.list-row:active {
 .product-search {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  align-self: start;
+  align-self: stretch;
   gap: var(--space-3);
   min-height: 0;
   max-height: 100%;
@@ -2866,6 +2908,129 @@ a.list-row:active {
   gap: var(--space-5);
 }
 
+/* ==========================================================================
+   Grille produits - le rail au repos travaille.
+   Pas de photo dans le modele produit, et c'est assume : le nom et le prix
+   distinguent deux articles la ou deux images identiques les confondraient.
+   L'ordre est alphabetique et fige, pour que la position d'une tuile
+   devienne memorisable.
+   ========================================================================== */
+
+.product-grid {
+  display: grid;
+  /* Des tuiles plus larges : moins de retours a la ligne dans les noms, des
+     cibles tactiles plus franches, et une grille qui occupe reellement le
+     rail au lieu de le saupoudrer de vignettes. */
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.product-tile {
+  /* Hauteur commune a toutes les tuiles : le nom occupe deux lignes reservees,
+     qu'il les remplisse ou non, sinon chaque rangee se decale selon la
+     longueur des libelles. */
+  min-height: 6.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.product-tile:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-surface-subtle);
+}
+
+.product-tile:active:not(:disabled) {
+  background: var(--color-surface-accent);
+}
+
+.product-tile:disabled {
+  cursor: not-allowed;
+  background: var(--color-surface-muted);
+  opacity: 0.6;
+}
+
+.product-tile-name {
+  /* Deux lignes reservees, toujours : c'est ce qui garde les rangees
+     alignees quel que soit la longueur des noms. */
+  min-height: 2.6em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* Prix et mention d'etat sont tous deux insecables : sans retour a la ligne
+   autorise, « 2 200 FCFA » + « Rupture » debordait de la tuile. La mention
+   passe dessous quand la largeur manque, elle ne deborde jamais. */
+.product-tile-foot {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.15rem var(--space-2);
+  min-width: 0;
+}
+
+.product-tile-foot strong {
+  flex: 0 0 auto;
+}
+
+.product-tile-unit,
+.product-tile-stock {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.product-tile-foot strong {
+  font-size: var(--text-secondary);
+  font-weight: 700;
+}
+
+.product-tile-unit,
+.product-tile-stock {
+  font-size: var(--text-eyebrow);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.product-tile-unit {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.product-tile-stock-low {
+  color: var(--color-warning);
+}
+
+.product-tile-stock-out {
+  color: var(--color-danger);
+  font-size: var(--text-secondary);
+  font-weight: 700;
+}
+
+.product-tile-skeleton {
+  cursor: default;
+  justify-content: space-between;
+}
+
 .pos-rail-section {
   display: grid;
   gap: var(--space-2);
@@ -3052,9 +3217,11 @@ a.list-row:active {
    loin du produit qu'elle concerne. */
 .cart-item {
   display: grid;
-  grid-template-columns:
-    minmax(9rem, 24rem) auto minmax(var(--space-4), 1fr) 7.5rem 5.5rem;
-  grid-template-areas: "identity quantity . total controls";
+  /* C'est le nom du produit qui absorbe la largeur disponible : un espaceur
+     en 1fr la captait, et le libelle — la seule chose que le caissier doit
+     pouvoir lire — restait coince a son minimum. */
+  grid-template-columns: minmax(9rem, 1fr) auto 6.5rem 5.5rem;
+  grid-template-areas: "identity quantity total controls";
   align-items: center;
   gap: var(--space-3);
   min-height: 3.5rem;
@@ -3086,20 +3253,31 @@ a.list-row:active {
   background: var(--color-surface-subtle);
 }
 
+/* Nom et prix unitaire cote a cote plutot qu'empiles : la ligne gagnait de
+   la hauteur pendant qu'une large bande de vide s'etalait a sa droite. Ils
+   se replient l'un sous l'autre quand le panier devient etroit. */
 .cart-item-identity {
-  display: grid;
-  gap: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
   min-width: 0;
 }
 
 /* Nom sur une ligne, tronque, avec le nom complet en info-bulle : dans un
    tableau, une ligne qui grandit desaligne toutes les autres. */
 .cart-item-identity strong {
+  /* Deux lignes plutot qu'une troncature : « Schweppes Lem... » ne dit pas
+     ce qu'on vend. La ligne grandit quand il le faut, jamais le libelle qui
+     disparait. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
   min-width: 0;
   line-height: 1.3;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .cart-item-unit {
@@ -3276,19 +3454,27 @@ a.list-row:active {
   text-transform: uppercase;
 }
 
-.checkout-button-group {
+/* Trois moyens de paiement cote a cote : l'ordre est fixe (Especes, Wave,
+   Orange Money), seul l'accent suit le moyen dominant du magasin. Le
+   raccourci vit dans le bouton, il n'a plus besoin d'une ligne d'aide. */
+.checkout-methods {
   display: grid;
-  gap: 0.35rem;
-  justify-items: stretch;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
 }
 
-.checkout-shortcuts-hint {
-  margin: 0;
-  color: var(--color-text-muted);
+.checkout-method {
+  flex-direction: column;
+  gap: 0.1rem;
+  padding-inline: var(--space-2);
+  font-size: var(--text-secondary);
+  text-align: center;
+}
+
+.checkout-method small {
   font-size: var(--text-eyebrow);
   font-weight: 600;
-  text-align: center;
-  text-transform: none;
+  opacity: 0.7;
 }
 
 /* Deux crans au-dessus de --text-amount-hero. Le total a payer est la
@@ -3309,9 +3495,6 @@ a.list-row:active {
   letter-spacing: 0.07em;
 }
 
-.checkout-button {
-  text-transform: uppercase;
-}
 
 /* ==========================================================================
    Dialog - une seule modale : titre, description, contenu, pied.
@@ -3836,7 +4019,25 @@ a.list-row:active {
     min-height: 0;
   }
 
-  .search-results,
+  /* Colonnes empilees : la grille ne prend que ce qui reste une fois la
+     place du panier reservee. Un plafond en vh ne suffisait pas — a 60 vh il
+     restait 230 px au panier, et le total comme les boutons de paiement
+     tombaient sous la ligne de flottaison des le troisieme article. On
+     reserve donc 26rem au panier (en-tete, quelques lignes, pied) et la
+     grille defile dans ce qui reste, sans jamais disparaitre. */
+  .product-search {
+    max-height: max(
+      14rem,
+      calc(
+        100dvh - var(--app-header-height) - var(--app-bottom-nav-height) - 26rem
+      )
+    );
+  }
+
+  .search-results {
+    overflow-y: auto;
+  }
+
   .cart-list {
     overflow-y: visible;
   }
@@ -3862,8 +4063,26 @@ a.list-row:active {
 }
 
 /* Tactile : aucune commande sous 3rem, et rien qui dependrait du survol. */
+/* Modifier le prix et supprimer une ligne sont des icones seules, sans
+   libelle : sur un poste sans survol, rien ne venait jamais reveler qu'elles
+   sont cliquables, et elles se lisaient comme de la decoration. Le critere
+   est bien l'absence de survol, pas la taille du pointeur — une tablette
+   peut se declarer « fine » et n'avoir aucun survol malgre tout. */
+@media (hover: none) {
+  .cart-item-controls .icon-button {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-muted);
+    color: var(--color-text);
+  }
+
+  .cart-item-controls .icon-button svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
+
 @media (pointer: coarse) {
-  .checkout-shortcuts-hint,
+  .checkout-method small,
   .payment-method-shortcut {
     display: none;
   }
@@ -3887,10 +4106,12 @@ a.list-row:active {
   }
 
   /* Les colonnes du panier suivent l'elargissement des pas tactiles, sinon
-     le compteur et les deux boutons debordent sur leurs voisins. */
+     le compteur et les deux boutons debordent sur leurs voisins. Le nombre
+     de colonnes doit rester celui de la regle de base : une definition a
+     cinq pistes ne correspondait plus aux quatre zones nommees, et les
+     commandes de fin de ligne se retrouvaient hors de leur colonne. */
   .cart-item {
-    grid-template-columns:
-      minmax(9rem, 24rem) auto minmax(var(--space-4), 1fr) 7.5rem 6.5rem;
+    grid-template-columns: minmax(9rem, 1fr) auto 6.5rem 7rem;
     min-height: 4rem;
   }
 
@@ -3931,8 +4152,10 @@ a.list-row:active {
   }
 
   /* Le caissier connait sa boutique : sur telephone, la place va au reseau
-     et au menu de session. */
-  .app-header-context {
+     et au menu de session. L'etat de session suit la meme regle — il se
+     retrouve en entier sur l'ecran de cloture. */
+  .app-header-context,
+  .app-header-stats {
     display: none;
   }
 
@@ -3987,16 +4210,21 @@ a.list-row:active {
   }
 
   /* Telephone : la ligne passe sur deux rangees plutot que de comprimer
-     quatre colonnes. Produit et prix unitaire occupent la premiere, les
-     commandes et le total la seconde, toutes au format tactile. */
+     quatre colonnes. Le total monte a cote du nom — reunis sur la meme
+     rangee, ils tiennent sans se chevaucher, la ou compteur + total + deux
+     boutons tactiles depassaient la largeur de l'ecran. */
   .cart-item {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "identity identity identity"
-      "quantity total    controls";
+      "identity total"
+      "quantity controls";
     gap: var(--space-2) var(--space-3);
     min-height: 0;
     padding: var(--space-3) var(--space-4);
+  }
+
+  .cart-line-total {
+    align-self: start;
   }
 
   .cart-item > .quantity-control {
@@ -4012,11 +4240,7 @@ a.list-row:active {
     grid-template-columns: 1fr;
   }
 
-  .checkout-button {
-    width: 100%;
-  }
-
-  .checkout-button-group {
+  .checkout-methods {
     width: 100%;
   }
 

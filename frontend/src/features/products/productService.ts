@@ -1,8 +1,12 @@
-import { getProducts } from "../../api/products"
+import { getProducts, getTopProducts } from "../../api/products"
 import { isApiUnavailable } from "../../api/client"
 import {
   findLocalProductByBarcode,
+  getLocalProductsByIds,
+  getTopProductIds,
   hasLocalProductCatalog,
+  listLocalProducts,
+  saveTopProductIds,
   searchLocalProducts,
 } from "../../db/products"
 import type { Product } from "../../types/api"
@@ -92,4 +96,51 @@ export async function searchProducts(
     if (!isApiUnavailable(error)) throw error
     throw new LocalCatalogUnavailableError()
   }
+}
+
+/**
+ * Meilleures ventes du magasin, pour la grille du rail — jamais le catalogue
+ * entier : une superette de plusieurs centaines de references rendrait la
+ * grille illisible et le cache inutilement lourd.
+ *
+ * Trois niveaux de repli, du plus frais au plus resistant :
+ * le serveur donne le classement a jour et on le memorise ; hors ligne on
+ * rejoue le dernier classement connu ; et si ce terminal n'en a jamais recu,
+ * on montre le debut du catalogue local plutot qu'une grille vide.
+ */
+export async function listTopProducts(
+  storeId: string,
+  limit: number,
+): Promise<CatalogProduct[]> {
+  const hasLocalCatalog = await hasLocalProductCatalog(storeId)
+
+  try {
+    const ranked = await getTopProducts(storeId, limit)
+    const rankedIds = ranked.map((product) => product.id)
+    await saveTopProductIds(storeId, rankedIds)
+    // Le catalogue local connait le stock deja engage par les ventes non
+    // synchronisees : quand il existe, il prime sur la reponse reseau.
+    if (hasLocalCatalog) {
+      const local = await getLocalProductsByIds(storeId, rankedIds)
+      if (local.length > 0) return sortByName(local.map(fromLocalProduct))
+    }
+    return sortByName(ranked.map(fromApiProduct).filter((product) => product.isActive))
+  } catch (error) {
+    if (!isApiUnavailable(error)) throw error
+    if (!hasLocalCatalog) throw new LocalCatalogUnavailableError()
+  }
+
+  const cachedIds = await getTopProductIds(storeId)
+  const cached = await getLocalProductsByIds(storeId, cachedIds)
+  if (cached.length > 0) return sortByName(cached.map(fromLocalProduct))
+  return sortByName((await listLocalProducts(storeId, limit)).map(fromLocalProduct))
+}
+
+/**
+ * Le classement choisit *quels* produits s'affichent ; l'ordre affiche reste
+ * alphabetique. Sans photo, c'est la position d'une tuile qui la designe :
+ * elle ne doit pas se deplacer parce que le pain s'est mieux vendu qu'hier.
+ */
+function sortByName(products: CatalogProduct[]): CatalogProduct[] {
+  return [...products].sort((a, b) => a.name.localeCompare(b.name, "fr"))
 }

@@ -41,10 +41,10 @@ import { getLastPaymentMethod, storeLastPaymentMethod } from "../features/checko
 import { SaleSuccessModal } from "../features/checkout/SaleSuccessModal"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { pendingSalesCountQueryKey } from "../features/offline/usePendingSalesCount"
+import { ProductGrid } from "../features/products/ProductGrid"
 import { ProductSearch } from "../features/products/ProductSearch"
 import { useProductCatalog } from "../features/products/queries"
 import type { CatalogProduct } from "../features/products/types"
-import { RecentSalesSection, recentSalesQueryKey } from "../features/sales/RecentSalesSection"
 import { type ReceiptView, receiptViewFromLocalSale } from "../features/sales/receiptView"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
 import type { PaymentMethod } from "../types/api"
@@ -151,9 +151,6 @@ export function PosPage() {
       setLastPaymentMethod(sale.payment.method)
       void queryClient.invalidateQueries({ queryKey: ["products"] })
       void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })
-      void queryClient.invalidateQueries({
-        queryKey: recentSalesQueryKey(ownSession?.id ?? null),
-      })
       // Hors ligne, conserver la vente dans l’outbox et laisser le compteur
       // global refléter toutes les ventes en attente. La reconnexion déclenche
       // déjà une synchronisation groupée via SyncStatusProvider.
@@ -198,6 +195,19 @@ export function PosPage() {
       return
     }
     cart.addItem(product, 1000)
+  }
+
+  /**
+   * Ajout depuis la grille du rail. Le focus doit repartir au champ de scan :
+   * sinon il resterait sur la tuile, et la frappe du scanner — qui est un
+   * clavier — arriverait sur un bouton au lieu du champ. On ne le fait pas
+   * pour un article au poids, dont le dialogue de pesée prend le focus.
+   */
+  function handleGridSelect(product: Parameters<typeof cart.addItem>[0]) {
+    handleAddProduct(product)
+    if (product.saleUnit !== "KG") {
+      document.getElementById("product-search-input")?.focus()
+    }
   }
 
   async function submitPayment(payment: CheckoutPayment) {
@@ -289,6 +299,19 @@ export function PosPage() {
     focusProductSearch()
   }
 
+  /**
+   * Entree dans l'encaissement pour un moyen de paiement donne — partagee
+   * par les trois boutons du pied de panier et par F1/F2/F3, pour que les
+   * deux chemins declenchent exactement la meme chose.
+   */
+  function startCheckout(method: PaymentMethod) {
+    if (!ownSession || cart.items.length === 0) return
+    saleMutation.reset()
+    setCheckoutStep(method)
+    trackCheckoutOpened({ cart_items_count: cart.items.length, cart_total: cart.total })
+    trackPaymentMethodSelected({ method })
+  }
+
   // F1/F2/F3 open a payment screen directly from the POS, bypassing the
   // method-selection modal entirely. Safe to intercept unconditionally
   // (unlike digits or Enter) because function keys never collide with
@@ -309,11 +332,7 @@ export function PosPage() {
         isHeldCartsOpen
       )
         return
-      if (!ownSession || cart.items.length === 0) return
-      saleMutation.reset()
-      setCheckoutStep(method)
-      trackCheckoutOpened({ cart_items_count: cart.items.length, cart_total: cart.total })
-      trackPaymentMethodSelected({ method })
+      startCheckout(method)
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
@@ -368,13 +387,16 @@ export function PosPage() {
               // ni modale ni changement de page.
               restContent={
                 <div className="pos-rail-rest">
+                  <ProductGrid
+                    storeId={selectedRegister.store_id}
+                    onProductSelect={handleGridSelect}
+                  />
                   <HeldCartsSection
                     carts={cart.heldCarts.list}
                     onResume={handleRailResume}
                     onDelete={handleRailDelete}
                     onSeeAll={() => setIsHeldCartsOpen(true)}
                   />
-                  <RecentSalesSection cashSessionId={ownSession?.id ?? null} />
                 </div>
               }
             />
@@ -391,14 +413,8 @@ export function PosPage() {
             onSuspend={handleSuspendCart}
             onDialogOpenChange={setIsCartDialogOpen}
             onInteractionComplete={focusProductSearch}
-            onCheckout={() => {
-              saleMutation.reset()
-              setCheckoutStep("METHODS")
-              trackCheckoutOpened({
-                cart_items_count: cart.items.length,
-                cart_total: cart.total,
-              })
-            }}
+            lastUsedMethod={lastPaymentMethod}
+            onCheckoutMethod={startCheckout}
           />
         </div>
       ) : (

@@ -193,7 +193,6 @@ describe("POS résilience hors ligne (reproduction pilote)", () => {
       expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1"),
     )
 
-    await userEvents.click(screen.getByRole("button", { name: "Encaisser" }))
     await userEvents.click(screen.getByRole("button", { name: /Espèces/ }))
     await userEvents.type(screen.getByLabelText("Montant reçu"), "500")
     await userEvents.click(screen.getByRole("button", { name: "Valider" }))
@@ -263,7 +262,6 @@ describe("POS résilience hors ligne (reproduction pilote)", () => {
       expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1"),
     )
 
-    await userEvents.click(screen.getByRole("button", { name: "Encaisser" }))
     await userEvents.click(screen.getByRole("button", { name: /Espèces/ }))
     await userEvents.type(screen.getByLabelText("Montant reçu"), "500")
     await userEvents.click(screen.getByRole("button", { name: "Valider" }))

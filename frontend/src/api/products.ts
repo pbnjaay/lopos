@@ -15,6 +15,16 @@ export function getProducts(lookup: ProductLookup): Promise<Product[]> {
   )
 }
 
+/** Meilleures ventes du magasin, pour la grille du point de vente. */
+export function getTopProducts(storeId: string, limit: number): Promise<Product[]> {
+  return apiRequest<Product[]>(
+    buildApiUrl("products/top/", {
+      store_id: storeId,
+      limit: String(limit),
+    }),
+  )
+}
+
 export function getProductCatalog(storeId: string): Promise<Product[]> {
   return apiRequest<Product[]>(
     buildApiUrl("products/", {
