@@ -13,7 +13,12 @@ from apps.sales.models import Payment, Sale, SaleItem, SaleReturn
 from apps.stores.models import Store
 from apps.sync.models import ProcessedSyncEvent
 
-from .formatting import classify_cash_difference, format_cash_difference, format_count
+from .formatting import (
+    classify_cash_difference,
+    format_cash_difference,
+    format_count,
+    format_open_duration,
+)
 from .period import DEFAULT_PERIOD, resolve_period_range
 
 ZERO = Decimal("0.00")
@@ -167,16 +172,44 @@ def _sync_conflict_alert() -> Alert | None:
     )
 
 
+def _stale_session_alerts(store_id: str | None) -> list[Alert]:
+    """Sessions encore ouvertes au-delà du seuil — probable oubli de clôture."""
+    threshold_hours = settings.STALE_CASH_SESSION_HOURS_THRESHOLD
+    cutoff = timezone.now() - timezone.timedelta(hours=threshold_hours)
+    qs = (
+        CashSession.objects.filter(status=CashSession.Status.OPEN, opened_at__lte=cutoff)
+        .select_related("cash_register", "cash_register__store")
+        .order_by("opened_at")
+    )
+    if store_id:
+        qs = qs.filter(cash_register__store_id=store_id)
+
+    now = timezone.now()
+    return [
+        Alert(
+            severity="warning",
+            text=(
+                f"{session.cash_register} ouverte depuis "
+                f"{format_open_duration(int((now - session.opened_at).total_seconds() // 3600))}"
+            ),
+            url=reverse("admin:cash_cashsession_change", args=[session.pk]),
+        )
+        for session in qs
+    ]
+
+
 def _build_alerts(
     *, store_id: str | None, out_of_stock_count: int, low_stock_count: int
 ) -> list[Alert]:
     critical_shortages, other_cash = _cash_session_alerts(store_id)
     out_alert, low_alert = _stock_alerts(store_id, out_of_stock_count, low_stock_count)
     sync_alert = _sync_conflict_alert()
+    stale_session_alerts = _stale_session_alerts(store_id)
 
     ordered: list[Alert] = [*critical_shortages]
     if out_alert:
         ordered.append(out_alert)
+    ordered.extend(stale_session_alerts)
     if sync_alert:
         ordered.append(sync_alert)
     ordered.extend(other_cash)

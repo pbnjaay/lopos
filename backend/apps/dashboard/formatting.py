@@ -29,6 +29,16 @@ def format_cash_difference(difference: Decimal | None) -> str:
     return f"Manque : {format_fcfa(abs(difference))}"
 
 
+def format_open_duration(hours: int) -> str:
+    """"18 h" en-dessous d'un jour, "2 j 3 h" au-delà (session oubliée un week-end)."""
+    if hours < 24:
+        return f"{hours} h"
+    days, remaining_hours = divmod(hours, 24)
+    if remaining_hours == 0:
+        return f"{days} j"
+    return f"{days} j {remaining_hours} h"
+
+
 def classify_cash_difference(difference: Decimal | None) -> str:
     """Returns "info" | "warning" | "critical" for a cash session's difference.
 

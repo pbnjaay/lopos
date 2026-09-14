@@ -11,6 +11,7 @@ from apps.dashboard.formatting import (
     format_cash_difference,
     format_count,
     format_fcfa,
+    format_open_duration,
     format_percentage,
 )
 from apps.dashboard.services import get_manager_dashboard
@@ -397,6 +398,60 @@ def test_sync_conflict_alert_only_appears_when_flagged() -> None:
 
     dashboard = get_manager_dashboard()
     assert any("vérification de synchronisation" in a.text for a in dashboard.alerts)
+
+
+# --- Sessions de caisse restées ouvertes ---------------------------------
+
+
+@pytest.mark.parametrize(
+    ("hours", "expected"),
+    [(3, "3 h"), (18, "18 h"), (24, "1 j"), (30, "1 j 6 h"), (48, "2 j")],
+)
+def test_format_open_duration(hours, expected) -> None:
+    assert format_open_duration(hours) == expected
+
+
+def test_stale_open_session_triggers_an_alert_past_the_threshold(
+    cash_session: CashSession,
+) -> None:
+    CashSession.objects.filter(pk=cash_session.pk).update(
+        opened_at=timezone.now() - timezone.timedelta(hours=13)
+    )
+
+    dashboard = get_manager_dashboard()
+
+    assert any("ouverte depuis" in alert.text for alert in dashboard.alerts)
+    stale_alert = next(a for a in dashboard.alerts if "ouverte depuis" in a.text)
+    assert stale_alert.severity == "warning"
+    assert "Caisse 01" in stale_alert.text
+    assert "13 h" in stale_alert.text
+
+
+def test_recently_opened_session_does_not_trigger_an_alert(
+    cash_session: CashSession,
+) -> None:
+    dashboard = get_manager_dashboard()
+
+    assert not any("ouverte depuis" in alert.text for alert in dashboard.alerts)
+
+
+def test_stale_session_alert_is_filtered_by_store(
+    store: Store, store2: Store, cashier
+) -> None:
+    register = CashRegister.objects.create(store=store, name="Caisse 01")
+    other_register = CashRegister.objects.create(store=store2, name="Caisse 02")
+    stale_cutoff = timezone.now() - timezone.timedelta(hours=13)
+    for reg in (register, other_register):
+        session = CashSession.objects.create(
+            cash_register=reg, cashier=cashier, opening_balance=Decimal("0")
+        )
+        CashSession.objects.filter(pk=session.pk).update(opened_at=stale_cutoff)
+
+    dashboard = get_manager_dashboard(store_id=str(store.id))
+
+    stale_alerts = [a for a in dashboard.alerts if "ouverte depuis" in a.text]
+    assert len(stale_alerts) == 1
+    assert "Caisse 01" in stale_alerts[0].text
 
 
 # --- Helpers --------------------------------------------------------------

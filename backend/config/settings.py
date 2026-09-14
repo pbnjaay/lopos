@@ -96,6 +96,11 @@ LOW_STOCK_THRESHOLD_DEFAULT = 5
 CASH_DISCREPANCY_NOTABLE_THRESHOLD = Decimal("1000")
 CASH_DISCREPANCY_CRITICAL_THRESHOLD = Decimal("5000")
 
+# Au-delà de ce nombre d'heures, une session de caisse encore ouverte remonte
+# comme alerte dans le dashboard gérant — signe probable d'un oubli de
+# clôture en fin de service plutôt que d'un service anormalement long.
+STALE_CASH_SESSION_HOURS_THRESHOLD = 12
+
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 
 UNFOLD = {
