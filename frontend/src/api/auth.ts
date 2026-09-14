@@ -27,7 +27,12 @@ export async function login(input: LoginInput): Promise<CurrentUser> {
   })
 }
 
-export function logout(): Promise<DetailResponse> {
+export async function logout(): Promise<DetailResponse> {
+  // Le cookie CSRF déjà posé (login, ou une visite antérieure) peut avoir
+  // expiré ou disparu sans que rien d'autre côté front ne le renouvelle —
+  // sans ce fetch, la déconnexion échoue en CSRF et personne ne peut se
+  // reconnecter avec un autre compte. Même garantie qu'au login.
+  await apiRequest<DetailResponse>("auth/csrf/")
   return apiRequest<DetailResponse>("auth/logout/", {
     method: "POST",
     body: {},
