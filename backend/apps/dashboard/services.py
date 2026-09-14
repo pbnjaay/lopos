@@ -2,8 +2,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 from django.conf import settings
-from django.db.models import Count, Q, QuerySet, Sum
-from django.db.models.functions import Abs
+from django.db.models import Count, F, Q, QuerySet, Sum
+from django.db.models.functions import Abs, Coalesce
 from django.urls import reverse
 from django.utils import timezone
 
@@ -243,9 +243,15 @@ def get_manager_dashboard(
     open_sessions = list(open_sessions_qs.order_by("cash_register__name"))
 
     threshold = getattr(settings, "LOW_STOCK_THRESHOLD_DEFAULT", 5)
-    stock_qs = _stock_queryset(store_id)
+    # Un produit peut définir son propre seuil (sac de riz vs canette) ; à
+    # défaut, on retombe sur le seuil global du commerce.
+    stock_qs = _stock_queryset(store_id).annotate(
+        effective_threshold=Coalesce("product__low_stock_threshold", threshold)
+    )
     out_of_stock_count = stock_qs.filter(quantity__lte=0).count()
-    low_stock_count = stock_qs.filter(quantity__gt=0, quantity__lte=threshold).count()
+    low_stock_count = stock_qs.filter(
+        quantity__gt=0, quantity__lte=F("effective_threshold")
+    ).count()
 
     top_products_qs = (
         SaleItem.objects.filter(sale__in=sales)

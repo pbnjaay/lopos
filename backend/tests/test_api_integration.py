@@ -340,3 +340,38 @@ def test_current_session_returns_404_when_register_has_no_open_session(
     )
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_product_low_stock_threshold_round_trips_through_the_api(
+    api_client: APIClient,
+) -> None:
+    response = api_client.post(
+        reverse("product-list"),
+        {"name": "Riz 25kg", "selling_price": "15000.00", "low_stock_threshold": 2},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.json()["low_stock_threshold"] == 2
+    assert Product.objects.get().low_stock_threshold == 2
+
+
+def test_product_low_stock_threshold_defaults_to_null(api_client: APIClient) -> None:
+    response = api_client.post(
+        reverse("product-list"),
+        {"name": "Soda", "selling_price": "500.00"},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.json()["low_stock_threshold"] is None
+
+
+def test_product_rejects_a_negative_low_stock_threshold(api_client: APIClient) -> None:
+    response = api_client.post(
+        reverse("product-list"),
+        {"name": "Soda", "selling_price": "500.00", "low_stock_threshold": -1},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST

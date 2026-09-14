@@ -127,7 +127,10 @@ class ProductAdmin(ModelAdmin):
 
     def get_fieldsets(self, request, obj=None):
         fieldsets = [
-            ("Informations générales", {"fields": ("name", "sale_unit", "is_active")}),
+            (
+                "Informations générales",
+                {"fields": ("name", "sale_unit", "low_stock_threshold", "is_active")},
+            ),
             ("Prix", {"fields": ("purchase_price", "selling_price")}),
         ]
         if obj is None:

@@ -66,3 +66,38 @@ def test_stock_status_filter_out_returns_only_zero_or_negative(
     result = list(filter_instance.queryset(None, Stock.objects.all()))
 
     assert result == [out_of_stock]
+
+
+def test_status_label_uses_the_product_own_threshold_when_set(store: Store) -> None:
+    rice = Product.objects.create(
+        name="Riz", selling_price=Decimal("15000.00"), low_stock_threshold=2
+    )
+    stock = Stock.objects.create(store=store, product=rice, quantity=8)
+    model_admin = StockAdmin(Stock, admin.site)
+
+    assert model_admin.status_label(stock) == "OK"
+
+
+def test_stock_status_filter_low_uses_the_product_own_threshold(store: Store) -> None:
+    # Seuil global (5) ne s'appliquerait pas ici : sans son propre seuil, ce
+    # produit n'apparaîtrait pas en "stock faible" à 8 unités.
+    rice = Product.objects.create(
+        name="Riz", selling_price=Decimal("15000.00"), low_stock_threshold=2
+    )
+    low_rice_stock = Stock.objects.create(store=store, product=rice, quantity=2)
+    ok_rice_stock = Stock.objects.create(
+        store=store,
+        product=Product.objects.create(
+            name="Riz jasmin", selling_price=Decimal("16000.00"), low_stock_threshold=2
+        ),
+        quantity=8,
+    )
+
+    model_admin = StockAdmin(Stock, admin.site)
+    filter_instance = StockStatusFilter(
+        request=None, params={"stock_status": ["low"]}, model=Stock, model_admin=model_admin
+    )
+    result = list(filter_instance.queryset(None, Stock.objects.all()))
+
+    assert result == [low_rice_stock]
+    assert ok_rice_stock not in result

@@ -46,6 +46,15 @@ class Product(models.Model):
     sale_unit = models.CharField(
         "unité de vente", max_length=8, choices=SaleUnit.choices, default=SaleUnit.UNIT
     )
+    low_stock_threshold = models.PositiveIntegerField(
+        "seuil de stock faible",
+        blank=True,
+        null=True,
+        help_text=(
+            "Laisser vide pour utiliser le seuil par défaut du commerce "
+            "(LOW_STOCK_THRESHOLD_DEFAULT)."
+        ),
+    )
     is_active = models.BooleanField("actif", default=True)
     created_at = models.DateTimeField("créé le", auto_now_add=True)
     updated_at = models.DateTimeField("modifié le", auto_now=True)

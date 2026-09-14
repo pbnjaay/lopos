@@ -19,6 +19,9 @@ class ProductSerializer(serializers.ModelSerializer):
         required=False,
     )
     stock = serializers.DecimalField(source="current_stock", max_digits=12, decimal_places=3, read_only=True)
+    low_stock_threshold = serializers.IntegerField(
+        min_value=0, allow_null=True, required=False
+    )
 
     class Meta:
         model = Product
@@ -29,6 +32,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "selling_price",
             "purchase_price",
             "sale_unit",
+            "low_stock_threshold",
             "is_active",
             "stock",
             "created_at",

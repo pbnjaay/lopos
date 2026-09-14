@@ -303,6 +303,22 @@ def test_out_of_stock_and_low_stock_are_distinct(
     assert dashboard.low_stock_count == expected_low
 
 
+def test_low_stock_count_uses_the_product_own_threshold_when_set(store: Store) -> None:
+    # Sac de riz de 25kg : 8 unités en stock n'ont rien d'alarmant, le seuil
+    # global (5) est bien trop bas pour ce produit précis.
+    rice = Product.objects.create(
+        name="Riz", selling_price=Decimal("15000.00"), low_stock_threshold=2
+    )
+    Stock.objects.create(store=store, product=rice, quantity=8)
+    # Canette : reste sur le seuil global faute d'override.
+    soda = Product.objects.create(name="Soda", selling_price=Decimal("500.00"))
+    Stock.objects.create(store=store, product=soda, quantity=3)
+
+    dashboard = get_manager_dashboard()
+
+    assert dashboard.low_stock_count == 1  # seul le soda, pas le riz
+
+
 # --- Cash discrepancy formatting / classification -----------------------
 
 
