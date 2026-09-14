@@ -99,7 +99,7 @@ def test_classe_par_quantite_vendue(api_client, shop, cashier):
     assert [row["name"] for row in response.json()][:3] == [
         "Coca 50cl",
         "Banane",
-        "Riz parfumé 5kg",
+        "Riz Parfumé 5kg",
     ]
 
 

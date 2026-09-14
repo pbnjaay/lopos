@@ -102,6 +102,9 @@ UNFOLD = {
     "SITE_TITLE": "LoPOS Admin",
     "SITE_HEADER": "LoPOS",
     "SITE_SUBHEADER": "Administration du point de vente",
+    # Lien "Voir le site" du bandeau admin : ce backend n'a pas de front qui
+    # lui est propre, il renvoie vers l'app caisse.
+    "SITE_URL": FRONTEND_URL,
     "SITE_SYMBOL": "point_of_sale",
     "DASHBOARD_CALLBACK": "apps.dashboard.views.manager_dashboard_callback",
     # Rampe verte LoPOS (dérivée par OKLCH du vert de marque du POS, #176b4d,

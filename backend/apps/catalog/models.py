@@ -1,8 +1,30 @@
+import re
 import uuid
 from decimal import Decimal
 
 from django.db import models
 from django.db.models import Q
+
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def format_product_name(raw_name: str) -> str:
+    """Normalise un nom de produit saisi à la main.
+
+    Selon le caissier, un même produit arrive en "COCA COLA 50CL", "coca
+    cola 50cl" ou "Coca Cola 50CL" — visuellement incohérent dans le
+    catalogue. On met en casse de titre chaque mot qui n'a qu'une seule
+    casse (tout majuscule ou tout minuscule), et on laisse intacts ceux qui
+    mélangent déjà les deux (ex. "iPhone") pour ne pas abîmer une casse
+    volontaire — au prix de ne pas pouvoir distinguer un sigle voulu en
+    majuscules ("CFA") d'une saisie clavier verrouillé en majuscules.
+    """
+    collapsed = _WHITESPACE_RE.sub(" ", raw_name).strip()
+    words = [
+        word.capitalize() if word.isupper() or word.islower() else word
+        for word in collapsed.split(" ")
+    ]
+    return " ".join(words)
 
 
 class Product(models.Model):
@@ -51,3 +73,7 @@ class Product(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    def save(self, *args, **kwargs) -> None:
+        self.name = format_product_name(self.name)
+        super().save(*args, **kwargs)

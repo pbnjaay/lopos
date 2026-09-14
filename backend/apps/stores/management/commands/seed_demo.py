@@ -8,7 +8,7 @@ from django.db import transaction
 from apps.cash.exceptions import CashSessionAlreadyOpen
 from apps.cash.models import CashSession
 from apps.cash.services import open_cash_session
-from apps.catalog.models import Product
+from apps.catalog.models import Product, format_product_name
 from apps.inventory.models import Stock
 from apps.inventory.services import receive_stock
 from apps.stores.models import CashRegister, Store, StoreAssignment
@@ -118,9 +118,13 @@ class Command(BaseCommand):
             )
 
             for item in DEMO_PRODUCTS:
+                # Product.save() normalise le nom (casse) : comparer contre le
+                # même nom normalisé, sinon chaque relance re-détecte un faux
+                # conflit / recrée le produit au lieu de le retrouver.
+                expected_name = format_product_name(item["name"])
                 conflicting_product = (
                     Product.objects.filter(barcode=item["barcode"])
-                    .exclude(name=item["name"])
+                    .exclude(name=expected_name)
                     .first()
                     if item["barcode"] is not None
                     else None
@@ -132,7 +136,7 @@ class Command(BaseCommand):
                     )
 
                 product, product_created = Product.objects.get_or_create(
-                    name=item["name"],
+                    name=expected_name,
                     defaults={
                         "barcode": item["barcode"],
                         "selling_price": item["selling_price"],

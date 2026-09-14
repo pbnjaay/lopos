@@ -4,10 +4,30 @@ import pytest
 from django.contrib import admin
 from django.db import IntegrityError, transaction
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, format_product_name
 
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.mark.parametrize(
+    ("raw_name", "expected"),
+    [
+        ("COCA COLA 50CL", "Coca Cola 50cl"),
+        ("coca cola 50cl", "Coca Cola 50cl"),
+        ("  Coca   Cola   50cl  ", "Coca Cola 50cl"),
+        ("iPhone 15", "iPhone 15"),
+        ("Riz parfumé 5kg", "Riz Parfumé 5kg"),
+    ],
+)
+def test_format_product_name(raw_name: str, expected: str) -> None:
+    assert format_product_name(raw_name) == expected
+
+
+def test_product_name_is_formatted_on_save() -> None:
+    product = Product.objects.create(name="  coca COLA 50cl  ", selling_price=Decimal("500"))
+
+    assert product.name == "Coca Cola 50cl"
 
 
 def test_product_accepts_nonnegative_prices_and_null_barcode() -> None:
