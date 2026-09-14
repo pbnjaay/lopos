@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { getCurrentUser, login } from "./auth"
+import { getCurrentUser, login, logout } from "./auth"
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -44,6 +44,31 @@ describe("auth API", () => {
     expect(loginRequest?.body).toBe(
       JSON.stringify({ username: "cashier", password: "secret" }),
     )
+  })
+
+  it("refreshes the CSRF cookie before posting the logout, in case the existing one expired", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementationOnce(async () => {
+        document.cookie = "csrftoken=fresh-token; path=/"
+        return new Response(JSON.stringify({ detail: "CSRF cookie set" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      })
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: "Logged out" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+
+    await expect(logout()).resolves.toEqual({ detail: "Logged out" })
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/auth/csrf/")
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/v1/auth/logout/")
+    const logoutRequest = fetchMock.mock.calls[1]?.[1]
+    expect(new Headers(logoutRequest?.headers).get("X-CSRFToken")).toBe("fresh-token")
   })
 
   it("maps an anonymous me response to null", async () => {
