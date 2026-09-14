@@ -31,6 +31,15 @@ def test_manager_group_can_manage_catalog_but_only_view_audit_models() -> None:
     } <= codenames
 
 
+def test_manager_group_can_manage_users_but_never_delete_them() -> None:
+    call_command("create_default_groups")
+    manager_group = Group.objects.get(name="Gérant")
+    codenames = set(manager_group.permissions.values_list("codename", flat=True))
+
+    assert {"add_user", "change_user", "view_user"} <= codenames
+    assert "delete_user" not in codenames
+
+
 def test_cashier_group_has_no_admin_permissions() -> None:
     call_command("create_default_groups")
     cashier_group = Group.objects.get(name="Caissier")

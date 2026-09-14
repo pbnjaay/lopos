@@ -11,6 +11,11 @@ MANAGER_PERMISSIONS = [
     ("stores", "store", ("add", "change", "view")),
     ("stores", "cashregister", ("add", "change", "view")),
     ("stores", "storeassignment", ("add", "change", "delete", "view")),
+    # Pas de "delete" : un gérant crée/désactive des comptes caissiers, mais
+    # ne supprime jamais un compte (perte de l'historique des ventes liées).
+    # UserAdmin retire en plus is_staff/is_superuser/groups/permissions du
+    # formulaire pour ce groupe — un gérant ne peut pas s'auto-élever.
+    ("auth", "user", ("add", "change", "view")),
     ("inventory", "stock", ("view",)),
     ("inventory", "inventorymovement", ("view",)),
     ("cash", "cashsession", ("view",)),
