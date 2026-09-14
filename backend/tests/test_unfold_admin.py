@@ -93,6 +93,34 @@ def test_sales_sidebar_links_to_returns() -> None:
     assert str(returns_item["link"]) == reverse("admin:sales_salereturn_changelist")
 
 
+def _configuration_item(title: str) -> dict:
+    config_section = next(
+        section
+        for section in settings.UNFOLD["SIDEBAR"]["navigation"]
+        if str(section["title"]) == "Configuration"
+    )
+    return next(item for item in config_section["items"] if str(item["title"]) == title)
+
+
+def test_configuration_sidebar_links_to_groups() -> None:
+    groups_item = _configuration_item("Groupes")
+
+    assert str(groups_item["link"]) == reverse("admin:auth_group_changelist")
+
+
+def test_groups_sidebar_link_is_reserved_to_superusers(rf) -> None:
+    groups_item = _configuration_item("Groupes")
+    permission_check = groups_item["permission"]
+
+    staff_request = rf.get("/admin/")
+    staff_request.user = User(is_staff=True, is_superuser=False)
+    superuser_request = rf.get("/admin/")
+    superuser_request.user = User(is_staff=True, is_superuser=True)
+
+    assert permission_check(staff_request) is False
+    assert permission_check(superuser_request) is True
+
+
 @pytest.mark.django_db
 def test_admin_login_uses_unfold(client) -> None:
     response = client.get(reverse("admin:login"))

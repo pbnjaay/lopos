@@ -222,6 +222,16 @@ UNFOLD = {
                         "icon": "group",
                         "link": reverse_lazy("admin:auth_user_changelist"),
                     },
+                    {
+                        "title": _("Groupes"),
+                        "icon": "groups",
+                        "link": reverse_lazy("admin:auth_group_changelist"),
+                        # Réservé au superuser : un gérant n'a aucune
+                        # permission auth.group (cf. create_default_groups),
+                        # un lien visible mais qui renvoie un 403 serait pire
+                        # que pas de lien du tout.
+                        "permission": lambda request: request.user.is_superuser,
+                    },
                 ],
             },
         ],
