@@ -1,5 +1,6 @@
 import { Navigate, createBrowserRouter } from "react-router-dom"
 
+import { RouterErrorBoundary } from "../components/ui/AppErrorBoundary"
 import { RequireAuth } from "../features/auth/RequireAuth"
 import { SessionRoute } from "../features/cash-session/SessionRoute"
 import { AppEntryPage } from "../pages/AppEntryPage"
@@ -16,56 +17,63 @@ import { SaleReturnReceiptPage } from "../pages/SaleReturnReceiptPage"
 import { SalesPage } from "../pages/SalesPage"
 
 export const router = createBrowserRouter([
-  { path: "/", element: <AppEntryPage /> },
   {
-    path: "/login",
-    element: <LoginPage />,
-  },
-  {
-    element: <RequireAuth />,
+    // Pas de path : regroupe tout l'arbre sous un seul errorElement, sans
+    // ajouter de segment d'URL — même mécanisme que RequireAuth ci-dessous.
+    errorElement: <RouterErrorBoundary />,
     children: [
+      { path: "/", element: <AppEntryPage /> },
       {
-        path: "/cash/open",
-        element: (
-          <SessionRoute requireOpen={false}>
-            <OpenCashSessionPage />
-          </SessionRoute>
-        ),
+        path: "/login",
+        element: <LoginPage />,
       },
       {
-        path: "/pos",
-        element: (
-          <SessionRoute requireOpen>
-            <PosPage />
-          </SessionRoute>
-        ),
+        element: <RequireAuth />,
+        children: [
+          {
+            path: "/cash/open",
+            element: (
+              <SessionRoute requireOpen={false}>
+                <OpenCashSessionPage />
+              </SessionRoute>
+            ),
+          },
+          {
+            path: "/pos",
+            element: (
+              <SessionRoute requireOpen>
+                <PosPage />
+              </SessionRoute>
+            ),
+          },
+          {
+            path: "/cash/close",
+            element: (
+              <SessionRoute requireOpen>
+                <CloseCashSessionPage />
+              </SessionRoute>
+            ),
+          },
+          {
+            path: "/cash-sessions/:sessionId/report",
+            element: <CashSessionReportPage />,
+          },
+          {
+            path: "/sales/pending",
+            element: <PendingSalesPage />,
+          },
+          {
+            path: "/sales/:saleId/receipt",
+            element: <SaleReceiptPage />,
+          },
+          { path: "/sales", element: <SessionRoute requireOpen><SalesPage /></SessionRoute> },
+          { path: "/sales/:saleId", element: <SessionRoute requireOpen><SaleDetailPage /></SessionRoute> },
+          { path: "/sales/:saleId/return", element: <SessionRoute requireOpen><SaleReturnPage /></SessionRoute> },
+          { path: "/returns/new", element: <Navigate to="/sales" replace /> },
+          { path: "/returns/:returnId/receipt", element: <SessionRoute requireOpen><SaleReturnReceiptPage /></SessionRoute> },
+        ],
       },
-      {
-        path: "/cash/close",
-        element: (
-          <SessionRoute requireOpen>
-            <CloseCashSessionPage />
-          </SessionRoute>
-        ),
-      },
-      {
-        path: "/cash-sessions/:sessionId/report",
-        element: <CashSessionReportPage />,
-      },
-      {
-        path: "/sales/pending",
-        element: <PendingSalesPage />,
-      },
-      {
-        path: "/sales/:saleId/receipt",
-        element: <SaleReceiptPage />,
-      },
-      { path: "/sales", element: <SessionRoute requireOpen><SalesPage /></SessionRoute> },
-      { path: "/sales/:saleId", element: <SessionRoute requireOpen><SaleDetailPage /></SessionRoute> },
-      { path: "/sales/:saleId/return", element: <SessionRoute requireOpen><SaleReturnPage /></SessionRoute> },
-      { path: "/returns/new", element: <Navigate to="/sales" replace /> },
-      { path: "/returns/:returnId/receipt", element: <SessionRoute requireOpen><SaleReturnReceiptPage /></SessionRoute> },
+      { path: "*", element: <Navigate to="/" replace /> },
     ],
   },
-  { path: "*", element: <Navigate to="/" replace /> },
 ])

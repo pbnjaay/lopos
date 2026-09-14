@@ -1,3 +1,7 @@
+import { useEffect } from "react"
+import { useRouteError } from "react-router-dom"
+
+import { Sentry } from "../../analytics/sentry"
 import { Button } from "./Button"
 
 /**
@@ -29,4 +33,22 @@ export function AppErrorFallback() {
       </div>
     </main>
   )
+}
+
+/**
+ * errorElement du routeur. React Router intercepte en interne toute erreur de
+ * rendu/loader levée sous lui et affiche par défaut son propre repli — un
+ * message de debug ("💿 Hey developer") qui n'atteint jamais le
+ * Sentry.ErrorBoundary posé autour de <RouterProvider> dans main.tsx, car
+ * React Router ne laisse pas l'erreur remonter jusque-là. On capture donc
+ * manuellement ici avant d'afficher le même repli que pour un crash au boot.
+ */
+export function RouterErrorBoundary() {
+  const error = useRouteError()
+
+  useEffect(() => {
+    Sentry.captureException(error, { tags: { boundary: "router" } })
+  }, [error])
+
+  return <AppErrorFallback />
 }
