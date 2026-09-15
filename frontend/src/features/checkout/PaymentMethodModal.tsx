@@ -5,7 +5,10 @@ import { Money } from "../../components/ui/Money"
 import type { PaymentMethod } from "../../types/api"
 
 type PaymentMethodModalProps = {
+  /** Montant à couvrir maintenant — le total, ou le reste dû après un premier versement. */
   total: number
+  /** true dès qu'un versement a déjà été appliqué (paiement mixte en cours). */
+  isPartial?: boolean
   lastUsedMethod?: PaymentMethod | null
   onClose: () => void
   onSelect: (method: PaymentMethod) => void
@@ -48,6 +51,7 @@ const shortcutToMethod: Record<string, PaymentMethod> = {
 
 export function PaymentMethodModal({
   total,
+  isPartial = false,
   lastUsedMethod = null,
   onClose,
   onSelect,
@@ -75,7 +79,7 @@ export function PaymentMethodModal({
     <Dialog eyebrow="Encaissement" title="Mode de paiement" onClose={onClose}>
       <div className="dialog-body">
         <div className="payment-total">
-          <span>Total à payer</span>
+          <span>{isPartial ? "Reste à payer" : "Total à payer"}</span>
           <strong>
             <Money value={total} />
           </strong>

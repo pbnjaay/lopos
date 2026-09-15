@@ -27,7 +27,7 @@ function pendingSale(id: string): LocalSale {
     conflictCode: null,
     conflictMessage: null,
     items: [],
-    payment: { method: "CASH", amount: 0, receivedAmount: 0, changeAmount: 0 },
+    payments: [{ method: "CASH", amount: 0, receivedAmount: 0, changeAmount: 0 }],
     subtotal: 0,
     discount: 0,
     total: 0,

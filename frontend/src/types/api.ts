@@ -94,12 +94,14 @@ export type SaleResponse = {
   total: string
   returned_total?: string
   net_total?: string
-  payment: {
+  // Un seul élément dans l'immense majorité des ventes — plusieurs pour un
+  // paiement mixte (espèces + Wave, par exemple).
+  payments: Array<{
     method: PaymentMethod
     amount: string
     received_amount: string | null
     change_amount: string | null
-  }
+  }>
   items: Array<{
     product_id: string
     id: string
@@ -141,7 +143,7 @@ export type SaleSummary = Pick<
   | "total"
   | "returned_total"
   | "net_total"
-  | "payment"
+  | "payments"
 >
 
 export type PaginatedSales = {

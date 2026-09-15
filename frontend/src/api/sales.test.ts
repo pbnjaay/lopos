@@ -21,12 +21,14 @@ describe("sales API", () => {
       subtotal: "1000.00",
       discount: "0.00",
       total: "1000.00",
-      payment: {
-        method: "CASH",
-        amount: "1000.00",
-        received_amount: "2000.00",
-        change_amount: "1000.00",
-      },
+      payments: [
+        {
+          method: "CASH",
+          amount: "1000.00",
+          received_amount: "2000.00",
+          change_amount: "1000.00",
+        },
+      ],
       items: [],
     }
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(

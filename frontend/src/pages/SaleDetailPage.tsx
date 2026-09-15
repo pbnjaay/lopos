@@ -149,7 +149,7 @@ export function SaleDetailPage() {
             { label: "Caissier", value: sale.cashier.username },
             {
               label: "Mode de paiement",
-              value: paymentLabels[sale.payment.method],
+              value: sale.payments.map((payment) => paymentLabels[payment.method]).join(" + "),
             },
             ...(sale.status === "CANCELLED"
               ? [{ label: "Statut", value: "Annulée" }]
@@ -243,9 +243,9 @@ export function SaleDetailPage() {
           <DialogBody>
             <p>
               Le stock sera remis à jour. Mode de paiement :{" "}
-              {paymentLabels[sale.payment.method]} — cette action ne touche
-              pas le paiement, c'est à vous de rembourser le client si
-              besoin.
+              {sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}
+              {" "}— cette action ne touche pas le paiement, c'est à vous de
+              rembourser le client si besoin.
             </p>
             {cancelMutation.error ? (
               <InlineAlert tone="error">

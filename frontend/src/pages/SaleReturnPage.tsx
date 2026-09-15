@@ -68,7 +68,9 @@ export function SaleReturnPage() {
     retry: false,
   });
   const sale: SaleReceipt | null = saleQuery.data ?? null;
-  const method = selectedMethod ?? sale?.payment.method ?? "CASH";
+  // Par défaut, rembourser via le premier moyen utilisé — le caissier peut
+  // toujours en choisir un autre, y compris pour un paiement mixte.
+  const method = selectedMethod ?? sale?.payments[0]?.method ?? "CASH";
 
   const selected =
     sale?.items.flatMap((item) => {
@@ -192,7 +194,9 @@ export function SaleReturnPage() {
 
   function requestSubmit() {
     if (!sale) return;
-    if (method !== sale.payment.method) {
+    // Avertir seulement si le moyen choisi n'a jamais été utilisé pour
+    // payer cette vente — normal pour un des moyens d'un paiement mixte.
+    if (!sale.payments.some((payment) => payment.method === method)) {
       setIsConfirming(true);
       return;
     }
@@ -412,9 +416,10 @@ export function SaleReturnPage() {
                   <option value="WAVE">Wave</option>
                   <option value="ORANGE_MONEY">Orange Money</option>
                 </select>
-                {method !== sale.payment.method ? (
+                {!sale.payments.some((payment) => payment.method === method) ? (
                   <small className="return-payment-warning">
-                    Paiement initial : {refundLabels[sale.payment.method]}.
+                    Paiement initial :{" "}
+                    {sale.payments.map((payment) => refundLabels[payment.method]).join(" + ")}.
                   </small>
                 ) : null}
               </div>
@@ -458,8 +463,10 @@ export function SaleReturnPage() {
           <DialogBody>
             <p>
               La vente a été payée par{" "}
-              <strong>{refundLabels[sale.payment.method]}</strong>, mais le
-              remboursement sera effectué par{" "}
+              <strong>
+                {sale.payments.map((payment) => refundLabels[payment.method]).join(" + ")}
+              </strong>
+              , mais le remboursement sera effectué par{" "}
               <strong>{refundLabels[method]}</strong>.
             </p>
             <p className="dialog-hint">

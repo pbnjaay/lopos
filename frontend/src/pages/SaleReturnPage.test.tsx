@@ -52,7 +52,9 @@ const sale: SaleReceipt = {
   total: "2000.00",
   returned_total: "500.00",
   net_total: "1500.00",
-  payment: { method: "WAVE", amount: "2000.00", received_amount: null, change_amount: null },
+  payments: [
+    { method: "WAVE", amount: "2000.00", received_amount: null, change_amount: null },
+  ],
   items: [
     { id: "item-1", product_id: "product-1", product_name: "Riz", sale_unit: "KG", unit_price: "1000.00", quantity: "2.000", quantity_returned: "0.500", quantity_returnable: "1.500", line_total: "2000.00" },
     { id: "item-2", product_id: "product-2", product_name: "Sucre", sale_unit: "UNIT", unit_price: "500.00", quantity: "1.000", quantity_returned: "1.000", quantity_returnable: "0.000", line_total: "500.00" },

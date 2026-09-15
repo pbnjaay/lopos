@@ -37,11 +37,12 @@ export function SaleSuccessModal({
   const keepSaleButtonRef = useRef<HTMLButtonElement>(null)
   useDialogFocusTrap(dialogRef)
   const [isConfirmingCancel, setIsConfirmingCancel] = useState(false)
-  const paymentLabel = {
+  const isSplitPayment = sale.payments.length > 1
+  const paymentLabels = {
     CASH: "Espèces",
     WAVE: "Wave",
     ORANGE_MONEY: "Orange Money",
-  }[sale.payment.method]
+  }
 
   // L'action suivante attendue après une vente est la vente suivante : le
   // focus y va, donc Entrée l'enchaîne sans quitter le clavier.
@@ -96,31 +97,45 @@ export function SaleSuccessModal({
 
         <dl className="sale-amounts">
           <div>
-            <dt>Paiement</dt>
-            <dd>{paymentLabel}</dd>
-          </div>
-          <div>
             <dt>Total</dt>
             <dd>
               <Money value={sale.total} />
             </dd>
           </div>
-          {sale.payment.receivedAmount !== null ? (
-            <div>
-              <dt>Reçu</dt>
+          {sale.payments.map((payment, index) => (
+            <div key={`method-${payment.method}-${index}`}>
+              <dt>{isSplitPayment ? `Paiement ${index + 1}` : "Paiement"}</dt>
               <dd>
-                <Money value={sale.payment.receivedAmount} />
+                {paymentLabels[payment.method]}
+                {isSplitPayment ? (
+                  <>
+                    {" — "}
+                    <Money value={payment.amount} />
+                  </>
+                ) : null}
               </dd>
             </div>
-          ) : null}
-          {sale.payment.changeAmount !== null ? (
-            <div className="sale-change">
-              <dt>Monnaie</dt>
-              <dd>
-                <Money value={sale.payment.changeAmount} />
-              </dd>
-            </div>
-          ) : null}
+          ))}
+          {sale.payments.map((payment, index) =>
+            payment.receivedAmount !== null ? (
+              <div key={`received-${index}`}>
+                <dt>{isSplitPayment ? `Reçu (paiement ${index + 1})` : "Reçu"}</dt>
+                <dd>
+                  <Money value={payment.receivedAmount} />
+                </dd>
+              </div>
+            ) : null,
+          )}
+          {sale.payments.map((payment, index) =>
+            payment.changeAmount !== null ? (
+              <div className="sale-change" key={`change-${index}`}>
+                <dt>{isSplitPayment ? `Monnaie (paiement ${index + 1})` : "Monnaie"}</dt>
+                <dd>
+                  <Money value={payment.changeAmount} />
+                </dd>
+              </div>
+            ) : null,
+          )}
         </dl>
 
         <div className="sale-success-actions">
@@ -164,8 +179,9 @@ export function SaleSuccessModal({
           <DialogBody>
             <p>
               Le stock sera remis à jour. Si le client a déjà payé
-              ({paymentLabel}), cette action ne touche pas le paiement —
-              c'est à vous de le rembourser si besoin.
+              ({sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}),
+              cette action ne touche pas le paiement — c'est à vous de le
+              rembourser si besoin.
             </p>
             {cancelErrorMessage ? (
               <InlineAlert tone="error">{cancelErrorMessage}</InlineAlert>

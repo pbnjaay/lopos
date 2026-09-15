@@ -115,8 +115,15 @@ function buildLocalSaleResult(input: CreateLocalSaleInput): LocalSale {
     }
   })
   const total = items.reduce((sum, item) => sum + item.lineTotal, 0)
-  const receivedAmount =
-    input.payment.method === "CASH" ? input.payment.receivedAmount ?? 0 : null
+  const payments = input.payments.map((payment) => {
+    const receivedAmount = payment.method === "CASH" ? payment.receivedAmount ?? 0 : null
+    return {
+      method: payment.method,
+      amount: payment.amount,
+      receivedAmount,
+      changeAmount: receivedAmount === null ? null : receivedAmount - payment.amount,
+    }
+  })
   return {
     id: "0f9e8d7c-1234-4a5b-9c6d-abcdef012345",
     serverId: null,
@@ -133,12 +140,7 @@ function buildLocalSaleResult(input: CreateLocalSaleInput): LocalSale {
     conflictCode: null,
     conflictMessage: null,
     items,
-    payment: {
-      method: input.payment.method,
-      amount: total,
-      receivedAmount,
-      changeAmount: receivedAmount === null ? null : receivedAmount - total,
-    },
+    payments,
     subtotal: total,
     discount: 0,
     total,
@@ -244,7 +246,7 @@ describe("POS sale workflow", () => {
     expect(createLocalSale).toHaveBeenCalledWith({
       session: expect.objectContaining({ id: cashSession.id, cashierId: user.id }),
       items: [{ productId: coca.id, quantity: 2 }],
-      payment: { method: "CASH", receivedAmount: 2_000 },
+      payments: [{ method: "CASH", amount: 1_000, receivedAmount: 2_000 }],
     })
 
     await userEvents.click(screen.getByRole("button", { name: "Nouvelle vente" }))
@@ -274,6 +276,43 @@ describe("POS sale workflow", () => {
     )
     expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1")
     expect(screen.queryByRole("heading", { name: "Vente validée" })).not.toBeInTheDocument()
+  })
+
+  it("splits a payment across cash and Wave, accumulating both into one sale", async () => {
+    const userEvents = userEvent.setup()
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderPos()
+    await scanCoca(userEvents)
+    await openCashPayment(userEvents)
+    await userEvents.type(screen.getByLabelText("Montant reçu"), "300")
+    await userEvents.click(screen.getByRole("button", { name: "Continuer avec un autre moyen" }))
+
+    // De retour au choix du moyen de paiement, pour le reste dû seulement.
+    // Le pied de panier garde lui aussi un bouton Wave : on cible la modale.
+    expect(await screen.findByText("Reste à payer")).toBeInTheDocument()
+    const methodDialog = screen.getByRole("dialog", { name: "Mode de paiement" })
+    await userEvents.click(within(methodDialog).getByRole("button", { name: /Wave/ }))
+    // Pré-rempli avec le reste — 200, pas le total de 500.
+    expect(await screen.findByLabelText("Montant reçu")).toHaveValue("200")
+    await userEvents.click(screen.getByRole("button", { name: "Paiement reçu" }))
+
+    expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
+    expect(createLocalSale).toHaveBeenCalledWith({
+      session: expect.objectContaining({ id: cashSession.id, cashierId: user.id }),
+      items: [{ productId: coca.id, quantity: 1 }],
+      payments: [
+        { method: "CASH", amount: 300, receivedAmount: 300 },
+        { method: "WAVE", amount: 200, receivedAmount: null },
+      ],
+    })
+    expect(screen.getByText("Paiement 1")).toBeInTheDocument()
+    expect(screen.getByText("Paiement 2")).toBeInTheDocument()
   })
 })
 
@@ -404,7 +443,7 @@ describe("POS sale workflow offline", () => {
           lineTotal: 1_000,
         },
       ],
-      payment: { method: "CASH", amount: 1_000, receivedAmount: 2_000, changeAmount: 1_000 },
+      payments: [{ method: "CASH", amount: 1_000, receivedAmount: 2_000, changeAmount: 1_000 }],
       subtotal: 1_000,
       discount: 0,
       total: 1_000,
@@ -426,7 +465,7 @@ describe("POS sale workflow offline", () => {
     expect(createLocalSale).toHaveBeenCalledWith({
       session: expect.objectContaining({ id: localSession.id, cashierId: user.id }),
       items: [{ productId: coca.id, quantity: 2 }],
-      payment: { method: "CASH", receivedAmount: 2_000 },
+      payments: [{ method: "CASH", amount: 1_000, receivedAmount: 2_000 }],
     })
   })
 
@@ -458,7 +497,7 @@ describe("POS sale workflow offline", () => {
           lineTotal: 500,
         },
       ],
-      payment: { method: "WAVE", amount: 500, receivedAmount: null, changeAmount: null },
+      payments: [{ method: "WAVE", amount: 500, receivedAmount: null, changeAmount: null }],
       subtotal: 500,
       discount: 0,
       total: 500,
@@ -476,7 +515,7 @@ describe("POS sale workflow offline", () => {
     expect(createLocalSale).toHaveBeenCalledWith({
       session: expect.objectContaining({ id: localSession.id, cashierId: user.id }),
       items: [{ productId: coca.id, quantity: 1 }],
-      payment: { method: "WAVE", receivedAmount: null },
+      payments: [{ method: "WAVE", amount: 500, receivedAmount: null }],
     })
   })
 

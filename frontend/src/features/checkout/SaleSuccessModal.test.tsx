@@ -19,11 +19,14 @@ const sale: ReceiptView = {
   total: 1_000,
   returnedTotal: 0,
   netTotal: 1_000,
-  payment: {
-    method: "CASH",
-    receivedAmount: 2_000,
-    changeAmount: 1_000,
-  },
+  payments: [
+    {
+      method: "CASH",
+      amount: 1_000,
+      receivedAmount: 2_000,
+      changeAmount: 1_000,
+    },
+  ],
   items: [],
 }
 

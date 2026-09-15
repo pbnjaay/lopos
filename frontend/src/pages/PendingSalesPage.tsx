@@ -138,7 +138,9 @@ export function PendingSalesPage() {
                   title={<Money value={sale.total} />}
                   meta={
                     <>
-                      <span>{paymentLabels[sale.payment.method]}</span>
+                      <span>
+                        {sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}
+                      </span>
                       <span aria-hidden="true">·</span>
                       <span>{formatDate(sale.createdAt)}</span>
                     </>

@@ -27,12 +27,14 @@ const cashReceipt: SaleReceipt = {
   subtotal: "1000.00",
   discount: "0.00",
   total: "1000.00",
-  payment: {
-    method: "CASH",
-    amount: "1000.00",
-    received_amount: "2000.00",
-    change_amount: "1000.00",
-  },
+  payments: [
+    {
+      method: "CASH",
+      amount: "1000.00",
+      received_amount: "2000.00",
+      change_amount: "1000.00",
+    },
+  ],
   items: [
     {
       product_id: "product-id",
@@ -97,12 +99,14 @@ describe("SaleReceiptPage", () => {
   ] as const)("shows %s without received cash or change", async (method, label) => {
     renderReceipt({
       ...cashReceipt,
-      payment: {
-        method,
-        amount: "1000.00",
-        received_amount: null,
-        change_amount: null,
-      },
+      payments: [
+        {
+          method,
+          amount: "1000.00",
+          received_amount: null,
+          change_amount: null,
+        },
+      ],
     })
 
     expect(await screen.findByText(label)).toBeInTheDocument()
@@ -157,7 +161,7 @@ describe("SaleReceiptPage", () => {
           lineTotal: 1_000,
         },
       ],
-      payment: { method: "CASH", amount: 1_000, receivedAmount: 2_000, changeAmount: 1_000 },
+      payments: [{ method: "CASH", amount: 1_000, receivedAmount: 2_000, changeAmount: 1_000 }],
       subtotal: 1_000,
       discount: 0,
       total: 1_000,

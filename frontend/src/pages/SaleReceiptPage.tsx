@@ -49,7 +49,7 @@ export function SaleReceiptPage() {
 
   const receipt = receiptQuery.data
   if (!receipt) return <RouteLoading message="Chargement du ticket…" />
-  const isCash = receipt.payment.method === "CASH"
+  const isSplitPayment = receipt.payments.length > 1
   const hasReturns = receipt.returnedTotal > 0
   const isFullyReturned = hasReturns && receipt.returnedTotal >= receipt.total
   // Une vente pas encore synchronisée n'a pas de page de détail côté
@@ -150,22 +150,36 @@ export function SaleReceiptPage() {
               </div>
             </>
           ) : null}
-          <div>
-            <dt>Paiement</dt>
-            <dd>{paymentLabels[receipt.payment.method]}</dd>
-          </div>
-          {isCash && receipt.payment.receivedAmount !== null ? (
-            <div>
-              <dt>Reçu</dt>
-              <dd><Money value={receipt.payment.receivedAmount} /></dd>
+          {receipt.payments.map((payment, index) => (
+            <div key={`method-${payment.method}-${index}`}>
+              <dt>{isSplitPayment ? `Paiement ${index + 1}` : "Paiement"}</dt>
+              <dd>
+                {paymentLabels[payment.method]}
+                {isSplitPayment ? (
+                  <>
+                    {" — "}
+                    <Money value={payment.amount} />
+                  </>
+                ) : null}
+              </dd>
             </div>
-          ) : null}
-          {isCash && receipt.payment.changeAmount !== null ? (
-            <div>
-              <dt>Monnaie</dt>
-              <dd><Money value={receipt.payment.changeAmount} /></dd>
-            </div>
-          ) : null}
+          ))}
+          {receipt.payments.map((payment, index) =>
+            payment.receivedAmount !== null ? (
+              <div key={`received-${index}`}>
+                <dt>{isSplitPayment ? `Reçu (paiement ${index + 1})` : "Reçu"}</dt>
+                <dd><Money value={payment.receivedAmount} /></dd>
+              </div>
+            ) : null,
+          )}
+          {receipt.payments.map((payment, index) =>
+            payment.changeAmount !== null ? (
+              <div key={`change-${index}`}>
+                <dt>{isSplitPayment ? `Monnaie (paiement ${index + 1})` : "Monnaie"}</dt>
+                <dd><Money value={payment.changeAmount} /></dd>
+              </div>
+            ) : null,
+          )}
         </dl>
 
         <footer className="receipt-footer">

@@ -16,31 +16,52 @@ describe("CashPaymentModal", () => {
     const onConfirm = vi.fn()
     render(<CashPaymentModal total={1_000} onClose={vi.fn()} onConfirm={onConfirm} />)
 
-    const confirmButton = screen.getByRole("button", { name: "Valider" })
-    expect(confirmButton).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Continuer avec un autre moyen" })).toBeDisabled()
     await user.type(screen.getByLabelText("Montant reçu"), "2000")
 
     const changePreview = screen.getByText("Monnaie à rendre").parentElement!
     expect(within(changePreview).getByText("1 000 FCFA")).toBeInTheDocument()
+    const confirmButton = screen.getByRole("button", { name: "Valider" })
     expect(confirmButton).toBeEnabled()
     await user.click(confirmButton)
     expect(onConfirm).toHaveBeenCalledWith(2_000)
   })
 
-  it("keeps validation disabled when the received amount is insufficient", async () => {
+  it("offers a partial payment as a distinct action instead of blocking, for a mixed payment", async () => {
     const user = userEvent.setup()
-    render(<CashPaymentModal total={1_000} onClose={vi.fn()} onConfirm={vi.fn()} />)
+    const onConfirm = vi.fn()
+    render(<CashPaymentModal total={1_000} onClose={vi.fn()} onConfirm={onConfirm} />)
 
     await user.type(screen.getByLabelText("Montant reçu"), "500")
 
-    expect(screen.getByRole("button", { name: "Valider" })).toBeDisabled()
-    expect(screen.getByRole("alert")).toHaveTextContent("Reste à recevoir500 FCFA")
+    const continueButton = screen.getByRole("button", { name: "Continuer avec un autre moyen" })
+    expect(continueButton).toBeEnabled()
+    expect(screen.queryByRole("button", { name: "Valider" })).not.toBeInTheDocument()
+    expect(screen.getByText("Reste à payer après ce versement").parentElement).toHaveTextContent(
+      "500 FCFA",
+    )
+    await user.click(continueButton)
+    expect(onConfirm).toHaveBeenCalledWith(500)
+  })
+
+  it("keeps validation disabled with nothing typed yet", () => {
+    render(<CashPaymentModal total={1_000} onClose={vi.fn()} onConfirm={vi.fn()} />)
+
+    expect(screen.getByRole("button", { name: "Continuer avec un autre moyen" })).toBeDisabled()
   })
 
   it("shows the full total as owed before anything has been typed", () => {
     render(<CashPaymentModal total={1_000} onClose={vi.fn()} onConfirm={vi.fn()} />)
 
-    expect(screen.getByText("Reste à recevoir").parentElement).toHaveTextContent("1 000 FCFA")
+    expect(
+      screen.getByText("Reste à payer après ce versement").parentElement,
+    ).toHaveTextContent("1 000 FCFA")
+  })
+
+  it("labels the total \"Reste à payer\" once a first payment has already been applied", () => {
+    render(<CashPaymentModal total={400} isPartial onClose={vi.fn()} onConfirm={vi.fn()} />)
+
+    expect(screen.getByText("Reste à payer").parentElement).toHaveTextContent("400 FCFA")
   })
 
   it("submits with Enter once the amount is sufficient, and only once", async () => {
@@ -54,12 +75,24 @@ describe("CashPaymentModal", () => {
     expect(onConfirm).toHaveBeenCalledWith(2_000)
   })
 
-  it("does not submit with Enter while the amount is insufficient", async () => {
+  it("submits a partial amount with Enter, same as clicking the continue action", async () => {
     const user = userEvent.setup()
     const onConfirm = vi.fn()
     render(<CashPaymentModal total={1_000} onClose={vi.fn()} onConfirm={onConfirm} />)
 
     await user.type(screen.getByLabelText("Montant reçu"), "500{Enter}")
+
+    expect(onConfirm).toHaveBeenCalledOnce()
+    expect(onConfirm).toHaveBeenCalledWith(500)
+  })
+
+  it("does not submit with Enter while nothing has been typed", async () => {
+    const user = userEvent.setup()
+    const onConfirm = vi.fn()
+    render(<CashPaymentModal total={1_000} onClose={vi.fn()} onConfirm={onConfirm} />)
+
+    screen.getByLabelText("Montant reçu").focus()
+    await user.keyboard("{Enter}")
 
     expect(onConfirm).not.toHaveBeenCalled()
   })

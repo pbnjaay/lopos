@@ -56,7 +56,7 @@ function buildPendingSale(id: string, syncEventId: string): LocalSale {
         lineTotal: 1_000,
       },
     ],
-    payment: { method: "CASH", amount: 1_000, receivedAmount: 2_000, changeAmount: 1_000 },
+    payments: [{ method: "CASH", amount: 1_000, receivedAmount: 2_000, changeAmount: 1_000 }],
     subtotal: 1_000,
     discount: 0,
     total: 1_000,
@@ -232,7 +232,7 @@ describe("syncPendingSales", () => {
       await createLocalSale({
         session,
         items: [{ productId: localProduct.id, quantityMilli: 1_000 }],
-        payment: { method: "WAVE" },
+        payments: [{ method: "WAVE", amount: 500 }],
       })
     }
     expect((await db.products.get([session.storeId, localProduct.id]))?.pendingSoldQuantityMilli).toBe(10_000)

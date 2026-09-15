@@ -87,12 +87,14 @@ function saleFixture(id: string, overrides: Partial<Awaited<ReturnType<typeof li
     total: "2000.00",
     returned_total: "0.00",
     net_total: "2000.00",
-    payment: {
-      method: "CASH" as const,
-      amount: "2000.00",
-      received_amount: "2000.00",
-      change_amount: "0.00",
-    },
+    payments: [
+      {
+        method: "CASH" as const,
+        amount: "2000.00",
+        received_amount: "2000.00",
+        change_amount: "0.00",
+      },
+    ],
     ...overrides,
   }
 }
@@ -118,7 +120,9 @@ describe("SalesPage", () => {
         total: "2000.00",
         returned_total: "500.00",
         net_total: "1500.00",
-        payment: { method: "WAVE", amount: "2000.00", received_amount: null, change_amount: null },
+        payments: [
+          { method: "WAVE", amount: "2000.00", received_amount: null, change_amount: null },
+        ],
       }],
     })
 
@@ -151,7 +155,9 @@ describe("SalesPage", () => {
         total: "2000.00",
         returned_total: "0.00",
         net_total: "2000.00",
-        payment: { method: "CASH", amount: "2000.00", received_amount: "2000.00", change_amount: "0.00" },
+        payments: [
+          { method: "CASH", amount: "2000.00", received_amount: "2000.00", change_amount: "0.00" },
+        ],
       }],
     })
 

@@ -52,7 +52,9 @@ const sale: SaleReceipt = {
   total: "2000.00",
   returned_total: "0.00",
   net_total: "2000.00",
-  payment: { method: "CASH", amount: "2000.00", received_amount: "2000.00", change_amount: "0.00" },
+  payments: [
+    { method: "CASH", amount: "2000.00", received_amount: "2000.00", change_amount: "0.00" },
+  ],
   items: [
     { id: "item-1", product_id: "product-1", product_name: "Riz", sale_unit: "KG", unit_price: "1000.00", quantity: "2.000", quantity_returned: "0.000", quantity_returnable: "2.000", line_total: "2000.00" },
   ],

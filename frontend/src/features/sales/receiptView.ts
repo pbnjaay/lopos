@@ -22,11 +22,14 @@ export type ReceiptView = {
   total: number
   returnedTotal: number
   netTotal: number
-  payment: {
+  // Un seul élément pour un paiement classique, plusieurs pour un paiement
+  // mixte.
+  payments: Array<{
     method: PaymentMethod
+    amount: number
     receivedAmount: number | null
     changeAmount: number | null
-  }
+  }>
 }
 
 function toIntegerAmount(value: string | null): number | null {
@@ -57,11 +60,12 @@ export function receiptViewFromApiReceipt(receipt: SaleReceipt): ReceiptView {
     netTotal: receipt.net_total === undefined
       ? total - returnedTotal
       : Math.round(Number(receipt.net_total)),
-    payment: {
-      method: receipt.payment.method,
-      receivedAmount: toIntegerAmount(receipt.payment.received_amount),
-      changeAmount: toIntegerAmount(receipt.payment.change_amount),
-    },
+    payments: receipt.payments.map((payment) => ({
+      method: payment.method,
+      amount: Math.round(Number(payment.amount)),
+      receivedAmount: toIntegerAmount(payment.received_amount),
+      changeAmount: toIntegerAmount(payment.change_amount),
+    })),
   }
 }
 
@@ -83,6 +87,6 @@ export function receiptViewFromLocalSale(sale: LocalSale): ReceiptView {
     total: sale.total,
     returnedTotal: 0,
     netTotal: sale.total,
-    payment: sale.payment,
+    payments: sale.payments,
   }
 }

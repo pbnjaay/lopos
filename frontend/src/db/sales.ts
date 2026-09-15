@@ -32,30 +32,58 @@ export class InsufficientLocalStockError extends Error {
   }
 }
 
-export type CreateLocalSaleInput = {
-  session: LocalCashSession
-  items: Array<{ productId: string; quantityMilli?: number; quantity?: number; unitPrice?: number }>
-  payment: {
-    method: PaymentMethod
-    receivedAmount?: number | null
+export class InvalidLocalPaymentError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "InvalidLocalPaymentError"
   }
 }
 
-function buildLocalPayment(
-  payment: CreateLocalSaleInput["payment"],
+export type CreateLocalSaleInput = {
+  session: LocalCashSession
+  items: Array<{ productId: string; quantityMilli?: number; quantity?: number; unitPrice?: number }>
+  // Un seul élément pour un paiement classique, plusieurs pour un paiement
+  // mixte (espèces + Wave, par exemple) — la somme des `amount` doit égaler
+  // le total de la vente.
+  payments: Array<{
+    method: PaymentMethod
+    amount: number
+    receivedAmount?: number | null
+  }>
+}
+
+function buildLocalPayments(
+  payments: CreateLocalSaleInput["payments"],
   total: number,
-): LocalPayment {
-  if (payment.method !== "CASH") {
-    return { method: payment.method, amount: total, receivedAmount: null, changeAmount: null }
+): LocalPayment[] {
+  if (payments.length === 0) {
+    throw new InvalidLocalPaymentError("Au moins un paiement est requis.")
+  }
+  const covered = payments.reduce((sum, payment) => sum + payment.amount, 0)
+  if (covered !== total) {
+    throw new InvalidLocalPaymentError(
+      "La somme des paiements ne correspond pas au total de la vente.",
+    )
   }
 
-  const receivedAmount = payment.receivedAmount ?? 0
-  return {
-    method: "CASH",
-    amount: total,
-    receivedAmount,
-    changeAmount: receivedAmount - total,
-  }
+  return payments.map((payment) => {
+    if (payment.method !== "CASH") {
+      return {
+        method: payment.method,
+        amount: payment.amount,
+        receivedAmount: null,
+        changeAmount: null,
+      }
+    }
+
+    const receivedAmount = payment.receivedAmount ?? 0
+    return {
+      method: "CASH",
+      amount: payment.amount,
+      receivedAmount,
+      changeAmount: receivedAmount - payment.amount,
+    }
+  })
 }
 
 /**
@@ -66,7 +94,7 @@ export async function createLocalSale(
   input: CreateLocalSaleInput,
   database: PosDatabase = db,
 ): Promise<LocalSale> {
-  const { session, items, payment } = input
+  const { session, items, payments } = input
   if (items.length === 0) throw new Error("Le panier est vide.")
 
   return database.transaction("rw", [database.products, database.localSales], async () => {
@@ -132,7 +160,7 @@ export async function createLocalSale(
       conflictCode: null,
       conflictMessage: null,
       items: saleItems,
-      payment: buildLocalPayment(payment, total),
+      payments: buildLocalPayments(payments, total),
       subtotal: total,
       discount: 0,
       total,

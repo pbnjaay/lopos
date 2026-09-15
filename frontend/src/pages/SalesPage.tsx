@@ -198,7 +198,7 @@ export function SalesPage() {
               le changement de ligne visée n'atteindrait aucun lecteur d'écran. */}
           <p className="visually-hidden" role="status">
             {aimedSale && !areResultsStale
-              ? `Vente visée : ticket ${aimedSale.id.slice(0, 8).toUpperCase()}, ${paymentLabels[aimedSale.payment.method]}, ${formatBackendMoney(aimedSale.net_total ?? aimedSale.total)}`
+              ? `Vente visée : ticket ${aimedSale.id.slice(0, 8).toUpperCase()}, ${aimedSale.payments.map((p) => paymentLabels[p.method]).join(" + ")}, ${formatBackendMoney(aimedSale.net_total ?? aimedSale.total)}`
               : ""}
           </p>
 
@@ -261,7 +261,9 @@ export function SalesPage() {
                       title={`Ticket ${sale.id.slice(0, 8).toUpperCase()}`}
                       meta={
                         <>
-                          <span>{paymentLabels[sale.payment.method]}</span>
+                          <span>
+                            {sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}
+                          </span>
                           {/* La caisse est déjà dans l'en-tête, et la date ne
                               distingue rien tant que la liste tient sur le jour
                               courant : elle n'apparaît que si elle informe. */}

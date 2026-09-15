@@ -9,7 +9,10 @@ import { getSuggestedCashAmounts } from "./cashSuggestions"
 import { useSlowSubmitHint } from "./useSlowSubmitHint"
 
 type CashPaymentModalProps = {
+  /** Montant à couvrir maintenant — le total, ou le reste dû après un premier versement. */
   total: number
+  /** true dès qu'un versement a déjà été appliqué (paiement mixte en cours). */
+  isPartial?: boolean
   onClose: () => void
   onConfirm: (receivedAmount: number) => void | Promise<void>
   isSubmitting?: boolean
@@ -19,6 +22,7 @@ type CashPaymentModalProps = {
 
 export function CashPaymentModal({
   total,
+  isPartial = false,
   onClose,
   onConfirm,
   isSubmitting = false,
@@ -31,6 +35,9 @@ export function CashPaymentModal({
   const [receivedInput, setReceivedInput] = useState("")
   const receivedAmount = parseMoneyInput(receivedInput)
   const isSufficient = receivedAmount !== null && receivedAmount >= total
+  // Un montant positif mais insuffisant n'est plus bloquant : c'est un
+  // versement valide pour un paiement mixte, à compléter par un autre moyen.
+  const canSubmit = receivedAmount !== null && receivedAmount > 0
   const changeAmount = isSufficient ? receivedAmount - total : 0
   const missingAmount = Math.max(total - (receivedAmount ?? 0), 0)
   const quickAmounts = useMemo(
@@ -74,16 +81,12 @@ export function CashPaymentModal({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (
-      submissionLock.current ||
-      isSubmitting ||
-      receivedAmount === null ||
-      receivedAmount < total
-    ) return
+    if (submissionLock.current || isSubmitting || !canSubmit) return
 
     submissionLock.current = true
     try {
-      await onConfirm(receivedAmount)
+      // canSubmit garantit receivedAmount non-null ici.
+      await onConfirm(receivedAmount!)
     } catch {
       // The parent mutation exposes the backend error through errorMessage.
     } finally {
@@ -105,7 +108,7 @@ export function CashPaymentModal({
     >
       <form className="dialog-body cash-payment-form" onSubmit={handleSubmit}>
         <div className="payment-total">
-          <span>Total à payer</span>
+          <span>{isPartial ? "Reste à payer" : "Total à payer"}</span>
           <strong>
             <Money value={total} />
           </strong>
@@ -185,13 +188,14 @@ export function CashPaymentModal({
         </div>
 
         {/* Information contextuelle, pas une notification : elle appartient à
-            l'écran de paiement et doit rester lisible tant qu'il est ouvert. */}
+            l'écran de paiement et doit rester lisible tant qu'il est ouvert.
+            Un montant insuffisant n'est plus une erreur bloquante — juste un
+            versement partiel valide — donc plus de role="alert" ici. */}
         <div
           className={isSufficient ? "change-preview" : "change-preview change-preview-pending"}
-          role={receivedAmount !== null && !isSufficient ? "alert" : undefined}
           aria-live="polite"
         >
-          <span>{isSufficient ? "Monnaie à rendre" : "Reste à recevoir"}</span>
+          <span>{isSufficient ? "Monnaie à rendre" : "Reste à payer après ce versement"}</span>
           <strong>
             <Money value={isSufficient ? changeAmount : missingAmount} />
           </strong>
@@ -211,11 +215,11 @@ export function CashPaymentModal({
           <Button
             variant="primary"
             type="submit"
-            disabled={!isSufficient}
+            disabled={!canSubmit}
             loading={isSubmitting}
             loadingLabel="Validation…"
           >
-            Valider
+            {isSufficient ? "Valider" : "Continuer avec un autre moyen"}
           </Button>
         </DialogFooter>
       </form>
