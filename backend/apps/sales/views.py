@@ -63,10 +63,8 @@ class CompleteSaleView(APIView):
 
         queryset = (
             sales_for_pos_session(cash_session=cash_session)
-            .select_related(
-                "payment", "cashier", "cash_session__cash_register__store"
-            )
-            .prefetch_related("returns")
+            .select_related("cashier", "cash_session__cash_register__store")
+            .prefetch_related("returns", "payments")
             .order_by("-occurred_at", "-created_at")
         )
         search = filters.get("search", "").strip()
@@ -81,7 +79,9 @@ class CompleteSaleView(APIView):
         if cashier_id := filters.get("cashier_id"):
             queryset = queryset.filter(cashier_id=cashier_id)
         if payment_method := filters.get("payment_method"):
-            queryset = queryset.filter(payment__method=payment_method)
+            # Un paiement mixte peut matcher plusieurs lignes de paiement à la
+            # fois : distinct() évite qu'une même vente apparaisse en double.
+            queryset = queryset.filter(payments__method=payment_method).distinct()
 
         paginator = SalePagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
@@ -91,7 +91,6 @@ class CompleteSaleView(APIView):
     def post(self, request) -> Response:
         serializer = CompleteSaleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        payment = serializer.validated_data.pop("payment")
         cash_session = serializer.validated_data["cash_session"]
         if cash_session.cashier_id != request.user.pk:
             return Response(
@@ -103,11 +102,7 @@ class CompleteSaleView(APIView):
             )
 
         try:
-            sale = complete_sale(
-                **serializer.validated_data,
-                payment_method=payment["method"],
-                received_amount=payment.get("received_amount"),
-            )
+            sale = complete_sale(**serializer.validated_data)
         except InsufficientStock as exc:
             return Response(
                 {"code": "INSUFFICIENT_STOCK", "message": str(exc)},
@@ -136,9 +131,9 @@ class CompleteSaleView(APIView):
 
         sale = (
             Sale.objects.select_related(
-                "payment", "cashier", "cash_session__cash_register__store"
+                "cashier", "cash_session__cash_register__store"
             )
-            .prefetch_related("items__return_items__sale_return", "returns")
+            .prefetch_related("items__return_items__sale_return", "returns", "payments")
             .get(pk=sale.pk)
         )
         return Response(SaleSerializer(sale).data, status=status.HTTP_201_CREATED)
@@ -154,9 +149,9 @@ class SaleDetailView(APIView):
         if error is not None:
             return error
         sale = get_object_or_404(
-            sales_for_pos_session(cash_session=cash_session).select_related(
-                "payment", "cashier", "cash_session__cash_register__store"
-            ).prefetch_related("items__return_items__sale_return", "returns"),
+            sales_for_pos_session(cash_session=cash_session)
+            .select_related("cashier", "cash_session__cash_register__store")
+            .prefetch_related("items__return_items__sale_return", "returns", "payments"),
             pk=pk,
         )
         return Response(SaleSerializer(sale).data, status=status.HTTP_200_OK)
@@ -179,9 +174,9 @@ class CancelSaleView(APIView):
 
         sale = (
             Sale.objects.select_related(
-                "payment", "cashier", "cash_session__cash_register__store"
+                "cashier", "cash_session__cash_register__store"
             )
-            .prefetch_related("items__return_items__sale_return", "returns")
+            .prefetch_related("items__return_items__sale_return", "returns", "payments")
             .get(pk=sale.pk)
         )
         return Response(SaleSerializer(sale).data, status=status.HTTP_200_OK)

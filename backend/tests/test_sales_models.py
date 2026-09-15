@@ -152,16 +152,16 @@ def test_mobile_payment_requires_null_received_and_change(
     assert payment.change_amount is None
 
 
-def test_sale_accepts_only_one_payment(sale: Sale) -> None:
+def test_sale_accepts_several_payments_for_a_split_payment(sale: Sale) -> None:
     Payment.objects.create(
         sale=sale,
         method=Payment.Method.WAVE,
-        amount=Decimal("1000.00"),
+        amount=Decimal("400.00"),
+    )
+    Payment.objects.create(
+        sale=sale,
+        method=Payment.Method.ORANGE_MONEY,
+        amount=Decimal("600.00"),
     )
 
-    with pytest.raises(IntegrityError), transaction.atomic():
-        Payment.objects.create(
-            sale=sale,
-            method=Payment.Method.ORANGE_MONEY,
-            amount=Decimal("1000.00"),
-        )
+    assert Payment.objects.filter(sale=sale).count() == 2

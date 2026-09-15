@@ -30,6 +30,12 @@ class SaleItemInput(TypedDict):
     unit_price: Decimal | None
 
 
+class PaymentLegInput(TypedDict):
+    method: str
+    amount: Decimal
+    received_amount: Decimal | int | None
+
+
 class OfflineSaleItemInput(TypedDict):
     product_id: UUID
     product_name: str
@@ -144,12 +150,15 @@ def _aggregate_offline_items(
     return aggregated
 
 
-def _validate_payment(
+def _validate_payment_leg(
     *,
     method: str,
-    total: Decimal,
+    amount: Decimal,
     received_amount: Decimal | int | None,
 ) -> tuple[Decimal | None, Decimal | None]:
+    """Valide un paiement isolément. `amount` est la part du total qu'il
+    couvre — le total plein pour une vente à un seul paiement, une fraction
+    pour un paiement mixte."""
     if method == Payment.Method.CASH:
         if isinstance(received_amount, bool) or not isinstance(
             received_amount, (Decimal, int)
@@ -157,9 +166,9 @@ def _validate_payment(
             raise InvalidPayment("Le montant reçu est obligatoire pour un paiement cash.")
 
         normalized_received = Decimal(received_amount)
-        if normalized_received < total:
+        if normalized_received < amount:
             raise InvalidPayment("Le montant reçu est insuffisant.")
-        return normalized_received, normalized_received - total
+        return normalized_received, normalized_received - amount
 
     if method in (Payment.Method.WAVE, Payment.Method.ORANGE_MONEY):
         if received_amount is not None:
@@ -171,13 +180,51 @@ def _validate_payment(
     raise InvalidPayment("Méthode de paiement invalide.")
 
 
+class _ValidatedPaymentLeg(NamedTuple):
+    method: str
+    amount: Decimal
+    received_amount: Decimal | None
+    change_amount: Decimal | None
+
+
+def _validate_payments(
+    *, total: Decimal, payments: Sequence[PaymentLegInput]
+) -> list[_ValidatedPaymentLeg]:
+    if not payments:
+        raise InvalidPayment("Au moins un paiement est requis.")
+
+    validated: list[_ValidatedPaymentLeg] = []
+    covered = Decimal("0.00")
+    for leg in payments:
+        try:
+            amount = _money(Decimal(leg["amount"]))
+        except (InvalidOperation, TypeError, ValueError, KeyError) as exc:
+            raise InvalidPayment("Le montant d'un paiement doit être un montant valide.") from exc
+        if amount <= 0:
+            raise InvalidPayment("Le montant d'un paiement doit être strictement positif.")
+
+        received, change = _validate_payment_leg(
+            method=leg["method"], amount=amount, received_amount=leg.get("received_amount")
+        )
+        validated.append(_ValidatedPaymentLeg(leg["method"], amount, received, change))
+        covered += amount
+
+    # Tolérance nulle : les montants sont déjà arrondis au centime, un écart
+    # ne peut venir que d'une erreur de saisie ou d'un client hors-ligne
+    # corrompu — jamais d'un arrondi légitime à absorber silencieusement.
+    if covered != total:
+        raise InvalidPayment(
+            "La somme des paiements ne correspond pas au total de la vente."
+        )
+    return validated
+
+
 def _execute_sale(
     *,
     sale_id: UUID,
     locked_session: CashSession,
     line_specs: Sequence[_LineSpec],
-    payment_method: str,
-    received_amount: Decimal | int | None,
+    payments: Sequence[PaymentLegInput],
     occurred_at: datetime | None,
     allow_negative_stock: bool,
 ) -> tuple[Sale, bool]:
@@ -195,7 +242,7 @@ def _execute_sale(
     tag_sale_scope(
         sale_id=sale_id,
         cash_session_id=locked_session.id,
-        payment_method=payment_method,
+        payment_method="+".join(sorted({leg["method"] for leg in payments})),
         offline=allow_negative_stock,
     )
 
@@ -239,11 +286,7 @@ def _execute_sale(
     discount = Decimal("0.00")
     total = subtotal
 
-    normalized_received, change_amount = _validate_payment(
-        method=payment_method,
-        total=total,
-        received_amount=received_amount,
-    )
+    validated_payments = _validate_payments(total=total, payments=payments)
 
     sale_kwargs = dict(
         id=sale_id,
@@ -274,12 +317,17 @@ def _execute_sale(
         ]
     )
 
-    Payment.objects.create(
-        sale=sale,
-        method=payment_method,
-        amount=total,
-        received_amount=normalized_received,
-        change_amount=change_amount,
+    Payment.objects.bulk_create(
+        [
+            Payment(
+                sale=sale,
+                method=leg.method,
+                amount=leg.amount,
+                received_amount=leg.received_amount,
+                change_amount=leg.change_amount,
+            )
+            for leg in validated_payments
+        ]
     )
 
     for spec in line_specs:
@@ -308,8 +356,7 @@ def complete_sale(
     *,
     cash_session: CashSession,
     items: Sequence[SaleItemInput],
-    payment_method: str,
-    received_amount: Decimal | int | None = None,
+    payments: Sequence[PaymentLegInput],
 ) -> Sale:
     quantities = _aggregate_items(items)
     product_ids = sorted(quantities)
@@ -349,8 +396,7 @@ def complete_sale(
         sale_id=uuid4(),
         locked_session=locked_session,
         line_specs=line_specs,
-        payment_method=payment_method,
-        received_amount=received_amount,
+        payments=payments,
         occurred_at=None,
         allow_negative_stock=False,
     )
@@ -363,8 +409,7 @@ def complete_offline_sale(
     sale_id: UUID,
     cash_session: CashSession,
     items: Sequence[OfflineSaleItemInput],
-    payment_method: str,
-    received_amount: Decimal | int | None,
+    payments: Sequence[PaymentLegInput],
     occurred_at: datetime,
 ) -> tuple[Sale, bool]:
     """Rejoue une vente réalisée hors-ligne, telle que capturée par le POS.
@@ -422,8 +467,7 @@ def complete_offline_sale(
         sale_id=sale_id,
         locked_session=locked_session,
         line_specs=line_specs,
-        payment_method=payment_method,
-        received_amount=received_amount,
+        payments=payments,
         occurred_at=occurred_at,
         allow_negative_stock=True,
     )

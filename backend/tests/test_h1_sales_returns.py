@@ -36,7 +36,7 @@ def test_unit_product_rejects_fractional_quantity(context):
         complete_sale(
             cash_session=session,
             items=[{"product_id": product.id, "quantity": Decimal("0.500")}],
-            payment_method=Payment.Method.WAVE,
+            payments=[{"method": Payment.Method.WAVE, "amount": Decimal("250.00")}],
         )
 
 
@@ -53,8 +53,7 @@ def test_kg_override_and_partial_return_are_exact(context):
             "quantity": Decimal("0.500"),
             "unit_price": Decimal("900"),
         }],
-        payment_method=Payment.Method.CASH,
-        received_amount=Decimal("1000"),
+        payments=[{"method": Payment.Method.CASH, "amount": Decimal("450"), "received_amount": Decimal("1000")}],
     )
     item = SaleItem.objects.get(sale=sale)
     stock.refresh_from_db()
@@ -90,7 +89,7 @@ def test_return_is_idempotent_and_prevents_over_return(context):
     sale = complete_sale(
         cash_session=session,
         items=[{"product_id": product.id, "quantity": Decimal("2")}],
-        payment_method=Payment.Method.WAVE,
+        payments=[{"method": Payment.Method.WAVE, "amount": Decimal("1000")}],
     )
     item = sale.items.get()
     key = uuid4()
@@ -119,8 +118,7 @@ def test_cash_summary_subtracts_cash_refunds(context):
     sale = complete_sale(
         cash_session=session,
         items=[{"product_id": product.id, "quantity": Decimal("4")}],
-        payment_method=Payment.Method.CASH,
-        received_amount=Decimal("2000"),
+        payments=[{"method": Payment.Method.CASH, "amount": Decimal("2000"), "received_amount": Decimal("2000")}],
     )
     create_sale_return(
         original_sale=sale, cash_session=session, created_by=cashier,
@@ -142,7 +140,7 @@ def test_offline_override_keeps_historical_catalog_snapshot(context):
     Stock.objects.create(store=store, product=product, quantity=Decimal("2.000"))
     sale, _ = complete_offline_sale(
         sale_id=uuid4(), cash_session=session, occurred_at=timezone.now(),
-        payment_method=Payment.Method.WAVE, received_amount=None,
+        payments=[{"method": Payment.Method.WAVE, "amount": Decimal("270")}],
         items=[{
             "product_id": product.id, "product_name": "Banane",
             "quantity": Decimal("0.300"), "unit_price": Decimal("900"),

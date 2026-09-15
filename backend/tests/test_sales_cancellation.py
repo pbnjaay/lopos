@@ -54,8 +54,9 @@ def sale(cash_session: CashSession, product: Product) -> Sale:
     return complete_sale(
         cash_session=cash_session,
         items=[{"product_id": product.id, "quantity": Decimal("3"), "unit_price": None}],
-        payment_method=Payment.Method.CASH,
-        received_amount=Decimal("2000.00"),
+        payments=[
+            {"method": Payment.Method.CASH, "amount": Decimal("1500.00"), "received_amount": Decimal("2000.00")}
+        ],
     )
 
 

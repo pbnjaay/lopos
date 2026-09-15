@@ -46,6 +46,7 @@ def product(store: Store) -> Product:
 
 
 def _sale_event_payload(*, cash_session: CashSession, product: Product, unit_price: Decimal):
+    amount = unit_price * 2
     return {
         "cash_session_id": cash_session.id,
         "items": [
@@ -56,7 +57,9 @@ def _sale_event_payload(*, cash_session: CashSession, product: Product, unit_pri
                 "quantity": 2,
             }
         ],
-        "payment": {"method": Payment.Method.CASH, "received_amount": Decimal("2000.00")},
+        "payments": [
+            {"method": Payment.Method.CASH, "amount": amount, "received_amount": Decimal("2000.00")}
+        ],
     }
 
 
@@ -206,7 +209,7 @@ def test_offline_sale_accepted_even_when_stock_goes_negative(
                     "quantity": 3,
                 }
             ],
-            "payment": {"method": Payment.Method.WAVE},
+            "payments": [{"method": Payment.Method.WAVE, "amount": Decimal("900.00")}],
         },
         cashier=cashier,
     )
@@ -311,7 +314,7 @@ def test_offline_sale_rejected_when_product_no_longer_exists(
                     "quantity": 1,
                 }
             ],
-            "payment": {"method": Payment.Method.WAVE},
+            "payments": [{"method": Payment.Method.WAVE, "amount": Decimal("100.00")}],
         },
         cashier=cashier,
     )

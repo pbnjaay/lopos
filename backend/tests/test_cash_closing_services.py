@@ -53,12 +53,12 @@ def _sell(
 ) -> None:
     product = Product.objects.create(name=name, selling_price=price)
     Stock.objects.create(store=store, product=product, quantity=quantity)
-    received = price * quantity if method == Payment.Method.CASH else None
+    amount = price * quantity
+    received = amount if method == Payment.Method.CASH else None
     complete_sale(
         cash_session=cash_session,
         items=[{"product_id": product.id, "quantity": quantity}],
-        payment_method=method,
-        received_amount=received,
+        payments=[{"method": method, "amount": amount, "received_amount": received}],
     )
 
 
@@ -247,7 +247,7 @@ def test_sale_after_close_is_rejected(
         complete_sale(
             cash_session=cash_session,
             items=[{"product_id": product.id, "quantity": 1}],
-            payment_method=Payment.Method.WAVE,
+            payments=[{"method": Payment.Method.WAVE, "amount": Decimal("500.00")}],
         )
 
     assert Sale.objects.count() == 0

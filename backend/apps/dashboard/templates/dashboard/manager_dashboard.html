@@ -140,7 +140,9 @@
                             </span>
                             <span class="font-medium text-base-900 dark:text-base-100">
                                 {{ sale.total|fcfa }}
-                                {% if sale.payment %}({{ sale.payment.get_method_display }}){% endif %}
+                                {% with sale.payments.all as sale_payments %}
+                                    {% if sale_payments %}({% for p in sale_payments %}{{ p.get_method_display }}{% if not forloop.last %} + {% endif %}{% endfor %}){% endif %}
+                                {% endwith %}
                             </span>
                         </a>
                     {% endfor %}

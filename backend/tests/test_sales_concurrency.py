@@ -32,7 +32,7 @@ def _attempt_sale(
             complete_sale(
                 cash_session=cash_session,
                 items=[{"product_id": product_id, "quantity": 1}],
-                payment_method=Payment.Method.WAVE,
+                payments=[{"method": Payment.Method.WAVE, "amount": Decimal("500.00")}],
             )
         except InsufficientStock:
             return "insufficient_stock"

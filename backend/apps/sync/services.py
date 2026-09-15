@@ -109,8 +109,7 @@ def process_sale_completed_event(
                 sale_id=entity_id,
                 cash_session=cash_session,
                 items=payload["items"],
-                payment_method=payload["payment"]["method"],
-                received_amount=payload["payment"].get("received_amount"),
+                payments=payload["payments"],
                 occurred_at=occurred_at,
             )
             ProcessedSyncEvent.objects.create(

@@ -146,10 +146,10 @@ class Payment(models.Model):
         ORANGE_MONEY = "ORANGE_MONEY", "Orange Money"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    sale = models.OneToOneField(
+    sale = models.ForeignKey(
         Sale,
         on_delete=models.PROTECT,
-        related_name="payment",
+        related_name="payments",
         verbose_name="vente",
     )
     method = models.CharField("mode de paiement", max_length=16, choices=Method.choices)
