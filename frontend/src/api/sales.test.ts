@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { getSaleReceipt, listSales } from "./sales"
+import { cancelSale, getSaleReceipt, listSales } from "./sales"
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -63,5 +63,21 @@ describe("sales API", () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       "/api/v1/sales/?cash_session_id=session-id&search=A12F&payment_method=WAVE&page=2&page_size=20",
     )
+  })
+
+  it("posts a cancellation to the sale's cancel endpoint", async () => {
+    document.cookie = "csrftoken=test-token; path=/"
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "CANCELLED" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    )
+
+    await cancelSale("sale-id")
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/sales/sale-id/cancel/")
+    const [, request] = fetchMock.mock.calls[0] ?? []
+    expect(request?.method).toBe("POST")
   })
 })

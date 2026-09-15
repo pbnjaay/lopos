@@ -3924,6 +3924,24 @@ a.list-row:active {
   gap: var(--space-3);
 }
 
+/* Correction d'erreur, pas un chemin attendu : en retrait des deux actions
+   primaires ci-dessus, jamais dans leur grille. */
+.sale-success-cancel-trigger {
+  margin-top: var(--space-4);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-caption);
+  text-decoration: underline;
+}
+
+.sale-success-cancel-trigger:hover {
+  color: var(--color-danger);
+}
+
 /* Sous 1200px, la navigation laterale devient une barre basse unique -
    meme hauteur, meme etat actif, meme zone de securite. */
 @media (max-width: 1199px) {

@@ -1,6 +1,13 @@
 import type { PaginatedSales, SaleReceipt, SaleReturn, PaymentMethod } from "../types/api"
 import { apiRequest, buildApiUrl } from "./client"
 
+export function cancelSale(id: string): Promise<SaleReceipt> {
+  return apiRequest<SaleReceipt>(`sales/${encodeURIComponent(id)}/cancel/`, {
+    method: "POST",
+    body: {},
+  })
+}
+
 export function listSales(input: {
   cashSessionId: string
   search?: string

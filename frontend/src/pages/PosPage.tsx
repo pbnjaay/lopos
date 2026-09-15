@@ -45,9 +45,11 @@ import { ProductGrid } from "../features/products/ProductGrid"
 import { ProductSearch } from "../features/products/ProductSearch"
 import { useProductCatalog } from "../features/products/queries"
 import type { CatalogProduct } from "../features/products/types"
+import { cancelSaleEverywhere } from "../features/sales/cancelSale"
 import { type ReceiptView, receiptViewFromLocalSale } from "../features/sales/receiptView"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
 import type { PaymentMethod } from "../types/api"
+import { describeErrorShort } from "../utils/errorCopy"
 import { formatQuantity } from "../utils/quantity"
 
 type CheckoutPayment = {
@@ -186,6 +188,19 @@ export function PosPage() {
         payment_method: payment.method,
         offline: !isOnline,
       })
+    },
+  })
+
+  // Local d'abord, retombe sur le serveur si la synchronisation en tâche de
+  // fond a déjà eu lieu entre l'encaissement et le clic — cf. cancelSale.ts.
+  const cancelSaleMutation = useMutation({
+    mutationFn: (saleId: string) => cancelSaleEverywhere(saleId),
+    onSuccess: () => {
+      setCompletedSale(null)
+      toast.success("Vente annulée")
+      void queryClient.invalidateQueries({ queryKey: ["products"] })
+      void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })
+      focusProductSearch()
     },
   })
 
@@ -478,6 +493,13 @@ export function PosPage() {
             setCompletedSale(null)
             focusProductSearch()
           }}
+          onCancelSale={() => cancelSaleMutation.mutateAsync(completedSale.id)}
+          isCancelling={cancelSaleMutation.isPending}
+          cancelErrorMessage={
+            cancelSaleMutation.error
+              ? describeErrorShort(cancelSaleMutation.error, "vente")
+              : null
+          }
         />
       ) : null}
       {weighedProduct ? (

@@ -88,7 +88,7 @@ export type PaymentMethod = "CASH" | "WAVE" | "ORANGE_MONEY"
 
 export type SaleResponse = {
   id: string
-  status: "COMPLETED"
+  status: "COMPLETED" | "CANCELLED"
   subtotal: string
   discount: string
   total: string

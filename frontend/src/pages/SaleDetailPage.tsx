@@ -1,15 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
+import { useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router-dom";
 
-import { getSaleReceipt } from "../api/sales";
+import { cancelSale, getSaleReceipt } from "../api/sales";
 import { PageHeader } from "../components/layout/PageHeader";
-import { ButtonLink } from "../components/ui/Button";
+import { Button, ButtonLink } from "../components/ui/Button";
+import { Dialog, DialogBody, DialogFooter } from "../components/ui/Dialog";
 import { InlineAlert } from "../components/ui/InlineAlert";
-import { ReceiptIcon, RotateCcwIcon } from "../components/ui/Icons";
+import { ReceiptIcon, RotateCcwIcon, XIcon } from "../components/ui/Icons";
 import { MetaList } from "../components/ui/Metadata";
 import { Money } from "../components/ui/Money";
 import { RouteError, RouteLoading } from "../components/ui/RouteState";
 import { SectionHeader } from "../components/ui/SectionHeader";
+import { useToast } from "../components/ui/Toast";
 import { useCurrentUser } from "../features/auth/queries";
 import { usePosSession } from "../features/cash-session/queries";
 import { useNetworkStatus } from "../features/offline/useNetworkStatus";
@@ -20,6 +23,7 @@ import {
   withSaleOrigin,
 } from "../features/sales/origin";
 import { formatDateTime } from "../utils/date";
+import { describeErrorShort } from "../utils/errorCopy";
 import { formatBackendMoney } from "../utils/money";
 import { backendQuantityToMilli, formatQuantity } from "../utils/quantity";
 
@@ -37,11 +41,27 @@ export function SaleDetailPage() {
   const user = useCurrentUser().data!;
   const { ownSession } = usePosSession(user);
   const online = useNetworkStatus();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const keepSaleButtonRef = useRef<HTMLButtonElement>(null);
+  const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
   const saleQuery = useQuery({
     queryKey: saleReceiptQueryKey(saleId, ownSession?.id),
     queryFn: () => getSaleReceipt(saleId!, ownSession!.id),
     enabled: Boolean(saleId && ownSession && online),
     retry: false,
+  });
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelSale(saleId!),
+    onSuccess: (updatedSale) => {
+      queryClient.setQueryData(
+        saleReceiptQueryKey(saleId, ownSession?.id),
+        updatedSale,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+      setIsConfirmingCancel(false);
+      toast.success("Vente annulée");
+    },
   });
 
   if (!online) {
@@ -71,6 +91,11 @@ export function SaleDetailPage() {
     sale.items.some(
       (item) => Number(item.quantity_returnable ?? item.quantity) > 0,
     );
+  // Pré-filtre côté client pour ne montrer le bouton que quand il a une
+  // chance d'aboutir — le serveur reste seul juge final (session encore
+  // ouverte ou non, notamment, qu'on ne connaît pas ici).
+  const canCancel =
+    sale.status === "COMPLETED" && (sale.cashier.id === user.id || user.is_staff);
 
   return (
     <main className="operational-page">
@@ -103,6 +128,16 @@ export function SaleDetailPage() {
                 <span>Effectuer un retour</span>
               </ButtonLink>
             ) : null}
+            {canCancel ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsConfirmingCancel(true)}
+              >
+                <XIcon />
+                <span>Annuler la vente</span>
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -116,6 +151,9 @@ export function SaleDetailPage() {
               label: "Mode de paiement",
               value: paymentLabels[sale.payment.method],
             },
+            ...(sale.status === "CANCELLED"
+              ? [{ label: "Statut", value: "Annulée" }]
+              : []),
           ]}
         />
         <div className="card-section">
@@ -181,12 +219,60 @@ export function SaleDetailPage() {
             ) : null}
           </dl>
         </div>
-        {!canReturn ? (
+        {!canReturn && sale.status === "COMPLETED" ? (
           <InlineAlert className="sale-detail-note">
             Aucun article de cette vente ne peut encore être retourné.
           </InlineAlert>
         ) : null}
+        {sale.status === "CANCELLED" ? (
+          <InlineAlert tone="warning" className="sale-detail-note">
+            Cette vente a été annulée — son stock a été restitué.
+          </InlineAlert>
+        ) : null}
       </section>
+
+      {isConfirmingCancel ? (
+        <Dialog
+          eyebrow="Vente"
+          title="Annuler cette vente ?"
+          size="sm"
+          initialFocusRef={keepSaleButtonRef}
+          dismissible={!cancelMutation.isPending}
+          onClose={() => setIsConfirmingCancel(false)}
+        >
+          <DialogBody>
+            <p>
+              Le stock sera remis à jour. Mode de paiement :{" "}
+              {paymentLabels[sale.payment.method]} — cette action ne touche
+              pas le paiement, c'est à vous de rembourser le client si
+              besoin.
+            </p>
+            {cancelMutation.error ? (
+              <InlineAlert tone="error">
+                {describeErrorShort(cancelMutation.error, "vente")}
+              </InlineAlert>
+            ) : null}
+            <DialogFooter>
+              <Button
+                ref={keepSaleButtonRef}
+                variant="secondary"
+                disabled={cancelMutation.isPending}
+                onClick={() => setIsConfirmingCancel(false)}
+              >
+                Garder la vente
+              </Button>
+              <Button
+                variant="destructive"
+                loading={cancelMutation.isPending}
+                loadingLabel="Annulation…"
+                onClick={() => cancelMutation.mutate()}
+              >
+                Confirmer l'annulation
+              </Button>
+            </DialogFooter>
+          </DialogBody>
+        </Dialog>
+      ) : null}
     </main>
   );
 }

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { PosDatabase } from "./database"
 import {
   InsufficientLocalStockError,
+  cancelPendingLocalSale,
   countConflictLocalSales,
   countPendingLocalSales,
   countPendingLocalSalesForSession,
@@ -253,5 +254,39 @@ describe("sync status transitions", () => {
     await expect(countConflictLocalSales(database)).resolves.toBe(1)
     const conflicts = await listConflictLocalSales(database)
     expect(conflicts.map((item) => item.id)).toEqual([sale.id])
+  })
+})
+
+describe("cancelPendingLocalSale", () => {
+  it("deletes a PENDING_SYNC sale and releases its local stock effect", async () => {
+    const sale = await createLocalSale(
+      { session, items: [{ productId: coca.id, quantity: 2 }], payment: { method: "CASH", receivedAmount: 1000 } },
+      database,
+    )
+
+    await expect(cancelPendingLocalSale(sale.id, database)).resolves.toBe(true)
+
+    await expect(database.localSales.get(sale.id)).resolves.toBeUndefined()
+    const product = await database.products.get([coca.storeId, coca.id])
+    expect(product?.pendingSoldQuantityMilli).toBe(0)
+    expect(product?.pendingSoldQuantity).toBe(0)
+    await expect(countPendingLocalSales(database)).resolves.toBe(0)
+  })
+
+  it("does nothing and returns false once the sale has already synced", async () => {
+    const sale = await createLocalSale(
+      { session, items: [{ productId: coca.id, quantity: 1 }], payment: { method: "WAVE" } },
+      database,
+    )
+    await markLocalSaleSynced(sale.id, sale.id, database)
+
+    await expect(cancelPendingLocalSale(sale.id, database)).resolves.toBe(false)
+
+    const stillThere = await database.localSales.get(sale.id)
+    expect(stillThere?.status).toBe("SYNCED")
+  })
+
+  it("returns false for a sale that doesn't exist locally", async () => {
+    await expect(cancelPendingLocalSale("unknown-id", database)).resolves.toBe(false)
   })
 })
