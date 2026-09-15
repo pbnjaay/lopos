@@ -8,6 +8,7 @@ from apps.cash.exceptions import CashSessionClosed
 
 from .exceptions import (
     InsufficientStock,
+    InvalidCancellation,
     InvalidPayment,
     InvalidSaleItems,
     ProductInactive,
@@ -24,7 +25,7 @@ from .serializers import (
     SaleSerializer,
     SaleSummarySerializer,
 )
-from .services import complete_sale, create_sale_return
+from .services import cancel_sale, complete_sale, create_sale_return
 
 
 class SalePagination(PageNumberPagination):
@@ -157,6 +158,31 @@ class SaleDetailView(APIView):
                 "payment", "cashier", "cash_session__cash_register__store"
             ).prefetch_related("items__return_items__sale_return", "returns"),
             pk=pk,
+        )
+        return Response(SaleSerializer(sale).data, status=status.HTTP_200_OK)
+
+
+class CancelSaleView(APIView):
+    def post(self, request, pk=None) -> Response:
+        try:
+            sale = cancel_sale(sale_id=pk, cancelled_by=request.user)
+        except Sale.DoesNotExist:
+            return Response(
+                {"code": "SALE_NOT_FOUND", "message": "Cette vente n'existe pas."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except InvalidCancellation as exc:
+            return Response(
+                {"code": "INVALID_CANCELLATION", "message": str(exc)},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        sale = (
+            Sale.objects.select_related(
+                "payment", "cashier", "cash_session__cash_register__store"
+            )
+            .prefetch_related("items__return_items__sale_return", "returns")
+            .get(pk=sale.pk)
         )
         return Response(SaleSerializer(sale).data, status=status.HTTP_200_OK)
 

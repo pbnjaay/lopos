@@ -37,3 +37,7 @@ class InvalidPayment(Exception):
 
 class InvalidReturn(Exception):
     """Raised when a merchandise return violates a business invariant."""
+
+
+class InvalidCancellation(Exception):
+    """Raised when a sale cannot be cancelled as requested."""

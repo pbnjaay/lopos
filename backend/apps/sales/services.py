@@ -14,6 +14,7 @@ from apps.inventory.models import InventoryMovement, Stock
 
 from .exceptions import (
     InsufficientStock,
+    InvalidCancellation,
     InvalidPayment,
     InvalidSaleItems,
     ProductInactive,
@@ -426,6 +427,67 @@ def complete_offline_sale(
         occurred_at=occurred_at,
         allow_negative_stock=True,
     )
+
+
+@transaction.atomic
+def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
+    """Annule une vente terminée et restitue son stock.
+
+    Pensé pour l'erreur repérée tout de suite (mauvais article scanné, vente
+    validée par erreur) — pas pour un article physiquement rapporté après
+    coup, c'est le rôle de `create_sale_return`. Ne rembourse jamais
+    automatiquement : seuls le statut et le stock sont corrigés, l'argent (le
+    cas échéant) reste à régler par le caissier lui-même.
+
+    Portée : le caissier propriétaire tant que sa session est encore ouverte,
+    ou un membre du staff sans restriction — même logique de délégation que
+    le reste de l'admin (cf. stores/views.py `current_session`).
+    """
+    sale = (
+        Sale.objects.select_for_update()
+        .select_related("cash_session__cash_register", "cashier")
+        .get(pk=sale_id)
+    )
+
+    if sale.status != Sale.Status.COMPLETED:
+        raise InvalidCancellation("Seule une vente terminée peut être annulée.")
+
+    if not cancelled_by.is_staff:
+        if sale.cashier_id != cancelled_by.pk:
+            raise InvalidCancellation("Cette vente appartient à un autre caissier.")
+        if sale.cash_session.status != CashSession.Status.OPEN:
+            raise InvalidCancellation(
+                "La session de caisse de cette vente est fermée."
+            )
+
+    store_id = sale.cash_session.cash_register.store_id
+    items = list(sale.items.select_related("product").order_by("product_id"))
+
+    for item in items:
+        stock, _ = Stock.objects.select_for_update().get_or_create(
+            store_id=store_id,
+            product_id=item.product_id,
+            defaults={"quantity": Decimal("0.000")},
+        )
+        stock.quantity += item.quantity
+        stock.save(update_fields=("quantity", "updated_at"))
+
+    InventoryMovement.objects.bulk_create(
+        [
+            InventoryMovement(
+                store_id=store_id,
+                product_id=item.product_id,
+                movement_type=InventoryMovement.Type.CANCELLATION,
+                quantity=item.quantity,
+                reference=sale.id,
+            )
+            for item in items
+        ]
+    )
+
+    sale.status = Sale.Status.CANCELLED
+    sale.save(update_fields=("status",))
+    return sale
 
 
 class ReturnItemInput(TypedDict):
