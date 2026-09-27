@@ -9,7 +9,6 @@ import { Button } from "../components/ui/Button"
 import { Dialog, DialogBody, DialogFooter } from "../components/ui/Dialog"
 import { InlineAlert } from "../components/ui/InlineAlert"
 import { MetaList } from "../components/ui/Metadata"
-import { Money } from "../components/ui/Money"
 import { RouteError, RouteLoading } from "../components/ui/RouteState"
 import { SectionHeader } from "../components/ui/SectionHeader"
 import { useToast } from "../components/ui/Toast"
@@ -259,6 +258,10 @@ export function CloseCashSessionPage() {
           ]}
         />
 
+        {/* Comptage à l'aveugle : aucun montant avant la saisie. Espèces +
+            fond initial donnaient le cash attendu par simple addition, et le
+            CA moins Wave et Orange Money aussi — le caissier devinait au lieu
+            de compter. Tout le détail arrive sur l'écran de résultat. */}
         <div className="card-section">
           <SectionHeader
             eyebrow="Activité"
@@ -269,26 +272,6 @@ export function CloseCashSessionPage() {
             <div className="closing-summary-kpi">
               <dt>Nombre de ventes</dt>
               <dd>{summary.sales_count}</dd>
-            </div>
-            <div className="closing-summary-kpi">
-              <dt>Chiffre d’affaires</dt>
-              <dd><Money backend={summary.gross_sales} /></dd>
-            </div>
-            <div className="closing-summary-payment">
-              <dt>Espèces</dt>
-              <dd><Money backend={summary.payments.cash} /></dd>
-            </div>
-            <div className="closing-summary-payment">
-              <dt>Wave</dt>
-              <dd><Money backend={summary.payments.wave} /></dd>
-            </div>
-            <div className="closing-summary-payment">
-              <dt>Orange Money</dt>
-              <dd><Money backend={summary.payments.orange_money} /></dd>
-            </div>
-            <div className="closing-summary-opening">
-              <dt>Fond initial</dt>
-              <dd><Money backend={summary.opening_balance} /></dd>
             </div>
           </dl>
         </div>
