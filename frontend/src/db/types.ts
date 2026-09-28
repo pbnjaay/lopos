@@ -30,7 +30,21 @@ export type LocalCashSession = {
   cachedAt: string
 }
 
-export type LocalSaleStatus = "PENDING_SYNC" | "SYNCED" | "CONFLICT"
+/** Client du cahier mis en cache pour la recherche en caisse, y compris hors ligne. */
+export type LocalCustomer = {
+  id: string
+  storeId: string
+  name: string
+  phone: string | null
+  isActive: boolean
+  /** Solde dû connu du serveur au dernier snapshot, en FCFA entiers. */
+  serverBalance: number
+  lastActivityAt: string | null
+  updatedAt: string
+  cachedAt: string
+}
+
+export type LocalSaleStatus ="PENDING_SYNC" | "SYNCED" | "CONFLICT"
 
 export type LocalSaleItem = {
   productId: string
@@ -48,6 +62,13 @@ export type LocalPayment = {
   amount: number
   receivedAmount: number | null
   changeAmount: number | null
+}
+
+/** Instantané du client d'une vente à crédit : le ticket doit rester lisible hors ligne. */
+export type LocalSaleCustomer = {
+  id: string
+  name: string
+  phone: string | null
 }
 
 export type LocalSale = {
@@ -70,6 +91,9 @@ export type LocalSale = {
   conflictMessage: string | null
   items: LocalSaleItem[]
   payments: LocalPayment[]
+  /** Part non encaissée, mise au cahier de `customer`. Absente sur les ventes antérieures au cahier. */
+  creditAmount?: number
+  customer?: LocalSaleCustomer | null
   subtotal: number
   discount: number
   total: number

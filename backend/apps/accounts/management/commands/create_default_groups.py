@@ -22,6 +22,12 @@ MANAGER_PERMISSIONS = [
     ("sales", "sale", ("view",)),
     ("sales", "saleitem", ("view",)),
     ("sales", "payment", ("view",)),
+    # Pas de "delete" : un client se désactive (historique du cahier).
+    ("customers", "customer", ("add", "change", "view")),
+    # "add" = ajustement ou solde d'ouverture saisi à la main ; jamais de
+    # "change"/"delete", une écriture du cahier est immuable.
+    ("customers", "customerledgerentry", ("add", "view")),
+    ("customers", "customerpayment", ("view",)),
     ("sync", "processedsyncevent", ("view",)),
 ]
 

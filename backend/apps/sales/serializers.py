@@ -4,6 +4,8 @@ from rest_framework import serializers
 
 from apps.cash.models import CashSession
 
+from apps.customers.services import reducible_credit
+
 from .models import Payment, Sale, SaleItem, SaleReturn, SaleReturnItem
 
 
@@ -38,7 +40,20 @@ class CompleteSaleSerializer(serializers.Serializer):
         queryset=CashSession.objects.all(),
     )
     items = SaleItemInputSerializer(many=True, allow_empty=False)
-    payments = PaymentInputSerializer(many=True, allow_empty=False)
+    # Vide pour une vente entièrement mise au cahier ; le service exige au
+    # moins un paiement dès qu'il n'y a pas de crédit.
+    payments = PaymentInputSerializer(many=True, allow_empty=True)
+    customer_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    credit_amount = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0"),
+        required=False, default=Decimal("0.00"),
+    )
+
+
+class SaleCustomerSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    phone = serializers.CharField(allow_null=True)
 
 
 class SaleListQuerySerializer(serializers.Serializer):
@@ -81,11 +96,13 @@ class PaymentSerializer(serializers.ModelSerializer):
 class SaleSerializer(serializers.ModelSerializer):
     items = SaleItemSerializer(many=True, read_only=True)
     payments = PaymentSerializer(many=True, read_only=True)
+    customer = SaleCustomerSerializer(read_only=True, allow_null=True)
     store = serializers.SerializerMethodField()
     cash_register = serializers.SerializerMethodField()
     cashier = serializers.SerializerMethodField()
     returned_total = serializers.SerializerMethodField()
     net_total = serializers.SerializerMethodField()
+    credit_reducible = serializers.SerializerMethodField()
 
     class Meta:
         model = Sale
@@ -102,6 +119,9 @@ class SaleSerializer(serializers.ModelSerializer):
             "returned_total",
             "net_total",
             "payments",
+            "credit_amount",
+            "credit_reducible",
+            "customer",
             "items",
         )
 
@@ -122,6 +142,13 @@ class SaleSerializer(serializers.ModelSerializer):
     def get_net_total(self, sale: Sale) -> Decimal:
         return sale.total - self.get_returned_total(sale)
 
+    def get_credit_reducible(self, sale: Sale) -> str:
+        """Ce qu'un retour sur cette vente effacerait encore du cahier avant de
+        rendre de l'argent (0 pour une vente sans crédit). Indicatif pour
+        l'écran : le montant définitif est recalculé sous verrou au retour."""
+        # Chaîne « 4500.00 », comme tous les montants de l'API.
+        return f"{reducible_credit(sale):.2f}"
+
 
 class SaleSummarySerializer(SaleSerializer):
     created_at = serializers.DateTimeField(source="occurred_at", read_only=True)
@@ -138,6 +165,8 @@ class SaleSummarySerializer(SaleSerializer):
             "returned_total",
             "net_total",
             "payments",
+            "credit_amount",
+            "customer",
         )
 
 
@@ -151,7 +180,11 @@ class CreateSaleReturnSerializer(serializers.Serializer):
     sale_id = serializers.PrimaryKeyRelatedField(source="original_sale", queryset=Sale.objects.all())
     cash_session_id = serializers.PrimaryKeyRelatedField(source="cash_session", queryset=CashSession.objects.all())
     idempotency_key = serializers.UUIDField()
-    payment_method = serializers.ChoiceField(choices=Payment.Method.choices)
+    # Inutile quand tout le retour est déduit du cahier ; le service l'exige
+    # dès qu'une part est rendue en argent.
+    payment_method = serializers.ChoiceField(
+        choices=Payment.Method.choices, required=False, allow_null=True, default=None
+    )
     items = SaleReturnItemInputSerializer(many=True, allow_empty=False)
 
 
@@ -165,9 +198,10 @@ class SaleReturnItemSerializer(serializers.ModelSerializer):
 
 class SaleReturnSerializer(serializers.ModelSerializer):
     items = SaleReturnItemSerializer(many=True, read_only=True)
+    money_refund = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     original_sale_id = serializers.UUIDField(read_only=True)
     cash_session_id = serializers.UUIDField(read_only=True)
     created_by = serializers.CharField(source="created_by.username", read_only=True)
     class Meta:
         model = SaleReturn
-        fields = ("id", "reference", "original_sale_id", "cash_session_id", "created_by", "total_refund", "payment_method", "status", "created_at", "items")
+        fields = ("id", "reference", "original_sale_id", "cash_session_id", "created_by", "total_refund", "credit_reduction", "money_refund", "payment_method", "status", "created_at", "items")

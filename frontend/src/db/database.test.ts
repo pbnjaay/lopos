@@ -14,7 +14,16 @@ describe("PosDatabase schema", () => {
       "cashSessions",
       "metadata",
       "carts",
+      "customers",
     ])
+  })
+
+  it("keys the customer book by store", () => {
+    const database = new PosDatabase()
+    const customerIndexes = database.customers.schema.indexes.map((index) => index.src)
+
+    expect(database.customers.schema.primKey.src).toBe("[storeId+id]")
+    expect(customerIndexes).toContain("[storeId+phone]")
   })
 
   it("indexes barcode lookup and the pending sales queue", () => {

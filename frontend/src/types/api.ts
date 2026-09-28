@@ -59,7 +59,18 @@ export type CashSessionSummary = {
     wave: string
     orange_money: string
   }
+  /** Argent réellement rendu sur les retours, par moyen (hors part déduite du cahier). */
   refunds?: {
+    cash: string
+    wave: string
+    orange_money: string
+  }
+  /** Part des ventes mise au cahier : pas de l'argent reçu. */
+  credit_sales?: string
+  /** Part des retours effacée du cahier : pas de l'argent rendu. */
+  credit_returns?: string
+  /** Paiements de clients sur leur cahier : de l'argent reçu, mais pas des ventes. */
+  customer_payments?: {
     cash: string
     wave: string
     orange_money: string
@@ -84,7 +95,73 @@ export type Product = {
   updated_at: string
 }
 
+/** Client du cahier, avec son solde dû calculé côté serveur. */
+export type Customer = {
+  id: string
+  store_id: string
+  name: string
+  /** Format E.164 (+221771234567) ; null pour un client repris sans numéro. */
+  phone: string | null
+  is_active: boolean
+  balance: string
+  last_activity_at: string | null
+  updated_at: string
+}
+
 export type PaymentMethod = "CASH" | "WAVE" | "ORANGE_MONEY"
+
+export type LedgerEntryType =
+  | "CREDIT_SALE"
+  | "PAYMENT"
+  | "RETURN_CREDIT"
+  | "ADJUSTMENT"
+  | "OPENING_BALANCE"
+  | "REVERSAL"
+
+/** Ligne du cahier. `amount` > 0 : le client doit plus ; < 0 : il doit moins. */
+export type LedgerEntry = {
+  id: string
+  entry_type: LedgerEntryType
+  label: string
+  amount: string
+  /** Solde juste après cette ligne. */
+  running_balance: string
+  occurred_at: string
+  sale_id: string | null
+  sale_return_id: string | null
+  customer_payment: { id: string; reference: string; method: PaymentMethod } | null
+  reference: string
+  reason: string
+  created_by: string | null
+}
+
+/** Fiche client : le client, son solde et tout son cahier, du plus récent au plus ancien. */
+export type CustomerDetail = Customer & { entries: LedgerEntry[] }
+
+/** Remboursement d'un client, avec l'instantané du solde pour le reçu. */
+export type CustomerPayment = {
+  id: string
+  reference: string
+  customer: SaleCustomer
+  store: { id: string; name: string }
+  cash_register: { id: string; name: string }
+  cash_session_id: string
+  method: PaymentMethod
+  amount: string
+  received_amount: string | null
+  change_amount: string | null
+  balance_before: string
+  balance_after: string
+  created_by: string
+  created_at: string
+}
+
+/** Client d'une vente mise au cahier, tel que la vente le référence. */
+export type SaleCustomer = {
+  id: string
+  name: string
+  phone: string | null
+}
 
 export type SaleResponse = {
   id: string
@@ -102,6 +179,11 @@ export type SaleResponse = {
     received_amount: string | null
     change_amount: string | null
   }>
+  /** Part non encaissée, inscrite au cahier du client ("0.00" sinon). */
+  credit_amount?: string
+  /** Ce qu'un retour effacerait encore du cahier avant de rendre de l'argent (détail de vente). */
+  credit_reducible?: string
+  customer?: SaleCustomer | null
   items: Array<{
     product_id: string
     id: string
@@ -144,6 +226,8 @@ export type SaleSummary = Pick<
   | "returned_total"
   | "net_total"
   | "payments"
+  | "credit_amount"
+  | "customer"
 >
 
 export type PaginatedSales = {
@@ -157,8 +241,14 @@ export type SaleReturn = {
   id: string
   reference: string
   original_sale_id: string
+  /** Valeur des articles rendus. */
   total_refund: string
-  payment_method: PaymentMethod
+  /** Part effacée du cahier du client, sans argent rendu. */
+  credit_reduction?: string
+  /** Argent réellement rendu : `total_refund − credit_reduction`. */
+  money_refund?: string
+  /** Null quand tout le retour a été déduit du cahier. */
+  payment_method: PaymentMethod | null
   status: "COMPLETED"
   created_at: string
   items: Array<{ id: string; product_name: string; sale_unit: "UNIT" | "KG"; quantity: string; unit_price: string; refund_amount: string; restock: boolean }>

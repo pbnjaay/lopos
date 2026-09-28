@@ -113,6 +113,15 @@ class CashSessionAdmin(ModelAdmin):
             (_("Espèces"), format_fcfa(summary.cash_sales)),
             (_("Wave"), format_fcfa(summary.wave_sales)),
             (_("Orange Money"), format_fcfa(summary.orange_money_sales)),
+            (_("Mis au cahier"), format_fcfa(summary.credit_sales)),
+            (
+                _("Remboursements cahier"),
+                format_fcfa(
+                    summary.cash_customer_payments
+                    + summary.wave_customer_payments
+                    + summary.orange_money_customer_payments
+                ),
+            ),
         )
         return format_html(
             "<table class='min-w-full text-sm'>{}</table>",

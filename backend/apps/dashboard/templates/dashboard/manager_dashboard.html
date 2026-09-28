@@ -71,10 +71,17 @@
                     <span class="text-base-500 dark:text-base-400">{% translate "Wave" %}</span>
                     <span class="font-medium text-base-900 dark:text-base-100">{{ dashboard.payment_totals.wave|fcfa }} <span class="text-base-400 dark:text-base-500 font-normal">({{ dashboard.payment_percentages.wave }} %)</span></span>
                 </div>
-                <div class="flex justify-between">
+                <div class="flex justify-between{% if dashboard.credit_total %} border-b border-base-100 dark:border-base-800 pb-2{% endif %}">
                     <span class="text-base-500 dark:text-base-400">{% translate "Orange Money" %}</span>
                     <span class="font-medium text-base-900 dark:text-base-100">{{ dashboard.payment_totals.orange_money|fcfa }} <span class="text-base-400 dark:text-base-500 font-normal">({{ dashboard.payment_percentages.orange_money }} %)</span></span>
                 </div>
+                {% if dashboard.credit_total %}
+                    {# Pas un encaissement : la part du CA restée au cahier des clients. #}
+                    <div class="flex justify-between">
+                        <span class="text-base-500 dark:text-base-400">{% translate "Cahier (non encaissé)" %}</span>
+                        <span class="font-medium text-base-900 dark:text-base-100">{{ dashboard.credit_total|fcfa }} <span class="text-base-400 dark:text-base-500 font-normal">({{ dashboard.credit_percentage }} %)</span></span>
+                    </div>
+                {% endif %}
             </div>
         </div>
 
@@ -101,6 +108,28 @@
             </div>
         </div>
     </div>
+
+    {% if dashboard.book.is_used %}
+        {# --- Cahier clients -------------------------------------------- #}
+        <a href="{{ dashboard.book.customers_url }}" class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4 hover:border-base-300 dark:hover:border-base-700 transition-colors">
+            <h2 class="font-semibold text-[15px] text-base-900 dark:text-base-100 mb-3">{% translate "Cahier clients" %}</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                    <div class="text-xs font-medium uppercase text-base-400 dark:text-base-500">{% translate "Crédit accordé" %}</div>
+                    <div class="text-xl font-semibold text-base-900 dark:text-base-100 mt-1">{{ dashboard.book.credit_granted|fcfa }}</div>
+                </div>
+                <div>
+                    <div class="text-xs font-medium uppercase text-base-400 dark:text-base-500">{% translate "Paiements reçus" %}</div>
+                    <div class="text-xl font-semibold text-base-900 dark:text-base-100 mt-1">{{ dashboard.book.payments_received|fcfa }}</div>
+                </div>
+                <div>
+                    <div class="text-xs font-medium uppercase text-base-400 dark:text-base-500">{% translate "Encours total" %}</div>
+                    <div class="text-xl font-semibold text-base-900 dark:text-base-100 mt-1">{{ dashboard.book.outstanding|fcfa }}</div>
+                    <div class="text-xs text-base-500 mt-1">{% translate "À ce jour, toutes périodes" %}</div>
+                </div>
+            </div>
+        </a>
+    {% endif %}
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
@@ -140,9 +169,7 @@
                             </span>
                             <span class="font-medium text-base-900 dark:text-base-100">
                                 {{ sale.total|fcfa }}
-                                {% with sale.payments.all as sale_payments %}
-                                    {% if sale_payments %}({% for p in sale_payments %}{{ p.get_method_display }}{% if not forloop.last %} + {% endif %}{% endfor %}){% endif %}
-                                {% endwith %}
+                                {% with sale|settlement as label %}{% if label %}({{ label }}){% endif %}{% endwith %}
                             </span>
                         </a>
                     {% endfor %}

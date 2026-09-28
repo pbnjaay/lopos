@@ -6,7 +6,7 @@ import { logout } from "../../api/auth"
 import { API_BASE_URL } from "../../api/client"
 import { resetAnalytics } from "../../analytics/posthog"
 import { clearSentryUser } from "../../analytics/sentry"
-import { CashRegisterIcon, ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, SettingsIcon } from "../ui/Icons"
+import { CashRegisterIcon, ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, SettingsIcon, UsersIcon } from "../ui/Icons"
 import { LogoMark } from "../ui/Logo"
 import { ToastProvider, useToast } from "../ui/Toast"
 import { CashContextLabel } from "../../features/cash-session/CashContextLabel"
@@ -50,13 +50,17 @@ function AppShell({ user }: AppLayoutProps) {
     location.pathname === "/pos" ||
     location.pathname === "/cash/close" ||
     location.pathname.startsWith("/sales") ||
-    location.pathname.startsWith("/returns")
+    location.pathname.startsWith("/returns") ||
+    location.pathname.startsWith("/customers")
   const isCashRoute =
     location.pathname === "/pos" ||
     location.pathname.startsWith("/cash")
   const isSalesRoute =
     location.pathname.startsWith("/sales") ||
     location.pathname.startsWith("/returns")
+  const isCustomersRoute =
+    location.pathname.startsWith("/customers") ||
+    location.pathname.startsWith("/customer-payments")
   const logoutMutation = useMutation({
     mutationFn: logout,
     onError: (error) => {
@@ -195,6 +199,15 @@ function AppShell({ user }: AppLayoutProps) {
           >
             <ReceiptIcon />
             <span>Ventes</span>
+          </Link>
+          <Link
+            className={`app-navigation-link${isCustomersRoute ? " app-navigation-link-active" : ""}`}
+            to="/customers"
+            title="Cahier clients"
+            aria-current={isCustomersRoute ? "page" : undefined}
+          >
+            <UsersIcon />
+            <span>Clients</span>
           </Link>
           {showCashSessionActions ? (
             <Link

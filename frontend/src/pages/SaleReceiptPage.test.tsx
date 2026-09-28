@@ -129,7 +129,7 @@ describe("SaleReceiptPage", () => {
     expect(await screen.findByText("Retour partiel")).toBeInTheDocument()
     expect(screen.getByText("↳ Retourné : 1 · Reste : 1")).toBeInTheDocument()
     expect(screen.getByText("Total de la vente")).toBeInTheDocument()
-    expect(screen.getByText("Remboursements")).toBeInTheDocument()
+    expect(screen.getByText("Retours")).toBeInTheDocument()
     expect(screen.getByText("Total net")).toBeInTheDocument()
     expect(screen.getAllByText("− 500 FCFA")).toHaveLength(3)
     expect(screen.getByText("Vente partiellement retournée")).toBeInTheDocument()

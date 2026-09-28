@@ -214,3 +214,104 @@ describe("SaleReturnPage", () => {
     expect(secondKey).toBe(firstKey)
   })
 })
+
+describe("SaleReturnPage — vente mise au cahier", () => {
+  const creditSale: SaleReceipt = {
+    ...sale,
+    id: "c0ffee00-0000-0000-0000-000000000000",
+    subtotal: "10000.00",
+    total: "10000.00",
+    returned_total: "0.00",
+    net_total: "10000.00",
+    payments: [{ method: "CASH", amount: "4000.00", received_amount: "4000.00", change_amount: "0.00" }],
+    credit_amount: "6000.00",
+    credit_reducible: "6000.00",
+    customer: { id: "moussa", name: "Moussa Fall", phone: "+221771234567" },
+    items: [
+      {
+        id: "rice", product_id: "rice-id", product_name: "Sac de riz", sale_unit: "UNIT",
+        unit_price: "5000.00", quantity: "2.000", quantity_returned: "0.000",
+        quantity_returnable: "2.000", line_total: "10000.00",
+      },
+    ],
+  }
+
+  function renderCreditSale() {
+    vi.mocked(getSaleReceipt).mockResolvedValue(creditSale)
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={[`/sales/${creditSale.id}/return`]}>
+          <Routes><Route path="/sales/:saleId/return" element={<SaleReturnPage />} /></Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+  }
+
+  it("deducts a return within the debt from the book, without any refund method", async () => {
+    const actor = userEvent.setup()
+    vi.mocked(createSaleReturn).mockResolvedValue({
+      ...completedReturn,
+      original_sale_id: creditSale.id,
+      total_refund: "5000.00",
+      credit_reduction: "5000.00",
+      money_refund: "0.00",
+      payment_method: null,
+    })
+    renderCreditSale()
+    await screen.findByRole("heading", { name: "Ticket C0FFEE00" })
+
+    await actor.click(screen.getByRole("button", { name: "Augmenter la quantité de Sac de riz" }))
+
+    const summary = screen.getByRole("complementary", { name: "Résumé du remboursement" })
+    expect(summary).toHaveTextContent("Déduit du cahier de Moussa Fall5 000 FCFA")
+    expect(summary).toHaveTextContent("Montant à rembourser0 FCFA")
+    expect(screen.queryByLabelText("Mode de remboursement")).not.toBeInTheDocument()
+    await actor.click(screen.getByRole("button", { name: "Déduire 5 000 FCFA du cahier" }))
+
+    expect(await screen.findByRole("heading", { name: "Retour déduit du cahier" })).toBeInTheDocument()
+    expect(createSaleReturn).toHaveBeenCalledWith(expect.objectContaining({ payment_method: null }))
+  })
+
+  it("refunds only the surplus beyond the debt", async () => {
+    const actor = userEvent.setup()
+    vi.mocked(createSaleReturn).mockResolvedValue({
+      ...completedReturn,
+      total_refund: "10000.00",
+      credit_reduction: "6000.00",
+      money_refund: "4000.00",
+      payment_method: "CASH",
+    })
+    renderCreditSale()
+    await screen.findByRole("heading", { name: "Ticket C0FFEE00" })
+
+    await actor.click(screen.getByRole("button", { name: "Augmenter la quantité de Sac de riz" }))
+    await actor.click(screen.getByRole("button", { name: "Augmenter la quantité de Sac de riz" }))
+
+    const summary = screen.getByRole("complementary", { name: "Résumé du remboursement" })
+    expect(summary).toHaveTextContent("Déduit du cahier de Moussa Fall6 000 FCFA")
+    expect(summary).toHaveTextContent("Montant à rembourser4 000 FCFA")
+    await actor.click(screen.getByRole("button", { name: "Rembourser 4 000 FCFA par espèces" }))
+
+    expect(await screen.findByRole("heading", { name: "Remboursement effectué" })).toBeInTheDocument()
+    expect(createSaleReturn).toHaveBeenCalledWith(expect.objectContaining({ payment_method: "CASH" }))
+    expect(screen.getByText("Total remboursé").nextSibling).toHaveTextContent("4 000 FCFA")
+  })
+
+  it("refunds everything in money once the customer has paid the book", async () => {
+    const actor = userEvent.setup()
+    vi.mocked(getSaleReceipt).mockResolvedValue({ ...creditSale, credit_reducible: "0.00" })
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={[`/sales/${creditSale.id}/return`]}>
+          <Routes><Route path="/sales/:saleId/return" element={<SaleReturnPage />} /></Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await screen.findByRole("heading", { name: "Ticket C0FFEE00" })
+
+    await actor.click(screen.getByRole("button", { name: "Augmenter la quantité de Sac de riz" }))
+
+    expect(screen.queryByText(/Déduit du cahier/)).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Rembourser 5 000 FCFA par espèces" })).toBeEnabled()
+  })
+})

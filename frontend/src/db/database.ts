@@ -3,13 +3,14 @@ import Dexie, { type EntityTable, type Table } from "dexie"
 import type {
   LocalCart,
   LocalCashSession,
+  LocalCustomer,
   LocalMetadata,
   LocalProduct,
   LocalSale,
 } from "./types"
 
 export const POS_DATABASE_NAME = "PosDatabase"
-export const POS_DATABASE_VERSION = 3
+export const POS_DATABASE_VERSION = 4
 
 export class PosDatabase extends Dexie {
   products!: Table<LocalProduct, [string, string]>
@@ -17,6 +18,7 @@ export class PosDatabase extends Dexie {
   cashSessions!: EntityTable<LocalCashSession, "id">
   metadata!: EntityTable<LocalMetadata, "key">
   carts!: EntityTable<LocalCart, "id">
+  customers!: Table<LocalCustomer, [string, string]>
 
   constructor() {
     super(POS_DATABASE_NAME)
@@ -44,12 +46,22 @@ export class PosDatabase extends Dexie {
       })
     })
 
+    this.version(3).stores({
+      products: "[storeId+id],[storeId+barcode],storeId,barcode,name",
+      localSales: "id,[status+createdAt],status,createdAt,cashSessionId",
+      cashSessions: "id,cashRegisterId,status",
+      metadata: "key",
+      carts: "id,cashSessionId,[cashSessionId+status],status",
+    })
+
+    // v4 : cahier clients, snapshot par magasin (comme le catalogue).
     this.version(POS_DATABASE_VERSION).stores({
       products: "[storeId+id],[storeId+barcode],storeId,barcode,name",
       localSales: "id,[status+createdAt],status,createdAt,cashSessionId",
       cashSessions: "id,cashRegisterId,status",
       metadata: "key",
       carts: "id,cashSessionId,[cashSessionId+status],status",
+      customers: "[storeId+id],[storeId+phone],storeId,name",
     })
   }
 }

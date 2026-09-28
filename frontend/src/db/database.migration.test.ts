@@ -62,4 +62,34 @@ describe("PosDatabase migrations", () => {
     expect(await upgraded.carts.count()).toBe(0)
     upgraded.close()
   })
+
+  it("adds the customer book to a v3 database without touching held carts", async () => {
+    const legacy = new Dexie(POS_DATABASE_NAME)
+    legacy.version(3).stores({
+      products: "[storeId+id],[storeId+barcode],storeId,barcode,name",
+      localSales: "id,[status+createdAt],status,createdAt,cashSessionId",
+      cashSessions: "id,cashRegisterId,status",
+      metadata: "key",
+      carts: "id,cashSessionId,[cashSessionId+status],status",
+    })
+    await legacy.open()
+    await legacy.table("carts").put({
+      id: "cart-id",
+      cashSessionId: "session-id",
+      status: "HELD",
+      items: [],
+      createdAt: "2026-09-28T10:00:00Z",
+      updatedAt: "2026-09-28T10:00:00Z",
+      heldAt: "2026-09-28T10:00:00Z",
+    })
+    legacy.close()
+
+    const upgraded = new PosDatabase()
+    await upgraded.open()
+
+    expect(upgraded.verno).toBe(POS_DATABASE_VERSION)
+    expect(await upgraded.carts.get("cart-id")).toMatchObject({ status: "HELD" })
+    expect(await upgraded.customers.count()).toBe(0)
+    upgraded.close()
+  })
 })

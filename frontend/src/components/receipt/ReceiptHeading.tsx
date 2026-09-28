@@ -5,7 +5,7 @@ import { LogoMark } from "../ui/Logo"
 type ReceiptHeadingProps = {
   titleId?: string
   storeName: string
-  documentTitle: "Ticket de vente" | "Ticket de retour"
+  documentTitle: "Ticket de vente" | "Ticket de retour" | "Reçu de paiement"
   referenceLabel: string
   reference: string
   createdAt: string

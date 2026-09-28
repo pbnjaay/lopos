@@ -130,3 +130,59 @@ describe("SaleReturnReceiptPage", () => {
     await waitFor(() => expect(printMock).toHaveBeenCalledOnce())
   })
 })
+
+describe("SaleReturnReceiptPage — retour sur une vente au cahier", () => {
+  it("shows what was deducted from the book and what was refunded", async () => {
+    vi.mocked(getSaleReturn).mockResolvedValue({
+      ...saleReturn,
+      total_refund: "10000.00",
+      credit_reduction: "6000.00",
+      money_refund: "4000.00",
+      payment_method: "CASH",
+    })
+    vi.mocked(getSaleReceipt).mockResolvedValue({
+      ...originalSale,
+      customer: { id: "moussa", name: "Moussa Fall", phone: "+221771234567" },
+      credit_amount: "6000.00",
+    })
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[`/returns/${saleReturn.id}/receipt`]}>
+          <Routes>
+            <Route path="/returns/:returnId/receipt" element={<SaleReturnReceiptPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect((await screen.findByText("Valeur retournée")).nextSibling).toHaveTextContent("10 000 FCFA")
+    expect(screen.getByText("Déduit du cahier").nextSibling).toHaveTextContent("− 6 000 FCFA")
+    expect(screen.getByText("Client").nextSibling).toHaveTextContent("Moussa Fall")
+    expect(screen.getByText("Total remboursé").nextSibling).toHaveTextContent("4 000 FCFA")
+    expect(screen.getByText("Remboursement").nextSibling).toHaveTextContent("Espèces")
+  })
+
+  it("has no refund method line when everything went to the book", async () => {
+    vi.mocked(getSaleReturn).mockResolvedValue({
+      ...saleReturn,
+      total_refund: "5000.00",
+      credit_reduction: "5000.00",
+      money_refund: "0.00",
+      payment_method: null,
+    })
+    vi.mocked(getSaleReceipt).mockResolvedValue(originalSale)
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={[`/returns/${saleReturn.id}/receipt`]}>
+          <Routes>
+            <Route path="/returns/:returnId/receipt" element={<SaleReturnReceiptPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect((await screen.findByText("Total remboursé")).nextSibling).toHaveTextContent("0 FCFA")
+    expect(screen.queryByText("Remboursement")).not.toBeInTheDocument()
+  })
+})

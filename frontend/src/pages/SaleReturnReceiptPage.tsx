@@ -82,6 +82,7 @@ export function SaleReturnReceiptPage() {
   if (!receipt)
     return <RouteLoading message="Chargement du ticket de retour…" />;
   const { saleReturn, originalSale } = receipt;
+  const hasCreditReduction = Number(saleReturn.credit_reduction ?? 0) > 0;
 
   return (
     <main className="operational-page operational-page-narrow receipt-screen-page">
@@ -162,17 +163,43 @@ export function SaleReturnReceiptPage() {
           ))}
         </ul>
 
+        {/* Sur une vente au cahier, le retour efface d'abord la dette : le
+            ticket dit ce qui a été déduit, puis ce qui a été rendu en argent. */}
         <dl className="receipt-totals">
+          {hasCreditReduction ? (
+            <>
+              <div>
+                <dt>Valeur retournée</dt>
+                <dd>
+                  <Money backend={saleReturn.total_refund} />
+                </dd>
+              </div>
+              <div className="receipt-credit">
+                <dt>Déduit du cahier</dt>
+                <dd>
+                  <Money backend={saleReturn.credit_reduction!} sign="minus" />
+                </dd>
+              </div>
+              {originalSale.customer ? (
+                <div>
+                  <dt>Client</dt>
+                  <dd>{originalSale.customer.name}</dd>
+                </div>
+              ) : null}
+            </>
+          ) : null}
           <div className="receipt-total">
             <dt>Total remboursé</dt>
             <dd>
-              <Money backend={saleReturn.total_refund} />
+              <Money backend={saleReturn.money_refund ?? saleReturn.total_refund} />
             </dd>
           </div>
-          <div>
-            <dt>Remboursement</dt>
-            <dd>{paymentLabels[saleReturn.payment_method]}</dd>
-          </div>
+          {saleReturn.payment_method ? (
+            <div>
+              <dt>Remboursement</dt>
+              <dd>{paymentLabels[saleReturn.payment_method]}</dd>
+            </div>
+          ) : null}
         </dl>
 
         <footer className="receipt-footer">

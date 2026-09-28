@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -12,6 +13,7 @@ from apps.cash.models import CashSession
 from apps.catalog.models import Product
 from apps.observability.sentry_context import tag_sync_scope
 from apps.sales.exceptions import (
+    CustomerNotFound,
     InvalidPayment,
     InvalidSaleItems,
     ProductNotFound,
@@ -111,6 +113,8 @@ def process_sale_completed_event(
                 items=payload["items"],
                 payments=payload["payments"],
                 occurred_at=occurred_at,
+                customer_id=payload.get("customer_id"),
+                credit_amount=payload.get("credit_amount", Decimal("0.00")),
             )
             ProcessedSyncEvent.objects.create(
                 event_id=event_id,
@@ -159,6 +163,19 @@ def process_sale_completed_event(
             event_id=event_id,
             status=SyncEventStatus.REJECTED,
             code="PRODUCT_NOT_FOUND",
+            message=str(exc),
+        )
+    except CustomerNotFound as exc:
+        # Le client est choisi dans le cache local du POS : absent côté
+        # serveur (ou rattaché à un autre magasin), la dette ne peut pas être
+        # inscrite. Rejet visible dans les ventes en conflit, jamais silencieux.
+        logger.warning(
+            "sync_event_rejected", extra={**log_context, "code": "CUSTOMER_NOT_FOUND"}
+        )
+        return EventOutcome(
+            event_id=event_id,
+            status=SyncEventStatus.REJECTED,
+            code="CUSTOMER_NOT_FOUND",
             message=str(exc),
         )
     except (InvalidPayment, InvalidSaleItems) as exc:

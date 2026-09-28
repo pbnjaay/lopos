@@ -5,6 +5,9 @@ import { RequireAuth } from "../features/auth/RequireAuth"
 import { SessionRoute } from "../features/cash-session/SessionRoute"
 import { AppEntryPage } from "../pages/AppEntryPage"
 import { CashSessionReportPage } from "../pages/CashSessionReportPage"
+import { CustomerDetailPage } from "../pages/CustomerDetailPage"
+import { CustomerPaymentReceiptPage } from "../pages/CustomerPaymentReceiptPage"
+import { CustomersPage } from "../pages/CustomersPage"
 import { CloseCashSessionPage } from "../pages/CloseCashSessionPage"
 import { LoginPage } from "../pages/LoginPage"
 import { OpenCashSessionPage } from "../pages/OpenCashSessionPage"
@@ -71,6 +74,9 @@ export const router = createBrowserRouter([
           { path: "/sales/:saleId/return", element: <SessionRoute requireOpen><SaleReturnPage /></SessionRoute> },
           { path: "/returns/new", element: <Navigate to="/sales" replace /> },
           { path: "/returns/:returnId/receipt", element: <SessionRoute requireOpen><SaleReturnReceiptPage /></SessionRoute> },
+          { path: "/customers", element: <SessionRoute requireOpen><CustomersPage /></SessionRoute> },
+          { path: "/customers/:customerId", element: <SessionRoute requireOpen><CustomerDetailPage /></SessionRoute> },
+          { path: "/customer-payments/:paymentId/receipt", element: <SessionRoute requireOpen><CustomerPaymentReceiptPage /></SessionRoute> },
         ],
       },
       { path: "*", element: <Navigate to="/" replace /> },

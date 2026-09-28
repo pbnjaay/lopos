@@ -17,8 +17,10 @@ export function trackSaleCompleted(props: {
   // Méthode du premier versement — celle du seul paiement pour une vente
   // classique. `is_split_payment` distingue un paiement mixte sans altérer
   // cette dimension pour les tableaux de bord analytics déjà en place.
-  payment_method: PaymentMethod
+  // "CREDIT" pour une vente entièrement mise au cahier (aucun paiement).
+  payment_method: PaymentMethod | "CREDIT"
   is_split_payment: boolean
+  is_credit_sale: boolean
   items_count: number
   total_amount: number
   offline: boolean
@@ -28,7 +30,7 @@ export function trackSaleCompleted(props: {
 
 export function trackSaleFailed(props: {
   error_code: string
-  payment_method: PaymentMethod | null
+  payment_method: PaymentMethod | "CREDIT" | null
   is_split_payment: boolean
   offline: boolean
 }) {
