@@ -6,6 +6,7 @@ from pathlib import Path
 import dj_database_url
 import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
+from django.templatetags.static import static
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from sentry_sdk.integrations.django import DjangoIntegration
@@ -110,7 +111,28 @@ UNFOLD = {
     # Lien "Voir le site" du bandeau admin : ce backend n'a pas de front qui
     # lui est propre, il renvoie vers l'app caisse.
     "SITE_URL": FRONTEND_URL,
-    "SITE_SYMBOL": "point_of_sale",
+    # Logo LoPOS (« lo », le o en goutte), le même que l'app caisse : généré
+    # dans static/brand/ par `npm run icons` côté frontend. La tuile verte
+    # se lit sur les deux thèmes, une seule image suffit.
+    "SITE_ICON": lambda request: static("brand/logo.svg"),
+    "SITE_FAVICONS": [
+        {
+            "rel": "icon",
+            "type": "image/svg+xml",
+            "href": lambda request: static("brand/logo.svg"),
+        },
+        {
+            "rel": "icon",
+            "type": "image/png",
+            "sizes": "32x32",
+            "href": lambda request: static("brand/favicon-32.png"),
+        },
+        {
+            "rel": "apple-touch-icon",
+            "sizes": "180x180",
+            "href": lambda request: static("brand/apple-touch-icon.png"),
+        },
+    ],
     "DASHBOARD_CALLBACK": "apps.dashboard.views.manager_dashboard_callback",
     # Rampe verte LoPOS (dérivée par OKLCH du vert de marque du POS, #176b4d,
     # place au niveau 600 - celui que consomment bg-primary-600/text-primary-600,
@@ -306,6 +328,7 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 STORAGES = {
