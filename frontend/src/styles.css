@@ -2933,6 +2933,23 @@ a.list-row:active {
   font-weight: 700;
 }
 
+/* Choix du client d'un cahier : mêmes lignes de résultat que la recherche
+   produit, dans une liste bornée pour que le pied de modale reste visible. */
+.customer-picker-results {
+  max-height: min(22rem, 45vh);
+  margin-top: var(--space-3);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.customer-picker-results:empty {
+  display: none;
+}
+
+.customer-balance-due {
+  color: var(--color-danger);
+}
+
 /* Le panneau remplit sa colonne : trois rangees fixes — en-tete, liste
    defilante, pied — de sorte que le total et ENCAISSER restent a l'ecran
    quel que soit le nombre d'articles. */

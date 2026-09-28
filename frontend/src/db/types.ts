@@ -30,7 +30,21 @@ export type LocalCashSession = {
   cachedAt: string
 }
 
-export type LocalSaleStatus = "PENDING_SYNC" | "SYNCED" | "CONFLICT"
+/** Client du cahier mis en cache pour la recherche en caisse, y compris hors ligne. */
+export type LocalCustomer = {
+  id: string
+  storeId: string
+  name: string
+  phone: string | null
+  isActive: boolean
+  /** Solde dû connu du serveur au dernier snapshot, en FCFA entiers. */
+  serverBalance: number
+  lastActivityAt: string | null
+  updatedAt: string
+  cachedAt: string
+}
+
+export type LocalSaleStatus ="PENDING_SYNC" | "SYNCED" | "CONFLICT"
 
 export type LocalSaleItem = {
   productId: string

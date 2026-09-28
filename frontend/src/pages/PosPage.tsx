@@ -47,6 +47,7 @@ import { pendingSalesCountQueryKey } from "../features/offline/usePendingSalesCo
 import { ProductGrid } from "../features/products/ProductGrid"
 import { ProductSearch } from "../features/products/ProductSearch"
 import { useProductCatalog } from "../features/products/queries"
+import { useCustomerBook } from "../features/customers/queries"
 import type { CatalogProduct } from "../features/products/types"
 import { cancelSaleEverywhere } from "../features/sales/cancelSale"
 import { type ReceiptView, receiptViewFromLocalSale } from "../features/sales/receiptView"
@@ -113,6 +114,9 @@ export function PosPage() {
   // pour la vente en cours, on le retire dès que le panier change de vie.
   const removalUndoToastRef = useRef<number | null>(null)
   const catalog = useProductCatalog(selectedRegister?.store_id ?? null)
+  // Cahier clients en cache local dès l'ouverture de la caisse : c'est lui
+  // qui permet de choisir le client d'une vente à crédit hors ligne.
+  useCustomerBook(selectedRegister?.store_id ?? null)
   const sessionSalesQuery = useQuery({
     queryKey: ["local-sales-for-session", ownSession?.id],
     queryFn: () => listRecentLocalSales(ownSession!.id, Number.POSITIVE_INFINITY),

@@ -84,6 +84,19 @@ export type Product = {
   updated_at: string
 }
 
+/** Client du cahier, avec son solde dû calculé côté serveur. */
+export type Customer = {
+  id: string
+  store_id: string
+  name: string
+  /** Format E.164 (+221771234567) ; null pour un client repris sans numéro. */
+  phone: string | null
+  is_active: boolean
+  balance: string
+  last_activity_at: string | null
+  updated_at: string
+}
+
 export type PaymentMethod = "CASH" | "WAVE" | "ORANGE_MONEY"
 
 export type SaleResponse = {
