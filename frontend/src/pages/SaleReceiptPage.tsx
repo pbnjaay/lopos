@@ -148,7 +148,7 @@ export function SaleReceiptPage() {
           {hasReturns ? (
             <>
               <div className="receipt-returned-total">
-                <dt>Remboursements</dt>
+                <dt>Retours</dt>
                 <dd><Money value={receipt.returnedTotal} sign="minus" /></dd>
               </div>
               <div className="receipt-net-total">

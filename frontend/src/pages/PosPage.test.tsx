@@ -784,13 +784,24 @@ describe("POS credit sale (cahier client)", () => {
     await db.metadata.clear()
   })
 
-  it("puts a whole sale on the customer's book from the cart footer", async () => {
+  it("keeps the cart free of any book button", async () => {
     const userEvents = userEvent.setup()
     mockServer()
 
     renderPos()
     await scanCoca(userEvents)
-    await userEvents.click(screen.getByRole("button", { name: /Mettre au cahier/ }))
+
+    expect(screen.queryByRole("button", { name: /cahier/i })).not.toBeInTheDocument()
+  })
+
+  it("puts a whole sale on the book when the customer pays nothing now", async () => {
+    const userEvents = userEvent.setup()
+    mockServer()
+
+    renderPos()
+    await scanCoca(userEvents)
+    await openCashPayment(userEvents)
+    await userEvents.click(screen.getByRole("button", { name: /Tout mettre au cahier/ }))
     expect(await screen.findByText("À mettre au cahier")).toBeInTheDocument()
     await pickMoussa(userEvents)
 
@@ -841,6 +852,68 @@ describe("POS credit sale (cahier client)", () => {
     )
   })
 
+  it("puts the rest on the book right from the cash screen", async () => {
+    const userEvents = userEvent.setup()
+    mockServer()
+
+    renderPos()
+    await scanCoca(userEvents)
+    await openCashPayment(userEvents)
+    await userEvents.type(screen.getByLabelText("Montant reçu"), "300")
+    await userEvents.click(screen.getByRole("button", { name: /Mettre le reste au cahier/ }))
+
+    expect(await screen.findByText("Reste à mettre au cahier")).toBeInTheDocument()
+    await pickMoussa(userEvents)
+    const confirmation = await screen.findByRole("dialog", { name: "Mettre au cahier" })
+    expect(within(confirmation).getByText("Déjà payé").nextSibling).toHaveTextContent("300 FCFA")
+    await userEvents.click(within(confirmation).getByRole("button", { name: "Valider la vente" }))
+
+    await screen.findByRole("heading", { name: "Vente validée" })
+    expect(createLocalSale).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payments: [{ method: "CASH", amount: 300, receivedAmount: 300 }],
+        credit: expect.objectContaining({ amount: 200 }),
+      }),
+    )
+  })
+
+  it("never offers the book once the amount received covers the total", async () => {
+    const userEvents = userEvent.setup()
+    mockServer()
+
+    renderPos()
+    await scanCoca(userEvents)
+    await openCashPayment(userEvents)
+    expect(screen.getByRole("button", { name: /Tout mettre au cahier/ })).toBeInTheDocument()
+    await userEvents.type(screen.getByLabelText("Montant reçu"), "500")
+
+    expect(screen.queryByRole("button", { name: /cahier/i })).not.toBeInTheDocument()
+  })
+
+  it("puts the rest on the book from a mobile money screen", async () => {
+    const userEvents = userEvent.setup()
+    mockServer()
+
+    renderPos()
+    await scanCoca(userEvents)
+    await userEvents.click(screen.getByRole("button", { name: /Wave/ }))
+    const amount = await screen.findByLabelText("Montant reçu")
+    expect(screen.queryByRole("button", { name: /cahier/i })).not.toBeInTheDocument()
+    await userEvents.clear(amount)
+    await userEvents.type(amount, "100")
+    await userEvents.click(screen.getByRole("button", { name: /Mettre le reste au cahier/ }))
+
+    await pickMoussa(userEvents)
+    await userEvents.click(await screen.findByRole("button", { name: "Valider la vente" }))
+    await screen.findByRole("heading", { name: "Vente validée" })
+    expect(createLocalSale).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payments: [{ method: "WAVE", amount: 100, receivedAmount: null }],
+        credit: expect.objectContaining({ amount: 400 }),
+      }),
+    )
+  })
+
   it("opens the customer choice with F4", async () => {
     const userEvents = userEvent.setup()
     mockServer()
@@ -858,7 +931,7 @@ describe("POS credit sale (cahier client)", () => {
 
     renderPos()
     await scanCoca(userEvents)
-    await userEvents.click(screen.getByRole("button", { name: /Mettre au cahier/ }))
+    fireEvent.keyDown(window, { key: "F4" })
     await pickMoussa(userEvents)
     const confirmation = await screen.findByRole("dialog", { name: "Mettre au cahier" })
     await userEvents.click(within(confirmation).getAllByRole("button", { name: "Changer de client" })[0]!)

@@ -183,8 +183,9 @@ describe("CustomerDetailPage", () => {
     renderAt("/customers/moussa")
 
     expect(await screen.findByRole("heading", { name: "Moussa Fall" })).toBeInTheDocument()
-    expect(screen.getByRole("region", { name: "Solde du client" })).toHaveTextContent("18 500 FCFA")
-    const history = screen.getByRole("region", { name: "Historique du cahier" })
+    expect(screen.getByText("Solde dû").nextSibling).toHaveTextContent("18 500 FCFA")
+    expect(screen.getByText("Téléphone").nextSibling).toHaveTextContent("77 123 45 67")
+    const history = screen.getByRole("list", { name: "Historique du cahier" })
     const rows = within(history).getAllByRole("listitem")
     expect(rows[0]).toHaveTextContent("Achat")
     expect(rows[0]).toHaveTextContent("+ 5 000 FCFA")
@@ -215,21 +216,22 @@ describe("CustomerDetailPage", () => {
 
     // Le solde serveur s'affiche d'abord ; la dette en attente s'y ajoute
     // dès que la lecture locale répond.
-    await screen.findByText(/de ventes en attente de synchronisation/)
-    const balance = screen.getByRole("region", { name: "Solde du client" })
-    expect(balance).toHaveTextContent("19 500 FCFA")
-    expect(balance).toHaveTextContent("dont 1 000 FCFA de ventes en attente de synchronisation")
+    await screen.findByText("Ventes en attente de synchronisation")
+    expect(screen.getByText("Ventes en attente de synchronisation").nextSibling).toHaveTextContent("1 000 FCFA")
+    expect(screen.getByText("Connu du serveur").nextSibling).toHaveTextContent("18 500 FCFA")
+    expect(screen.getByText("Solde dû").nextSibling).toHaveTextContent("19 500 FCFA")
     await userEvents.click(screen.getByRole("button", { name: "Enregistrer un paiement" }))
     expect(screen.getByLabelText("Montant payé")).toHaveValue("18 500")
   })
 
   it("does not offer a payment to a settled customer", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ ...detail, balance: "0.00", entries: [] }),
+      jsonResponse({ ...detail, balance: "0.00" }),
     )
     renderAt("/customers/moussa")
 
-    expect(await screen.findByRole("button", { name: "Enregistrer un paiement" })).toBeDisabled()
+    expect(await screen.findByText("Ce client ne doit rien.")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Enregistrer un paiement" })).not.toBeInTheDocument()
   })
 
   it("falls back to the cached balance offline, without payments", async () => {
@@ -238,9 +240,9 @@ describe("CustomerDetailPage", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
     renderAt("/customers/moussa")
 
-    expect(await screen.findByRole("region", { name: "Solde du client" })).toHaveTextContent("18 500 FCFA")
+    expect((await screen.findByText("Solde dû")).nextSibling).toHaveTextContent("18 500 FCFA")
     expect(screen.getByText(/L’historique et les paiements reviennent avec la connexion/)).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Enregistrer un paiement" })).toBeDisabled()
+    expect(screen.queryByRole("button", { name: "Enregistrer un paiement" })).not.toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

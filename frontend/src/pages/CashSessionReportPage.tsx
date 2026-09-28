@@ -7,10 +7,9 @@ import { getCashSessionSummary } from "../api/cashSessions"
 import { getStore } from "../api/stores"
 import { PageHeader } from "../components/layout/PageHeader"
 import { Button } from "../components/ui/Button"
-import { Money } from "../components/ui/Money"
 import { RouteError, RouteLoading } from "../components/ui/RouteState"
+import { ZReportTotals } from "../features/cash-session/ZReportTotals"
 import { formatDateTime } from "../utils/date"
-import { describeCashDifference } from "../utils/money"
 
 export function CashSessionReportPage() {
   const { sessionId } = useParams<{ sessionId: string }>()
@@ -64,7 +63,6 @@ export function CashSessionReportPage() {
   const summary = summaryQuery.data
   const store = storeQuery.data
   if (!summary || !store) return <RouteLoading message="Chargement du rapport Z…" />
-  const difference = describeCashDifference(summary.cash_difference ?? "0.00")
 
   return (
     <main className="operational-page operational-page-narrow report-page">
@@ -98,59 +96,7 @@ export function CashSessionReportPage() {
           </span>
         </div>
 
-        <dl className="closing-summary report-totals">
-          <div className="closing-summary-total">
-            <dt>Nombre de ventes</dt>
-            <dd>{summary.sales_count}</dd>
-          </div>
-          <div className="closing-summary-total">
-            <dt>Ventes brutes</dt>
-            <dd><Money backend={summary.gross_sales} /></dd>
-          </div>
-          {summary.returns_total !== undefined ? <div>
-            <dt>Retours</dt>
-            <dd><Money backend={summary.returns_total ?? "0.00"} sign="minus" /></dd>
-          </div> : null}
-          {summary.net_sales !== undefined ? <div className="closing-summary-total">
-            <dt>CA net</dt>
-            <dd><Money backend={summary.net_sales ?? summary.gross_sales} /></dd>
-          </div> : null}
-          <div>
-            <dt>Espèces</dt>
-            <dd><Money backend={summary.payments.cash} /></dd>
-          </div>
-          <div>
-            <dt>Wave</dt>
-            <dd><Money backend={summary.payments.wave} /></dd>
-          </div>
-          <div>
-            <dt>Orange Money</dt>
-            <dd><Money backend={summary.payments.orange_money} /></dd>
-          </div>
-          {summary.refunds ? <><div><dt>Remboursements espèces</dt><dd><Money backend={summary.refunds.cash} sign="minus" /></dd></div>
-          <div><dt>Remboursements Wave</dt><dd><Money backend={summary.refunds.wave} sign="minus" /></dd></div>
-          <div><dt>Remboursements Orange Money</dt><dd><Money backend={summary.refunds.orange_money} sign="minus" /></dd></div></> : null}
-          <div className="closing-summary-opening">
-            <dt>Fond initial</dt>
-            <dd><Money backend={summary.opening_balance} /></dd>
-          </div>
-          <div>
-            <dt>Cash attendu</dt>
-            <dd><Money backend={summary.expected_cash} /></dd>
-          </div>
-          <div>
-            <dt>Cash compté</dt>
-            <dd>
-              {summary.counted_cash === null
-                ? "Non compté"
-                : <Money backend={summary.counted_cash} />}
-            </dd>
-          </div>
-          <div className={`cash-difference cash-difference-${difference.kind}`}>
-            <dt>Écart</dt>
-            <dd>{summary.cash_difference === null ? "Non disponible" : difference.label}</dd>
-          </div>
-        </dl>
+        <ZReportTotals summary={summary} />
       </article>
     </main>
   )

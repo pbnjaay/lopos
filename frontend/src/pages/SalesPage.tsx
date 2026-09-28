@@ -345,7 +345,7 @@ export function SalesPage() {
                           </span>
                           {returned > 0 ? (
                             <span className="sales-row-refunded">
-                              −{formatBackendMoney(sale.returned_total!)} remboursés
+                              −{formatBackendMoney(sale.returned_total!)} retournés
                             </span>
                           ) : null}
                         </span>

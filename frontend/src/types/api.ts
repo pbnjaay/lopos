@@ -59,7 +59,18 @@ export type CashSessionSummary = {
     wave: string
     orange_money: string
   }
+  /** Argent réellement rendu sur les retours, par moyen (hors part déduite du cahier). */
   refunds?: {
+    cash: string
+    wave: string
+    orange_money: string
+  }
+  /** Part des ventes mise au cahier : pas de l'argent reçu. */
+  credit_sales?: string
+  /** Part des retours effacée du cahier : pas de l'argent rendu. */
+  credit_returns?: string
+  /** Paiements de clients sur leur cahier : de l'argent reçu, mais pas des ventes. */
+  customer_payments?: {
     cash: string
     wave: string
     orange_money: string

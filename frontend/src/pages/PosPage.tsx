@@ -326,6 +326,15 @@ export function PosPage() {
     await saleMutation.mutateAsync({ legs, credit: null })
   }
 
+  /**
+   * Depuis un écran de paiement : ce que le client a donné (s'il a donné
+   * quelque chose) est un versement comme un autre, le reste part au cahier.
+   */
+  function creditRemainderAfter(leg: PaymentLeg | null) {
+    if (leg && leg.amount > 0) setPaymentLegs((legs) => [...legs, leg])
+    goToCreditCustomer()
+  }
+
   /** Le reste dû part au cahier : on choisit d'abord le client. */
   function goToCreditCustomer() {
     saleMutation.reset()
@@ -625,7 +634,6 @@ export function PosPage() {
             onInteractionComplete={focusProductSearch}
             primaryMethod={primaryPaymentMethod}
             onCheckoutMethod={startCheckout}
-            onCredit={startCreditCheckout}
           />
         </div>
       ) : (
@@ -696,6 +704,11 @@ export function PosPage() {
             if (!saleMutation.isPending) closeCheckout()
           }}
           onConfirm={handleCashPayment}
+          onCredit={(received) =>
+            creditRemainderAfter(
+              received > 0 ? { method: "CASH", amount: received, receivedAmount: received } : null,
+            )
+          }
         />
       ) : null}
       {checkoutStep === "WAVE" || checkoutStep === "ORANGE_MONEY" ? (
@@ -713,6 +726,9 @@ export function PosPage() {
             if (!saleMutation.isPending) closeCheckout()
           }}
           onConfirm={(amount) => handleMobilePayment(checkoutStep, amount)}
+          onCredit={(amount) =>
+            creditRemainderAfter(amount > 0 ? { method: checkoutStep, amount } : null)
+          }
         />
       ) : null}
       {completedSale ? (

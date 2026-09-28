@@ -3586,16 +3586,25 @@ a.list-row:active {
   opacity: 0.7;
 }
 
-/* Cahier client : sous la rangée des moyens de paiement, en retrait. */
-.checkout-credit {
+/* Cahier : une action du reste à payer, pas un moyen de paiement. Discrète
+   (un lien dans l'encadré du reste), elle n'existe que s'il reste à payer. */
+.payment-credit-action {
+  justify-self: center;
   margin-top: var(--space-2);
-  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
-.checkout-credit small {
-  font-size: var(--text-eyebrow);
-  font-weight: 600;
-  opacity: 0.7;
+.payment-credit-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 /* Le cahier n'est pas un encaissement : même carte, bordure pointillée. */
@@ -4496,66 +4505,6 @@ a.list-row:active {
 }
 
 /* ── Cahier clients ─────────────────────────────────────────────── */
-.customer-balance-card {
-  gap: var(--space-1);
-}
-
-.customer-balance-card > span {
-  color: var(--color-text-muted);
-  font-size: var(--text-secondary);
-}
-
-.customer-balance-card > strong {
-  font-size: var(--text-amount-hero);
-}
-
-.customer-balance-card > small {
-  color: var(--color-text-muted);
-}
-
-.ledger-list {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.ledger-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-3) 0;
-  border-top: 1px solid var(--color-border);
-}
-
-.ledger-row-main,
-.ledger-row-numbers {
-  display: grid;
-  gap: var(--space-1);
-}
-
-.ledger-row-main span,
-.ledger-row-main small,
-.ledger-row-numbers span {
-  color: var(--color-text-muted);
-  font-size: var(--text-secondary);
-}
-
-.ledger-row-numbers {
-  flex: 0 0 auto;
-  text-align: right;
-}
-
-/* Le client doit plus : rouge. Il doit moins : vert. */
-.ledger-amount-debit {
-  color: var(--color-danger);
-}
-
-.ledger-amount-credit {
-  color: var(--color-success);
-}
-
 .repayment-new-balance {
   margin: 0;
   color: var(--color-text-muted);
@@ -4566,4 +4515,28 @@ a.list-row:active {
     display: flex;
     flex-wrap: wrap;
   }
+}
+
+/* ── Rapport Z en sections ──────────────────────────────────────── */
+.report-section + .report-section {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.report-section:first-of-type {
+  margin-top: var(--space-6);
+}
+
+.report-section .report-totals {
+  margin-top: var(--space-2);
+}
+
+.report-section-title {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }

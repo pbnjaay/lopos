@@ -19,6 +19,8 @@ type MobileMoneyConfirmationProps = {
   onClose: () => void
   onBack: () => void
   onConfirm: (amount: number) => void | Promise<void>
+  /** Le reste (après ce qui a été reçu, 0 si rien) part au cahier. Proposé seulement s'il en reste. */
+  onCredit?: (amount: number) => void
 }
 
 const labels: Record<Exclude<PaymentMethod, "CASH">, string> = {
@@ -35,6 +37,7 @@ export function MobileMoneyConfirmation({
   onClose,
   onBack,
   onConfirm,
+  onCredit,
 }: MobileMoneyConfirmationProps) {
   const submissionLock = useRef(false)
   const isSlow = useSlowSubmitHint(isSubmitting)
@@ -49,6 +52,7 @@ export function MobileMoneyConfirmation({
   // jamais un versement volontairement excédentaire.
   const canSubmit = amount !== null && amount > 0 && amount <= total
   const exceedsTotal = amount !== null && amount > total
+  const isShort = amount === null || amount < total
 
   function handleAmountChange(value: string) {
     if (/^[\d\s]*$/.test(value)) setAmountInput(formatMoneyInput(value))
@@ -123,6 +127,25 @@ export function MobileMoneyConfirmation({
             </small>
           ) : null}
         </div>
+
+        {/* Même place que sur l'écran espèces : le cahier n'apparaît que s'il
+            reste quelque chose à payer après ce versement. */}
+        {isShort && onCredit ? (
+          <div className="change-preview change-preview-pending">
+            <span>Reste à payer après ce versement</span>
+            <strong>
+              <Money value={total - (amount ?? 0)} />
+            </strong>
+            <button
+              type="button"
+              className="payment-credit-action"
+              disabled={isSubmitting}
+              onClick={() => onCredit(amount ?? 0)}
+            >
+              {amount ? "Mettre le reste au cahier" : "Tout mettre au cahier"} →
+            </button>
+          </div>
+        ) : null}
 
         {errorMessage ? <InlineAlert tone="error">{errorMessage}</InlineAlert> : null}
         {isSubmitting && isSlow ? (

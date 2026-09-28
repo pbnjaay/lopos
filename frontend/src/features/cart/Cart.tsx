@@ -34,8 +34,6 @@ type CartProps = {
   onRemove: (productId: string) => void
   onClear: () => void
   onCheckoutMethod: (method: PaymentMethod) => void
-  /** Vente entièrement mise au cahier d'un client (F4). */
-  onCredit?: () => void
   /** Moyen de paiement dominant de la session, mis en avant dans le pied du panier. */
   primaryMethod?: PaymentMethod | null
   onSuspend: () => void
@@ -61,7 +59,6 @@ export function Cart({
   onRemove,
   onClear,
   onCheckoutMethod,
-  onCredit,
   primaryMethod = null,
   onSuspend,
   onDialogOpenChange,
@@ -238,21 +235,6 @@ export function Cart({
             </Button>
           ))}
         </div>
-        {/* Sous les trois moyens, jamais parmi eux : le cahier n'est pas un
-            encaissement, et la rangée que la main connaît ne bouge pas. */}
-        {onCredit ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            block
-            className="checkout-credit"
-            disabled={items.length === 0}
-            onClick={onCredit}
-          >
-            Mettre au cahier
-            <small>F4</small>
-          </Button>
-        ) : null}
       </footer>
     </section>
 

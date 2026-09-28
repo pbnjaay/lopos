@@ -15,6 +15,11 @@ type CashPaymentModalProps = {
   isPartial?: boolean
   onClose: () => void
   onConfirm: (receivedAmount: number) => void | Promise<void>
+  /**
+   * Le client ne paie pas tout : ce qui est reçu (0 si rien) est encaissé et
+   * le reste part au cahier. Proposé seulement quand il reste quelque chose.
+   */
+  onCredit?: (receivedAmount: number) => void
   isSubmitting?: boolean
   errorMessage?: string | null
   onBack?: () => void
@@ -25,6 +30,7 @@ export function CashPaymentModal({
   isPartial = false,
   onClose,
   onConfirm,
+  onCredit,
   isSubmitting = false,
   errorMessage = null,
   onBack,
@@ -199,6 +205,19 @@ export function CashPaymentModal({
           <strong>
             <Money value={isSufficient ? changeAmount : missingAmount} />
           </strong>
+          {/* Le cahier n'est pas un moyen de paiement : c'est ce reste-là,
+              quand le client ne le paie pas. D'où sa place ici, et nulle part
+              quand le montant reçu couvre tout. */}
+          {!isSufficient && onCredit ? (
+            <button
+              type="button"
+              className="payment-credit-action"
+              disabled={isSubmitting}
+              onClick={() => onCredit(receivedAmount ?? 0)}
+            >
+              {receivedAmount ? "Mettre le reste au cahier" : "Tout mettre au cahier"} →
+            </button>
+          ) : null}
         </div>
 
         {errorMessage ? <InlineAlert tone="error">{errorMessage}</InlineAlert> : null}
