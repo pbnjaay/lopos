@@ -9,6 +9,7 @@ from apps.cash.views import (
 )
 from apps.catalog.views import ProductViewSet
 from apps.customers.views import (
+    CustomerDetailView,
     CustomerListCreateView,
     CustomerPaymentCreateView,
     CustomerPaymentDetailView,
@@ -58,6 +59,7 @@ urlpatterns = [
     path("returns/", SaleReturnListCreateView.as_view(), name="sale-return-list"),
     path("returns/<uuid:pk>/", SaleReturnDetailView.as_view(), name="sale-return-detail"),
     path("customers/", CustomerListCreateView.as_view(), name="customer-list"),
+    path("customers/<uuid:pk>/", CustomerDetailView.as_view(), name="customer-detail"),
     path(
         "customer-payments/",
         CustomerPaymentCreateView.as_view(),

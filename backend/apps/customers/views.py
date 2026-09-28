@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.response import Response
@@ -16,13 +18,14 @@ from .exceptions import (
     InvalidCustomerPayment,
     InvalidPhone,
 )
-from .models import Customer, CustomerPayment
+from .models import Customer, CustomerLedgerEntry, CustomerPayment
 from .serializers import (
     CreateCustomerPaymentSerializer,
     CreateCustomerSerializer,
     CustomerBookQuerySerializer,
     CustomerPaymentSerializer,
     CustomerSerializer,
+    LedgerEntrySerializer,
 )
 from .services import create_customer, record_customer_payment, with_book_summary
 
@@ -103,10 +106,45 @@ class CustomerListCreateView(APIView):
 
 
 def _payment_response(payment: CustomerPayment, http_status: int) -> Response:
-    payment = CustomerPayment.objects.select_related("customer", "store", "created_by").get(
+    payment = CustomerPayment.objects.select_related(
+        "customer", "store", "created_by", "cash_session__cash_register"
+    ).get(
         pk=payment.pk
     )
     return Response(CustomerPaymentSerializer(payment).data, status=http_status)
+
+
+class CustomerDetailView(APIView):
+    """Fiche client : solde et historique complet du cahier, du plus récent
+    au plus ancien, chaque ligne portant le solde juste après elle.
+
+    L'historique d'un cahier de boutique reste court (quelques centaines de
+    lignes au plus) : il est renvoyé en entier, sans pagination.
+    """
+
+    def get(self, request, pk=None) -> Response:
+        customer = get_object_or_404(Customer.objects.select_related("store"), pk=pk)
+        _, error = _accessible_store_or_error(request, customer.store_id)
+        if error is not None:
+            return error
+
+        entries = list(
+            CustomerLedgerEntry.objects.filter(customer=customer)
+            .select_related("customer_payment", "created_by")
+            .order_by("occurred_at", "created_at", "id")
+        )
+        running = Decimal("0.00")
+        for entry in entries:
+            running += entry.amount
+            entry.running_balance = running
+        entries.reverse()
+
+        return Response(
+            {
+                **_customer_data(customer),
+                "entries": LedgerEntrySerializer(entries, many=True).data,
+            }
+        )
 
 
 class CustomerPaymentCreateView(APIView):

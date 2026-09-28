@@ -7,9 +7,15 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.cash.models import CashSession
 from apps.customers.models import Customer
-from apps.customers.services import create_customer, record_adjustment, record_opening_balance
-from apps.stores.models import Store, StoreAssignment
+from apps.customers.services import (
+    create_customer,
+    record_adjustment,
+    record_customer_payment,
+    record_opening_balance,
+)
+from apps.stores.models import CashRegister, Store, StoreAssignment
 
 
 pytestmark = pytest.mark.django_db
@@ -152,3 +158,53 @@ def test_quick_create_requires_store_access(store) -> None:
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert Customer.objects.count() == 0
+
+
+def test_customer_detail_returns_history_with_running_balance(api_client, store, cashier) -> None:
+    manager = User.objects.create_user(username="gerant")
+    customer = create_customer(store=store, name="Moussa Fall", phone="771234567")
+    record_opening_balance(customer=customer, amount=Decimal("8500"), reference="ACCESS:1")
+    session = CashSession.objects.create(
+        cash_register=CashRegister.objects.create(store=store, name="Caisse 01"),
+        cashier=cashier,
+        opening_balance=Decimal("0"),
+    )
+    payment = record_customer_payment(
+        customer=customer, cash_session=session, created_by=cashier, method="WAVE",
+        amount=Decimal("2000"), idempotency_key=uuid4(),
+    )
+    record_adjustment(customer=customer, amount=Decimal("-500"), reason="Erreur papier", created_by=manager)
+
+    response = api_client.get(reverse("customer-detail", kwargs={"pk": customer.pk}))
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["name"] == "Moussa Fall"
+    assert response.data["balance"] == "6000.00"
+    entries = response.data["entries"]
+    assert [e["entry_type"] for e in entries] == ["ADJUSTMENT", "PAYMENT", "OPENING_BALANCE"]
+    assert [e["running_balance"] for e in entries] == ["6000.00", "6500.00", "8500.00"]
+    assert entries[0]["label"] == "Ajustement"
+    assert entries[0]["reason"] == "Erreur papier"
+    assert entries[0]["created_by"] == "gerant"
+    assert entries[1]["amount"] == "-2000.00"
+    assert entries[1]["customer_payment"] == {
+        "id": payment.id, "reference": payment.reference, "method": "WAVE",
+    }
+    assert entries[2]["reference"] == "ACCESS:1"
+    assert entries[2]["created_by"] is None
+
+
+def test_customer_detail_requires_store_access(store) -> None:
+    customer = create_customer(store=store, name="Moussa Fall", phone="771234567")
+    client = APIClient()
+    client.force_authenticate(User.objects.create_user(username="outsider"))
+
+    response = client.get(reverse("customer-detail", kwargs={"pk": customer.pk}))
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+def test_customer_detail_unknown(api_client) -> None:
+    response = api_client.get(reverse("customer-detail", kwargs={"pk": uuid4()}))
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND

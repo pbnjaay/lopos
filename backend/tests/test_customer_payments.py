@@ -297,6 +297,7 @@ def test_payment_api_returns_the_receipt_data(api_client, customer, cash_session
     assert data["reference"].startswith("RMB-")
     assert data["customer"] == {"id": str(customer.pk), "name": "Moussa Fall", "phone": "+221771234567"}
     assert data["store"]["name"] == "Supérette Test"
+    assert data["cash_register"]["name"] == "Caisse 01"
     assert data["method"] == "CASH"
     assert data["amount"] == "4000.00"
     assert data["change_amount"] == "1000.00"

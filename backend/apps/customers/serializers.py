@@ -5,7 +5,7 @@ from rest_framework import serializers
 from apps.cash.models import CashSession
 from apps.sales.models import Payment
 
-from .models import Customer, CustomerPayment
+from .models import Customer, CustomerLedgerEntry, CustomerPayment
 
 
 class CustomerBriefSerializer(serializers.ModelSerializer):
@@ -39,6 +39,41 @@ class CustomerSerializer(serializers.ModelSerializer):
         )
 
 
+class LedgerEntrySerializer(serializers.ModelSerializer):
+    """Ligne du cahier telle que la fiche client l'affiche, avec le solde
+    courant juste après elle (`running_balance`, calculé par la vue)."""
+
+    label = serializers.CharField(source="get_entry_type_display", read_only=True)
+    running_balance = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    sale_id = serializers.UUIDField(read_only=True, allow_null=True)
+    sale_return_id = serializers.UUIDField(read_only=True, allow_null=True)
+    customer_payment = serializers.SerializerMethodField()
+    created_by = serializers.CharField(source="created_by.username", read_only=True, allow_null=True)
+
+    class Meta:
+        model = CustomerLedgerEntry
+        fields = (
+            "id",
+            "entry_type",
+            "label",
+            "amount",
+            "running_balance",
+            "occurred_at",
+            "sale_id",
+            "sale_return_id",
+            "customer_payment",
+            "reference",
+            "reason",
+            "created_by",
+        )
+
+    def get_customer_payment(self, entry: CustomerLedgerEntry) -> dict | None:
+        payment = entry.customer_payment
+        if payment is None:
+            return None
+        return {"id": payment.id, "reference": payment.reference, "method": payment.method}
+
+
 class CreateCustomerSerializer(serializers.Serializer):
     store_id = serializers.UUIDField()
     name = serializers.CharField(max_length=255)
@@ -67,6 +102,7 @@ class CreateCustomerPaymentSerializer(serializers.Serializer):
 class CustomerPaymentSerializer(serializers.ModelSerializer):
     customer = CustomerBriefSerializer(read_only=True)
     store = serializers.SerializerMethodField()
+    cash_register = serializers.SerializerMethodField()
     cash_session_id = serializers.UUIDField(read_only=True)
     created_by = serializers.CharField(source="created_by.username", read_only=True)
 
@@ -77,6 +113,7 @@ class CustomerPaymentSerializer(serializers.ModelSerializer):
             "reference",
             "customer",
             "store",
+            "cash_register",
             "cash_session_id",
             "method",
             "amount",
@@ -90,3 +127,7 @@ class CustomerPaymentSerializer(serializers.ModelSerializer):
 
     def get_store(self, payment: CustomerPayment) -> dict:
         return {"id": payment.store_id, "name": payment.store.name}
+
+    def get_cash_register(self, payment: CustomerPayment) -> dict:
+        register = payment.cash_session.cash_register
+        return {"id": register.id, "name": register.name}
