@@ -38,6 +38,8 @@ export function SaleSuccessModal({
   useDialogFocusTrap(dialogRef)
   const [isConfirmingCancel, setIsConfirmingCancel] = useState(false)
   const isSplitPayment = sale.payments.length > 1
+  const changePayments = sale.payments.filter((payment) => payment.changeAmount !== null)
+  const changeTotal = changePayments.reduce((sum, payment) => sum + (payment.changeAmount ?? 0), 0)
   const paymentLabels = {
     CASH: "Espèces",
     WAVE: "Wave",
@@ -56,7 +58,24 @@ export function SaleSuccessModal({
       // La confirmation d'annulation a son propre clavier : Entrée n'y
       // déclenche jamais "Nouvelle vente" par-dessus.
       if (isConfirmingCancel) return
-      if (event.key === "Enter") onNewSale()
+      // Échap ferme comme toutes les autres modales ; fermer, ici, c'est
+      // passer à la vente suivante.
+      if (event.key === "Escape") {
+        onNewSale()
+        return
+      }
+      if (event.key !== "Enter") return
+      // Focus sur un bouton ou un lien (Imprimer, Annuler cette vente,
+      // Nouvelle vente elle-même) : l'activation native fait déjà le bon
+      // geste. Intercepter ici fermait la modale avant que « Annuler cette
+      // vente » ne puisse s'ouvrir au clavier.
+      if (
+        event.target instanceof Element &&
+        event.target.closest("button, a, input, select, textarea")
+      ) {
+        return
+      }
+      onNewSale()
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
@@ -87,6 +106,17 @@ export function SaleSuccessModal({
         </div>
         <p className="eyebrow">Vente terminée</p>
         <h2 id="sale-success-title">Vente validée</h2>
+
+        {/* Ce que le caissier regarde en rendant les billets : en tête et en
+            grand, pas en dernière ligne du récapitulatif. */}
+        {changePayments.length > 0 ? (
+          <div className="sale-change-hero">
+            <span>Monnaie à rendre</span>
+            <strong>
+              <Money value={changeTotal} />
+            </strong>
+          </div>
+        ) : null}
 
         {sale.isPendingSync ? (
           <p className="sale-pending-note">
@@ -122,16 +152,6 @@ export function SaleSuccessModal({
                 <dt>{isSplitPayment ? `Reçu (paiement ${index + 1})` : "Reçu"}</dt>
                 <dd>
                   <Money value={payment.receivedAmount} />
-                </dd>
-              </div>
-            ) : null,
-          )}
-          {sale.payments.map((payment, index) =>
-            payment.changeAmount !== null ? (
-              <div className="sale-change" key={`change-${index}`}>
-                <dt>{isSplitPayment ? `Monnaie (paiement ${index + 1})` : "Monnaie"}</dt>
-                <dd>
-                  <Money value={payment.changeAmount} />
                 </dd>
               </div>
             ) : null,

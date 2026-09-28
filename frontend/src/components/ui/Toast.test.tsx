@@ -100,4 +100,43 @@ describe("ToastProvider", () => {
       "status",
     )
   })
+
+  it("runs a toast action once and closes the toast", async () => {
+    const user = userEvent.setup()
+    const toast = renderToasts()
+    const onUndo = vi.fn()
+
+    act(() => {
+      toast().info("Coca retiré du panier", { action: { label: "Annuler", onClick: onUndo } })
+    })
+    await user.click(screen.getByRole("button", { name: "Annuler" }))
+
+    expect(onUndo).toHaveBeenCalledOnce()
+    expect(screen.queryByText("Coca retiré du panier")).not.toBeInTheDocument()
+  })
+
+  it("keeps an action toast long enough to reach its button", () => {
+    vi.useFakeTimers()
+    const toast = renderToasts()
+
+    act(() => {
+      toast().info("Coca retiré du panier", { action: { label: "Annuler", onClick: vi.fn() } })
+    })
+    act(() => vi.advanceTimersByTime(5_000))
+    expect(screen.getByText("Coca retiré du panier")).toBeInTheDocument()
+    act(() => vi.advanceTimersByTime(1_000))
+    expect(screen.queryByText("Coca retiré du panier")).not.toBeInTheDocument()
+  })
+
+  it("dismisses a toast by the id its call returned", () => {
+    const toast = renderToasts()
+    let id = 0
+
+    act(() => {
+      id = toast().info("Coca retiré du panier")
+    })
+    act(() => toast().dismiss(id))
+
+    expect(screen.queryByText("Coca retiré du panier")).not.toBeInTheDocument()
+  })
 })

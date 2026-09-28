@@ -187,4 +187,11 @@ describe("SaleReceiptPage", () => {
     expect(screen.getByText(/référence locale/i)).toHaveTextContent("0F9E8D7C")
     expect(getSaleReceipt).not.toHaveBeenCalled()
   })
+
+  it("goes back to the sales list offline, since the sale detail needs the server", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false)
+    renderReceipt(cashReceipt)
+
+    expect(await screen.findByRole("link", { name: "Retour aux ventes" })).toHaveAttribute("href", "/sales")
+  })
 })

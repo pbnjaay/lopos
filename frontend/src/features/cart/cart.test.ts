@@ -8,6 +8,7 @@ import {
   getCartTotal,
   incrementItem,
   removeItem,
+  restoreItem,
   setItemQuantity,
 } from "./cartState"
 
@@ -68,6 +69,17 @@ describe("cart", () => {
 
     expect(removeItem(items, "coca").map((item) => item.productId)).toEqual(["bread"])
     expect(clearCart()).toEqual([])
+  })
+
+  it("restores a removed line at its original position, never twice", () => {
+    const items = addItem(addItem([], coca), bread)
+    const removed = items[0]!
+    const remaining = removeItem(items, "coca")
+
+    expect(restoreItem(remaining, removed, 0).map((item) => item.productId)).toEqual(["coca", "bread"])
+    // Rescanné entre-temps : la ligne présente fait foi.
+    const rescanned = addItem(remaining, coca)
+    expect(restoreItem(rescanned, removed, 0)).toBe(rescanned)
   })
 
   it("calculates the total from integer FCFA prices", () => {

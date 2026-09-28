@@ -88,12 +88,66 @@ describe("SaleSuccessModal", () => {
     expect(onNewSale).toHaveBeenCalledOnce()
   })
 
+  it("closes with Escape, like every other dialog, by starting the next sale", () => {
+    const onNewSale = vi.fn()
+    render(<SaleSuccessModal sale={sale} onNewSale={onNewSale} onCancelSale={vi.fn()} />)
+
+    fireEvent.keyDown(window, { key: "Escape" })
+    expect(onNewSale).toHaveBeenCalledOnce()
+  })
+
   it("ignores a held-down Enter key repeat", () => {
     const onNewSale = vi.fn()
     render(<SaleSuccessModal sale={sale} onNewSale={onNewSale} onCancelSale={vi.fn()} />)
 
     fireEvent.keyDown(window, { key: "Enter", repeat: true })
     expect(onNewSale).not.toHaveBeenCalled()
+  })
+
+  it("puts the change to give back right under the title", () => {
+    render(<SaleSuccessModal sale={sale} onNewSale={vi.fn()} onCancelSale={vi.fn()} />)
+
+    const hero = screen.getByText("Monnaie à rendre").parentElement!
+    expect(hero).toHaveTextContent("1 000 FCFA")
+    expect(screen.getByRole("heading", { name: "Vente validée" }).nextElementSibling).toBe(hero)
+  })
+
+  it("shows no change block for a mobile money sale", () => {
+    render(
+      <SaleSuccessModal
+        sale={{
+          ...sale,
+          payments: [{ method: "WAVE", amount: 1_000, receivedAmount: null, changeAmount: null }],
+        }}
+        onNewSale={vi.fn()}
+        onCancelSale={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByText("Monnaie à rendre")).not.toBeInTheDocument()
+  })
+
+  it("opens the cancel confirmation with Enter instead of starting a new sale", async () => {
+    const user = userEvent.setup()
+    const onNewSale = vi.fn()
+    render(<SaleSuccessModal sale={sale} onNewSale={onNewSale} onCancelSale={vi.fn()} />)
+
+    screen.getByRole("button", { name: "Erreur ? Annuler cette vente" }).focus()
+    await user.keyboard("{Enter}")
+
+    expect(onNewSale).not.toHaveBeenCalled()
+    expect(screen.getByRole("heading", { name: "Annuler cette vente ?" })).toBeInTheDocument()
+  })
+
+  it("starts a new sale exactly once with Enter on the focused button", async () => {
+    const user = userEvent.setup()
+    const onNewSale = vi.fn()
+    render(<SaleSuccessModal sale={sale} onNewSale={onNewSale} onCancelSale={vi.fn()} />)
+
+    expect(screen.getByRole("button", { name: "Nouvelle vente" })).toHaveFocus()
+    await user.keyboard("{Enter}")
+
+    expect(onNewSale).toHaveBeenCalledOnce()
   })
 
   describe("cancelling the sale", () => {

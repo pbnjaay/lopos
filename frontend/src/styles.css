@@ -20,6 +20,7 @@
   --color-primary-hover: #0f563c;
   --color-border: #dde2df;
   --color-border-strong: #c2ccc6;
+  --focus-ring: 2px solid var(--color-primary);
   /* Rayons resserres vers la grammaire Unfold (rounded-default = 8px cote
      admin) sans perdre la hierarchie a 3 niveaux du POS. */
   --radius-sm: 0.5rem;
@@ -112,11 +113,16 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Contour de focus unique, plein et au vert de marque : l'ancien vert a
+   30 % d'opacite tombait a ~1,5:1 sur blanc, sous le 3:1 exige pour un
+   indicateur de focus — or le POS se pilote au clavier toute la journee. */
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
-a:focus-visible {
-  outline: 3px solid rgb(23 107 77 / 30%);
+textarea:focus-visible,
+a:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -1398,6 +1404,12 @@ a.list-row:active {
   font-size: var(--text-caption);
 }
 
+.toast-action {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-left: auto;
+}
+
 .toast-close {
   width: var(--control-sm);
   height: var(--control-sm);
@@ -1723,7 +1735,7 @@ a.list-row:active {
 
 .sales-filters {
   display: grid;
-  grid-template-columns: minmax(13rem, 2fr) repeat(3, minmax(9rem, 1fr));
+  grid-template-columns: minmax(13rem, 2fr) minmax(9rem, 1fr);
   align-items: end;
   gap: var(--space-3);
   padding: var(--space-5);
@@ -1902,7 +1914,7 @@ a.list-row:active {
 }
 
 .sales-pagination-button:focus-visible {
-  outline: 3px solid rgb(23 107 77 / 20%);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -2108,7 +2120,7 @@ a.list-row:active {
 }
 
 .return-restock-field input:focus-visible + .return-restock-switch {
-  outline: 3px solid rgb(23 107 77 / 25%);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -2916,6 +2928,13 @@ a.list-row:active {
    devienne memorisable.
    ========================================================================== */
 
+.product-grid-unavailable {
+  margin: 0;
+  padding: var(--space-3) 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-secondary);
+}
+
 .product-grid {
   display: grid;
   /* Des tuiles plus larges : moins de retours a la ligne dans les noms, des
@@ -3413,7 +3432,7 @@ a.list-row:active {
 
 .quantity-input:focus-visible {
   outline: 0;
-  box-shadow: inset 0 0 0 2px rgb(23 107 77 / 22%);
+  box-shadow: inset 0 0 0 2px var(--color-primary);
 }
 
 .icon-button {
@@ -3911,10 +3930,31 @@ a.list-row:active {
   font-weight: 800;
 }
 
-/* Le resultat cle domine l'ecran de succes : la monnaie a rendre. */
-.sale-amounts .sale-change dd {
+/* Le resultat cle domine l'ecran de succes : la monnaie a rendre, juste
+   sous le titre, au cran de montant le plus fort. */
+.sale-change-hero {
+  width: 100%;
+  display: grid;
+  gap: 0.15rem;
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-success-border);
+  border-radius: var(--radius-control);
+  background: var(--color-success-surface);
+  text-align: center;
+}
+
+.sale-change-hero span {
+  color: var(--color-text-muted);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+}
+
+.sale-change-hero strong {
   color: var(--color-success);
-  font-size: var(--text-section-title);
+  font-size: var(--text-display);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
 }
 
 .sale-success-actions {
@@ -4058,6 +4098,14 @@ a.list-row:active {
 
   .cart-list {
     overflow-y: visible;
+  }
+}
+
+/* Grand ecran : la cloture vit dans la barre laterale, jamais en double
+   dans le menu de session. */
+@media (min-width: 1200px) {
+  .session-menu-close {
+    display: none;
   }
 }
 

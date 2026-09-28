@@ -20,10 +20,10 @@ import { CashClosingResult } from "../features/cash-session/CashClosingResult"
 import { usePosSession } from "../features/cash-session/queries"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
-import { describeSyncOutcome } from "../features/sync/syncCopy"
+import { describeSyncNotice } from "../features/sync/syncCopy"
 import { formatDateTime } from "../utils/date"
 import { describeErrorShort } from "../utils/errorCopy"
-import { formatMoney, parseMoneyInput, toBackendMoney } from "../utils/money"
+import { formatMoney, formatMoneyInput, parseMoneyInput, toBackendMoney } from "../utils/money"
 
 export function CloseCashSessionPage() {
   const user = useCurrentUser().data!
@@ -188,10 +188,18 @@ export function CloseCashSessionPage() {
 
   if (pendingLocalSalesCount > 0) {
     async function handleSyncClick() {
-      const outcome = await triggerSync()
-      void queryClient.invalidateQueries({ queryKey: pendingLocalSalesQueryKey })
-      // Événement court : un toast, pas un message figé dans la page.
-      toast.success("Synchronisation terminée", { description: describeSyncOutcome(outcome) })
+      try {
+        const outcome = await triggerSync()
+        const remaining = await countPendingLocalSalesForSession(ownSession!.id)
+        // Événement court : un toast, pas un message figé dans la page — mais
+        // jamais vert quand la clôture reste bloquée.
+        const notice = describeSyncNotice(outcome, remaining)
+        toast[notice.tone](notice.title, { description: notice.description })
+      } catch (error) {
+        toast.error("Synchronisation impossible", { description: describeErrorShort(error) })
+      } finally {
+        void queryClient.invalidateQueries({ queryKey: pendingLocalSalesQueryKey })
+      }
     }
 
     return (
@@ -298,7 +306,15 @@ export function CloseCashSessionPage() {
                     disabled={closeMutation.isPending}
                     aria-describedby="counted-cash-help"
                     aria-invalid={isInvalidCountedCash}
-                    onChange={(event) => setCountedCash(event.target.value)}
+                    // Une saisie invalide reste telle quelle pour que l'erreur
+                    // sous le champ puisse la nommer ; le reste se regroupe.
+                    onChange={(event) =>
+                      setCountedCash(
+                        /^[\d\s]*$/.test(event.target.value)
+                          ? formatMoneyInput(event.target.value)
+                          : event.target.value,
+                      )
+                    }
                   />
                   <span>FCFA</span>
                 </div>

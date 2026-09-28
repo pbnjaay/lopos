@@ -237,7 +237,7 @@ describe("POS sale workflow", () => {
     await userEvents.click(screen.getByRole("button", { name: "Valider" }))
 
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
-    const changeRow = screen.getByText("Monnaie").parentElement!
+    const changeRow = screen.getByText("Monnaie à rendre").parentElement!
     expect(within(changeRow).getByText("1 000 FCFA")).toBeInTheDocument()
     expect(screen.getByText("Panier vide")).toBeInTheDocument()
     // Local-first : aucune requête POST /sales/ pendant l'encaissement, la
@@ -579,7 +579,7 @@ describe("POS keyboard shortcuts", () => {
     await userEvents.keyboard("2000{Enter}")
 
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
-    const changeRow = screen.getByText("Monnaie").parentElement!
+    const changeRow = screen.getByText("Monnaie à rendre").parentElement!
     expect(within(changeRow).getByText("1 000 FCFA")).toBeInTheDocument()
     expect(createLocalSale).toHaveBeenCalledTimes(1)
 
@@ -700,6 +700,31 @@ describe("POS keyboard shortcuts", () => {
 
     await userEvents.click(screen.getByRole("button", { name: `Supprimer ${coca.name} du panier` }))
     await waitFor(() => expect(scanner).toHaveFocus())
+  })
+
+  it("undoes a line removal from the toast, and drops the undo once checkout starts", async () => {
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      throw new Error(`Unexpected request: ${url}`)
+    })
+    const userEvents = userEvent.setup()
+    renderPos()
+    const scanner = await scanCoca(userEvents)
+
+    await userEvents.click(screen.getByRole("button", { name: `Supprimer ${coca.name} du panier` }))
+    expect(await screen.findByText("Panier vide")).toBeInTheDocument()
+    await userEvents.click(screen.getByRole("button", { name: "Annuler" }))
+
+    await waitFor(() => expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1"))
+    await waitFor(() => expect(scanner).toHaveFocus())
+
+    await userEvents.click(screen.getByRole("button", { name: `Supprimer ${coca.name} du panier` }))
+    await userEvents.type(scanner, `${coca.barcode}{Enter}`)
+    await waitFor(() => expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("1"))
+    await openCashPayment(userEvents)
+    expect(screen.queryByText(`${coca.name} retiré du panier`)).not.toBeInTheDocument()
   })
 
   it("backs out of checkout one Escape at a time, ending with scanner focus", async () => {

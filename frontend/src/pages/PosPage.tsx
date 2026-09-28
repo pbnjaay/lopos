@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { getStore } from "../api/stores"
@@ -16,12 +16,14 @@ import {
   InsufficientLocalStockError,
   LocalSaleProductNotFoundError,
   createLocalSale,
+  listRecentLocalSales,
 } from "../db/sales"
 import {
   getLocalCashSessionForRegister,
   saveLocalCashSession,
   updateLocalCashSessionStoreName,
 } from "../db/sessions"
+import { HeldCartNotFoundError } from "../db/carts"
 import type { LocalCashSession } from "../db/types"
 import { useCurrentUser } from "../features/auth/queries"
 import { Cart } from "../features/cart/Cart"
@@ -39,6 +41,7 @@ import { MobileMoneyConfirmation } from "../features/checkout/MobileMoneyConfirm
 import { PaymentMethodModal } from "../features/checkout/PaymentMethodModal"
 import { getLastPaymentMethod, storeLastPaymentMethod } from "../features/checkout/paymentMethodStorage"
 import { SaleSuccessModal } from "../features/checkout/SaleSuccessModal"
+import { dominantPaymentMethod } from "../features/checkout/dominantPaymentMethod"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { pendingSalesCountQueryKey } from "../features/offline/usePendingSalesCount"
 import { ProductGrid } from "../features/products/ProductGrid"
@@ -106,7 +109,19 @@ export function PosPage() {
   const [lastPaymentMethod, setLastPaymentMethod] = useState<PaymentMethod | null>(
     getLastPaymentMethod,
   )
+  // Toast « Annuler » de la dernière ligne retirée : il n'a de sens que
+  // pour la vente en cours, on le retire dès que le panier change de vie.
+  const removalUndoToastRef = useRef<number | null>(null)
   const catalog = useProductCatalog(selectedRegister?.store_id ?? null)
+  const sessionSalesQuery = useQuery({
+    queryKey: ["local-sales-for-session", ownSession?.id],
+    queryFn: () => listRecentLocalSales(ownSession!.id, Number.POSITIVE_INFINITY),
+    enabled: ownSession !== null,
+  })
+  // L'accent du pied de panier suit l'habitude de la session ; avant la
+  // première vente, le dernier moyen utilisé sur cet appareil fait foi.
+  const primaryPaymentMethod =
+    dominantPaymentMethod(sessionSalesQuery.data ?? []) ?? lastPaymentMethod
   const storeQuery = useQuery({
     queryKey: ["stores", selectedRegister?.store_id],
     queryFn: () => getStore(selectedRegister!.store_id),
@@ -171,6 +186,7 @@ export function PosPage() {
       setLastPaymentMethod(lastMethod)
       void queryClient.invalidateQueries({ queryKey: ["products"] })
       void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })
+      void queryClient.invalidateQueries({ queryKey: ["local-sales-for-session"] })
       // Hors ligne, conserver la vente dans l’outbox et laisser le compteur
       // global refléter toutes les ventes en attente. La reconnexion déclenche
       // déjà une synchronisation groupée via SyncStatusProvider.
@@ -218,6 +234,7 @@ export function PosPage() {
     onSuccess: () => {
       setCompletedSale(null)
       toast.success("Vente annulée")
+      void queryClient.invalidateQueries({ queryKey: ["local-sales-for-session"] })
       void queryClient.invalidateQueries({ queryKey: ["products"] })
       void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })
       focusProductSearch()
@@ -282,10 +299,54 @@ export function PosPage() {
     })
   }
 
-  function handleSuspendCart() {
-    void cart.holdCart()
-    toast.success("Vente mise en attente")
-    focusProductSearch()
+  function dropRemovalUndo() {
+    if (removalUndoToastRef.current === null) return
+    toast.dismiss(removalUndoToastRef.current)
+    removalUndoToastRef.current = null
+  }
+
+  /**
+   * Le ✕ d'une ligne est à un doigt du crayon : une suppression ne demande
+   * pas de confirmation (ce serait une modale par article), mais elle se
+   * rattrape en un clic pendant quelques secondes.
+   */
+  function handleRemoveItem(productId: string) {
+    const index = cart.items.findIndex((item) => item.productId === productId)
+    const item = cart.items[index]
+    if (!item) return
+    void cart.removeItem(productId)
+    removalUndoToastRef.current = toast.info(`${item.name} retiré du panier`, {
+      action: {
+        label: "Annuler",
+        onClick: () => {
+          removalUndoToastRef.current = null
+          void cart.restoreItem(item, index)
+          focusProductSearch()
+        },
+      },
+    })
+  }
+
+  function handleClearCart() {
+    dropRemovalUndo()
+    return cart.clearCart()
+  }
+
+  async function handleSuspendCart() {
+    dropRemovalUndo()
+    // Le succès n'est annoncé qu'une fois le panier réellement écrit : un
+    // échec IndexedDB affichait sinon « mise en attente » sur une vente
+    // restée à l'écran.
+    try {
+      await cart.holdCart()
+      toast.success("Vente mise en attente")
+    } catch {
+      toast.error("Impossible de mettre la vente en attente", {
+        description: "La vente reste en cours sur cet écran. Réessayez.",
+      })
+    } finally {
+      focusProductSearch()
+    }
   }
 
   function handleDeleteHeldCart(cartId: string) {
@@ -324,10 +385,24 @@ export function PosPage() {
   async function handleResumeHeldCart(cartId: string, strategy: ResumeStrategy) {
     setIsHeldCartsOpen(false)
     setHeldCartAction(null)
-    if (strategy === "hold") await cart.holdCart()
-    else if (strategy === "clear") await cart.clearCart()
-
-    const revalidation = await cart.resumeCart(cartId)
+    dropRemovalUndo()
+    let revalidation: Awaited<ReturnType<typeof cart.resumeCart>>
+    try {
+      if (strategy === "hold") await cart.holdCart()
+      else if (strategy === "clear") await cart.clearCart()
+      revalidation = await cart.resumeCart(cartId)
+    } catch (error) {
+      // Double clic sur « Reprendre », ou panier déjà repris dans un autre
+      // onglet : l'échec se dit, au lieu de laisser le caissier sans réponse.
+      toast.error("Impossible de reprendre ce panier", {
+        description:
+          error instanceof HeldCartNotFoundError
+            ? "Il a déjà été repris ou supprimé."
+            : "Réessayez.",
+      })
+      focusProductSearch()
+      return
+    }
     if (!revalidation) {
       toast.error("Impossible de reprendre ce panier", { description: "Réessayez." })
       return
@@ -362,6 +437,7 @@ export function PosPage() {
    */
   function startCheckout(method: PaymentMethod) {
     if (!ownSession || cart.items.length === 0) return
+    dropRemovalUndo()
     saleMutation.reset()
     setPaymentLegs([])
     setCheckoutStep(method)
@@ -465,12 +541,12 @@ export function PosPage() {
             onDecrement={cart.decrementItem}
             onQuantityChange={cart.setItemQuantity}
             onPriceChange={cart.setItemPrice}
-            onRemove={cart.removeItem}
-            onClear={cart.clearCart}
-            onSuspend={handleSuspendCart}
+            onRemove={handleRemoveItem}
+            onClear={handleClearCart}
+            onSuspend={() => void handleSuspendCart()}
             onDialogOpenChange={setIsCartDialogOpen}
             onInteractionComplete={focusProductSearch}
-            lastUsedMethod={lastPaymentMethod}
+            primaryMethod={primaryPaymentMethod}
             onCheckoutMethod={startCheckout}
           />
         </div>

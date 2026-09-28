@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react"
+import { type FormEvent, useRef, useState } from "react"
 
 import { Button } from "../../components/ui/Button"
 import { Dialog, DialogFooter } from "../../components/ui/Dialog"
 import { InlineAlert } from "../../components/ui/InlineAlert"
 import { Money } from "../../components/ui/Money"
-import { parseMoneyInput } from "../../utils/money"
+import { formatMoneyInput, parseMoneyInput } from "../../utils/money"
 import type { PaymentMethod } from "../../types/api"
 import { useSlowSubmitHint } from "./useSlowSubmitHint"
 
@@ -42,7 +42,7 @@ export function MobileMoneyConfirmation({
   // Pré-rempli avec le montant plein : le cas courant (un seul paiement)
   // reste un simple clic, sans rien à taper. Modifiable uniquement pour un
   // versement partiel d'un paiement mixte.
-  const [amountInput, setAmountInput] = useState(String(total))
+  const [amountInput, setAmountInput] = useState(() => formatMoneyInput(String(total)))
   const amount = parseMoneyInput(amountInput)
   // Aucune monnaie possible sur un paiement mobile : contrairement aux
   // espèces, un montant supérieur au reste dû est un mauvais chiffre saisi,
@@ -51,10 +51,11 @@ export function MobileMoneyConfirmation({
   const exceedsTotal = amount !== null && amount > total
 
   function handleAmountChange(value: string) {
-    if (/^[\d\s]*$/.test(value)) setAmountInput(value)
+    if (/^[\d\s]*$/.test(value)) setAmountInput(formatMoneyInput(value))
   }
 
-  async function handleConfirm() {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
     if (submissionLock.current || isSubmitting || !canSubmit) return
     submissionLock.current = true
     try {
@@ -66,20 +67,6 @@ export function MobileMoneyConfirmation({
     }
   }
 
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.repeat || isSubmitting) return
-      if (event.key !== "Enter") return
-      // Never auto-submit just from selecting Wave/OM (F2/F3): a mobile
-      // money sale still requires this explicit confirmation, same as a
-      // click on "Paiement reçu".
-      event.preventDefault()
-      void handleConfirm()
-    }
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isSubmitting, canSubmit, amount])
-
   return (
     <Dialog
       eyebrow="Paiement mobile"
@@ -90,7 +77,19 @@ export function MobileMoneyConfirmation({
       backDisabled={isSubmitting}
       dismissible={!isSubmitting}
     >
-      <div className="dialog-body">
+      {/* Entrée valide via le formulaire, jamais via un écouteur global : un
+          Entrée sur « Annuler » ou « Changer de moyen » confirmait sinon un
+          paiement que le client n'avait peut-être pas fait. Le focus part sur
+          le montant, présélectionné : Entrée confirme le cas courant, une
+          frappe remplace le montant pour un versement partiel. */}
+      <form
+        className="dialog-body"
+        onSubmit={handleSubmit}
+        onKeyDown={(event) => {
+          // Un Entrée maintenu ne doit pas re-soumettre.
+          if (event.key === "Enter" && event.repeat) event.preventDefault()
+        }}
+      >
         <div className="payment-total">
           <span>{isPartial ? "Reste à payer" : "Total à payer"}</span>
           <strong>
@@ -107,7 +106,10 @@ export function MobileMoneyConfirmation({
           <div className="money-input payment-money-input">
             <input
               id="mobile-money-amount"
+              autoFocus
               inputMode="numeric"
+              enterKeyHint="done"
+              onFocus={(event) => event.currentTarget.select()}
               value={amountInput}
               disabled={isSubmitting}
               onChange={(event) => handleAmountChange(event.target.value)}
@@ -136,13 +138,13 @@ export function MobileMoneyConfirmation({
             variant="primary"
             disabled={!canSubmit}
             loading={isSubmitting}
+            type="submit"
             loadingLabel="Validation…"
-            onClick={() => void handleConfirm()}
           >
             {amount !== null && amount < total ? "Continuer avec un autre moyen" : "Paiement reçu"}
           </Button>
         </DialogFooter>
-      </div>
+      </form>
     </Dialog>
   )
 }

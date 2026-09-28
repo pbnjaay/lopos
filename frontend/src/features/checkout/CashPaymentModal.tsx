@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/Button"
 import { Dialog, DialogFooter } from "../../components/ui/Dialog"
 import { InlineAlert } from "../../components/ui/InlineAlert"
 import { Money } from "../../components/ui/Money"
-import { parseMoneyInput } from "../../utils/money"
+import { formatMoneyInput, parseMoneyInput } from "../../utils/money"
 import { getSuggestedCashAmounts } from "./cashSuggestions"
 import { useSlowSubmitHint } from "./useSlowSubmitHint"
 
@@ -56,16 +56,16 @@ export function CashPaymentModal({
   }
 
   function handleInput(value: string) {
-    if (/^[\d\s]*$/.test(value)) setReceivedInput(value)
+    if (/^[\d\s]*$/.test(value)) setReceivedInput(formatMoneyInput(value))
   }
 
   function handleKeypadDigit(digit: string) {
-    setReceivedInput((current) => current + digit)
+    setReceivedInput((current) => formatMoneyInput(current + digit))
     refocusReceivedInput()
   }
 
   function handleKeypadBackspace() {
-    setReceivedInput((current) => current.slice(0, -1))
+    setReceivedInput((current) => formatMoneyInput(current.replace(/\D/g, "").slice(0, -1)))
     refocusReceivedInput()
   }
 
@@ -75,7 +75,7 @@ export function CashPaymentModal({
   }
 
   function handleQuickAmount(amount: number) {
-    setReceivedInput(String(amount))
+    setReceivedInput(formatMoneyInput(String(amount)))
     refocusReceivedInput()
   }
 

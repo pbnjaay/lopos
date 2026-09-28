@@ -8,6 +8,7 @@ import { Button } from "../components/ui/Button"
 import { Money } from "../components/ui/Money"
 import { RouteError, RouteLoading } from "../components/ui/RouteState"
 import { getLocalSaleById } from "../db/sales"
+import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { readSaleOrigin, saleOriginBack } from "../features/sales/origin"
 import { receiptViewFromApiReceipt, receiptViewFromLocalSale } from "../features/sales/receiptView"
 import { formatDateTime } from "../utils/date"
@@ -24,6 +25,7 @@ export function SaleReceiptPage() {
   const { saleId } = useParams<{ saleId: string }>()
   const [searchParams] = useSearchParams()
   const cashSessionId = searchParams.get("cash_session_id") ?? undefined
+  const isOnline = useNetworkStatus()
   const receiptQuery = useQuery({
     queryKey: ["sales", saleId, "receipt", cashSessionId],
     queryFn: async () => {
@@ -61,7 +63,11 @@ export function SaleReceiptPage() {
       ? saleOriginBack(origin)
       : receipt.isPendingSync
         ? saleOriginBack("pending")
-        : { to: `/sales/${receipt.id}`, label: "Retour à la vente" }
+        // Hors connexion, la page de détail est serveur : on revient à la
+        // liste locale d'où le ticket a été ouvert.
+        : !isOnline
+          ? saleOriginBack(null)
+          : { to: `/sales/${receipt.id}`, label: "Retour à la vente" }
 
   return (
     <main className="operational-page operational-page-narrow receipt-screen-page">

@@ -106,7 +106,6 @@ function AppShell({ user }: AppLayoutProps) {
               type="button"
               aria-expanded={isSessionMenuOpen}
               aria-controls="session-menu-panel"
-              aria-haspopup="true"
               aria-label={`Menu de session — ${userName}`}
               onClick={() => setIsSessionMenuOpen((isOpen) => !isOpen)}
             >
@@ -116,13 +115,16 @@ function AppShell({ user }: AppLayoutProps) {
             </button>
             {isSessionMenuOpen ? (
               <div id="session-menu-panel" className="session-menu-panel" aria-label="Actions de session">
+                {/* Sur grand écran la clôture est déjà dans la barre latérale :
+                    l'entrée du menu ne sert qu'en barre basse, où elle est
+                    masquée. Voir .session-menu-close. */}
                 {showCashSessionActions ? (
                   <>
-                    <Link className="session-menu-item" to="/cash/close" onClick={() => setIsSessionMenuOpen(false)}>
+                    <Link className="session-menu-item session-menu-close" to="/cash/close" onClick={() => setIsSessionMenuOpen(false)}>
                       <PowerIcon />
                       <span>Clôturer la caisse</span>
                     </Link>
-                    <div className="session-menu-separator" />
+                    <div className="session-menu-separator session-menu-close" />
                   </>
                 ) : null}
                 {user.is_staff ? (

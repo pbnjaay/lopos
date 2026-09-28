@@ -65,7 +65,8 @@ describe("MobileMoneyConfirmation", () => {
     expect(onBack).toHaveBeenCalledOnce()
   })
 
-  it("confirms the payment with Enter, exactly once", () => {
+  it("confirms the payment with Enter from the pre-selected amount", async () => {
+    const user = userEvent.setup()
     const onConfirm = vi.fn()
     render(
       <MobileMoneyConfirmation
@@ -78,10 +79,57 @@ describe("MobileMoneyConfirmation", () => {
       />,
     )
 
-    fireEvent.keyDown(window, { key: "Enter" })
-    fireEvent.keyDown(window, { key: "Enter" })
+    expect(screen.getByLabelText("Montant reçu")).toHaveFocus()
+    await user.keyboard("{Enter}")
 
     expect(onConfirm).toHaveBeenCalledOnce()
+    expect(onConfirm).toHaveBeenCalledWith(1_000)
+  })
+
+  it("submits only once on a rapid double submission", () => {
+    const onConfirm = vi.fn()
+    render(
+      <MobileMoneyConfirmation
+        method="WAVE"
+        total={1_000}
+        isSubmitting={false}
+        onClose={vi.fn()}
+        onBack={vi.fn()}
+        onConfirm={onConfirm}
+      />,
+    )
+    const form = screen.getByLabelText("Montant reçu").closest("form")!
+
+    fireEvent.submit(form)
+    fireEvent.submit(form)
+
+    expect(onConfirm).toHaveBeenCalledOnce()
+  })
+
+  it("never confirms when Enter lands on Annuler or the back button", async () => {
+    const user = userEvent.setup()
+    const onConfirm = vi.fn()
+    const onClose = vi.fn()
+    const onBack = vi.fn()
+    render(
+      <MobileMoneyConfirmation
+        method="WAVE"
+        total={1_000}
+        isSubmitting={false}
+        onClose={onClose}
+        onBack={onBack}
+        onConfirm={onConfirm}
+      />,
+    )
+
+    screen.getByRole("button", { name: "Annuler" }).focus()
+    await user.keyboard("{Enter}")
+    screen.getByRole("button", { name: /Changer de moyen de paiement/ }).focus()
+    await user.keyboard("{Enter}")
+
+    expect(onConfirm).not.toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(onBack).toHaveBeenCalledOnce()
   })
 
   it("does not confirm just from selecting the method (no Enter/click yet)", () => {
@@ -212,7 +260,7 @@ describe("MobileMoneyConfirmation", () => {
       />,
     )
 
-    fireEvent.keyDown(window, { key: "Enter", repeat: true })
+    fireEvent.keyDown(screen.getByLabelText("Montant reçu"), { key: "Enter", repeat: true })
     expect(onConfirm).not.toHaveBeenCalled()
   })
 })

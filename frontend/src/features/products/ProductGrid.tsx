@@ -63,9 +63,16 @@ export function ProductGrid({ storeId, onProductSelect }: ProductGridProps) {
   }
 
   // Une grille absente n'est pas une panne : la recherche et le scanner
-  // fonctionnent toujours. On reste donc silencieux plutôt que d'occuper le
-  // rail avec une alerte que le caissier ne peut pas résoudre en caisse.
-  if (productsQuery.error) return null
+  // fonctionnent toujours. Pas d'alerte que le caissier ne peut pas résoudre
+  // en caisse — mais une ligne discrète, pour qu'un rail vide ne se lise pas
+  // comme un bug.
+  if (productsQuery.error) {
+    return (
+      <p className="product-grid-unavailable" role="status">
+        Raccourcis produits indisponibles — scannez ou recherchez l’article.
+      </p>
+    )
+  }
 
   const products = productsQuery.data ?? []
   if (products.length === 0) {

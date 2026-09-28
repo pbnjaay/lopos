@@ -168,7 +168,7 @@ describe("CashPaymentModal", () => {
     await user.click(screen.getByRole("button", { name: "Chiffre 0" }))
     await user.click(screen.getByRole("button", { name: "Chiffre 0" }))
     await user.click(screen.getByRole("button", { name: "Chiffre 0" }))
-    expect(screen.getByLabelText("Montant reçu")).toHaveValue("2000")
+    expect(screen.getByLabelText("Montant reçu")).toHaveValue("2 000")
 
     await user.click(screen.getByRole("button", { name: "Supprimer le dernier chiffre" }))
     expect(screen.getByLabelText("Montant reçu")).toHaveValue("200")
