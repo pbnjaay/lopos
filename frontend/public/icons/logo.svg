@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Source unique du logo LoPOS : une tuile verte et le symbole blanc.
+       Changer de logo = remplacer ce fichier, puis `npm run icons`.
+       Piste C « lo » (provisoire) : un l et un o en forme de goutte. -->
+  <rect width="64" height="64" rx="14" fill="#176b4d"/>
+  <rect x="13.5" y="13" width="7.5" height="38" rx="3.75" fill="#ffffff"/>
+  <path d="M39 22.5C39 22.5 28.5 34 28.5 41a10.5 10.5 0 0 0 21 0C49.5 34 39 22.5 39 22.5Z" fill="none" stroke="#ffffff" stroke-width="6.5" stroke-linejoin="round"/>
+</svg>

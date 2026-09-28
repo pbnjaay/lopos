@@ -9,7 +9,6 @@ import { Button } from "../components/ui/Button"
 import { Dialog, DialogBody, DialogFooter } from "../components/ui/Dialog"
 import { InlineAlert } from "../components/ui/InlineAlert"
 import { MetaList } from "../components/ui/Metadata"
-import { Money } from "../components/ui/Money"
 import { RouteError, RouteLoading } from "../components/ui/RouteState"
 import { SectionHeader } from "../components/ui/SectionHeader"
 import { useToast } from "../components/ui/Toast"
@@ -21,10 +20,10 @@ import { CashClosingResult } from "../features/cash-session/CashClosingResult"
 import { usePosSession } from "../features/cash-session/queries"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
-import { describeSyncOutcome } from "../features/sync/syncCopy"
+import { describeSyncNotice } from "../features/sync/syncCopy"
 import { formatDateTime } from "../utils/date"
 import { describeErrorShort } from "../utils/errorCopy"
-import { formatMoney, parseMoneyInput, toBackendMoney } from "../utils/money"
+import { formatMoney, formatMoneyInput, parseMoneyInput, toBackendMoney } from "../utils/money"
 
 export function CloseCashSessionPage() {
   const user = useCurrentUser().data!
@@ -189,10 +188,18 @@ export function CloseCashSessionPage() {
 
   if (pendingLocalSalesCount > 0) {
     async function handleSyncClick() {
-      const outcome = await triggerSync()
-      void queryClient.invalidateQueries({ queryKey: pendingLocalSalesQueryKey })
-      // Événement court : un toast, pas un message figé dans la page.
-      toast.success("Synchronisation terminée", { description: describeSyncOutcome(outcome) })
+      try {
+        const outcome = await triggerSync()
+        const remaining = await countPendingLocalSalesForSession(ownSession!.id)
+        // Événement court : un toast, pas un message figé dans la page — mais
+        // jamais vert quand la clôture reste bloquée.
+        const notice = describeSyncNotice(outcome, remaining)
+        toast[notice.tone](notice.title, { description: notice.description })
+      } catch (error) {
+        toast.error("Synchronisation impossible", { description: describeErrorShort(error) })
+      } finally {
+        void queryClient.invalidateQueries({ queryKey: pendingLocalSalesQueryKey })
+      }
     }
 
     return (
@@ -259,6 +266,10 @@ export function CloseCashSessionPage() {
           ]}
         />
 
+        {/* Comptage à l'aveugle : aucun montant avant la saisie. Espèces +
+            fond initial donnaient le cash attendu par simple addition, et le
+            CA moins Wave et Orange Money aussi — le caissier devinait au lieu
+            de compter. Tout le détail arrive sur l'écran de résultat. */}
         <div className="card-section">
           <SectionHeader
             eyebrow="Activité"
@@ -269,26 +280,6 @@ export function CloseCashSessionPage() {
             <div className="closing-summary-kpi">
               <dt>Nombre de ventes</dt>
               <dd>{summary.sales_count}</dd>
-            </div>
-            <div className="closing-summary-kpi">
-              <dt>Chiffre d’affaires</dt>
-              <dd><Money backend={summary.gross_sales} /></dd>
-            </div>
-            <div className="closing-summary-payment">
-              <dt>Espèces</dt>
-              <dd><Money backend={summary.payments.cash} /></dd>
-            </div>
-            <div className="closing-summary-payment">
-              <dt>Wave</dt>
-              <dd><Money backend={summary.payments.wave} /></dd>
-            </div>
-            <div className="closing-summary-payment">
-              <dt>Orange Money</dt>
-              <dd><Money backend={summary.payments.orange_money} /></dd>
-            </div>
-            <div className="closing-summary-opening">
-              <dt>Fond initial</dt>
-              <dd><Money backend={summary.opening_balance} /></dd>
             </div>
           </dl>
         </div>
@@ -315,7 +306,15 @@ export function CloseCashSessionPage() {
                     disabled={closeMutation.isPending}
                     aria-describedby="counted-cash-help"
                     aria-invalid={isInvalidCountedCash}
-                    onChange={(event) => setCountedCash(event.target.value)}
+                    // Une saisie invalide reste telle quelle pour que l'erreur
+                    // sous le champ puisse la nommer ; le reste se regroupe.
+                    onChange={(event) =>
+                      setCountedCash(
+                        /^[\d\s]*$/.test(event.target.value)
+                          ? formatMoneyInput(event.target.value)
+                          : event.target.value,
+                      )
+                    }
                   />
                   <span>FCFA</span>
                 </div>

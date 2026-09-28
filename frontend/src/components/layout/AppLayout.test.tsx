@@ -76,6 +76,45 @@ describe("AppLayout", () => {
     expect(screen.getByRole("button", { name: "Menu de session — Awa" })).toHaveFocus()
   })
 
+  it("shows only the initials in the header", () => {
+    const queryClient = new QueryClient()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/pos"]}>
+          <Routes>
+            <Route element={<AppLayout user={{ ...user, last_name: "Diop" }} />}>
+              <Route path="/pos" element={<p>Point de vente</p>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    const trigger = screen.getByRole("button", { name: "Menu de session — Awa" })
+    expect(trigger).toHaveTextContent(/^AD$/)
+  })
+
+  it("names the user in full at the top of the session menu", async () => {
+    const userEvents = userEvent.setup()
+    const queryClient = new QueryClient()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/pos"]}>
+          <Routes>
+            <Route element={<AppLayout user={{ ...user, last_name: "Diop" }} />}>
+              <Route path="/pos" element={<p>Point de vente</p>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    await userEvents.click(screen.getByRole("button", { name: "Menu de session — Awa" }))
+    const sessionMenu = screen.getByLabelText("Actions de session")
+    expect(within(sessionMenu).getByText("Awa Diop")).toBeInTheDocument()
+    expect(within(sessionMenu).getByText("cashier")).toBeInTheDocument()
+  })
+
   it("shows the Django administration link only to staff users", async () => {
     const userEvents = userEvent.setup()
     const queryClient = new QueryClient()

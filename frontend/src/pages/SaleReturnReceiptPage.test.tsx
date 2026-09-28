@@ -49,7 +49,9 @@ const originalSale: SaleReceipt = {
   subtotal: "2000.00",
   discount: "0.00",
   total: "2000.00",
-  payment: { method: "CASH", amount: "2000.00", received_amount: "2000.00", change_amount: "0.00" },
+  payments: [
+    { method: "CASH", amount: "2000.00", received_amount: "2000.00", change_amount: "0.00" },
+  ],
   items: [],
 }
 

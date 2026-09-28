@@ -4,11 +4,20 @@ import {
   describeCashDifference,
   formatBackendMoney,
   formatMoney,
+  formatMoneyInput,
   parseMoneyInput,
   toBackendMoney,
 } from "./money"
 
 describe("money utilities", () => {
+  it("groups a typed amount by thousands, keeping only digits", () => {
+    expect(formatMoneyInput("25000")).toBe("25 000")
+    expect(formatMoneyInput("1 2345 6")).toBe("123 456")
+    expect(formatMoneyInput("007")).toBe("7")
+    expect(formatMoneyInput("0")).toBe("0")
+    expect(formatMoneyInput("")).toBe("")
+  })
+
   it("formats integer FCFA amounts consistently", () => {
     expect(formatMoney(15_000)).toBe("15 000 FCFA")
     expect(formatBackendMoney("43000.00")).toBe("43 000 FCFA")

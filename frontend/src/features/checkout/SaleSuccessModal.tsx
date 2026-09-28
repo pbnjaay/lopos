@@ -1,6 +1,8 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { Button, buttonClassName } from "../../components/ui/Button"
+import { Dialog, DialogBody, DialogFooter } from "../../components/ui/Dialog"
+import { InlineAlert } from "../../components/ui/InlineAlert"
 import { Money } from "../../components/ui/Money"
 import { useDialogFocusTrap } from "../../components/ui/useDialogFocusTrap"
 import { withSaleOrigin } from "../sales/origin"
@@ -11,6 +13,9 @@ type SaleSuccessModalProps = {
   cashSessionId?: string
   onNewSale: () => void
   onPrintTicket?: () => void
+  onCancelSale: () => void | Promise<void>
+  isCancelling?: boolean
+  cancelErrorMessage?: string | null
 }
 
 /**
@@ -18,15 +23,28 @@ type SaleSuccessModalProps = {
  * produit : marque de statut → titre → résultat clé → action primaire →
  * action secondaire. Ici le résultat clé est la monnaie à rendre.
  */
-export function SaleSuccessModal({ sale, cashSessionId, onNewSale, onPrintTicket }: SaleSuccessModalProps) {
+export function SaleSuccessModal({
+  sale,
+  cashSessionId,
+  onNewSale,
+  onPrintTicket,
+  onCancelSale,
+  isCancelling = false,
+  cancelErrorMessage = null,
+}: SaleSuccessModalProps) {
   const dialogRef = useRef<HTMLElement>(null)
   const newSaleButtonRef = useRef<HTMLButtonElement>(null)
+  const keepSaleButtonRef = useRef<HTMLButtonElement>(null)
   useDialogFocusTrap(dialogRef)
-  const paymentLabel = {
+  const [isConfirmingCancel, setIsConfirmingCancel] = useState(false)
+  const isSplitPayment = sale.payments.length > 1
+  const changePayments = sale.payments.filter((payment) => payment.changeAmount !== null)
+  const changeTotal = changePayments.reduce((sum, payment) => sum + (payment.changeAmount ?? 0), 0)
+  const paymentLabels = {
     CASH: "Espèces",
     WAVE: "Wave",
     ORANGE_MONEY: "Orange Money",
-  }[sale.payment.method]
+  }
 
   // L'action suivante attendue après une vente est la vente suivante : le
   // focus y va, donc Entrée l'enchaîne sans quitter le clavier.
@@ -37,11 +55,42 @@ export function SaleSuccessModal({ sale, cashSessionId, onNewSale, onPrintTicket
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.repeat) return
-      if (event.key === "Enter") onNewSale()
+      // La confirmation d'annulation a son propre clavier : Entrée n'y
+      // déclenche jamais "Nouvelle vente" par-dessus.
+      if (isConfirmingCancel) return
+      // Échap ferme comme toutes les autres modales ; fermer, ici, c'est
+      // passer à la vente suivante.
+      if (event.key === "Escape") {
+        onNewSale()
+        return
+      }
+      if (event.key !== "Enter") return
+      // Focus sur un bouton ou un lien (Imprimer, Annuler cette vente,
+      // Nouvelle vente elle-même) : l'activation native fait déjà le bon
+      // geste. Intercepter ici fermait la modale avant que « Annuler cette
+      // vente » ne puisse s'ouvrir au clavier.
+      if (
+        event.target instanceof Element &&
+        event.target.closest("button, a, input, select, textarea")
+      ) {
+        return
+      }
+      onNewSale()
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [onNewSale])
+  }, [onNewSale, isConfirmingCancel])
+
+  async function confirmCancelSale() {
+    try {
+      await onCancelSale()
+      // Succès : le parent vide `completedSale`, ce composant se démonte.
+      setIsConfirmingCancel(false)
+    } catch {
+      // Échec : la modale de confirmation reste ouverte, l'erreur y est
+      // affichée via cancelErrorMessage — rien à faire ici.
+    }
+  }
 
   return (
     <div className="dialog-backdrop">
@@ -58,6 +107,17 @@ export function SaleSuccessModal({ sale, cashSessionId, onNewSale, onPrintTicket
         <p className="eyebrow">Vente terminée</p>
         <h2 id="sale-success-title">Vente validée</h2>
 
+        {/* Ce que le caissier regarde en rendant les billets : en tête et en
+            grand, pas en dernière ligne du récapitulatif. */}
+        {changePayments.length > 0 ? (
+          <div className="sale-change-hero">
+            <span>Monnaie à rendre</span>
+            <strong>
+              <Money value={changeTotal} />
+            </strong>
+          </div>
+        ) : null}
+
         {sale.isPendingSync ? (
           <p className="sale-pending-note">
             Vente enregistrée sur la caisse, synchronisation automatique.
@@ -67,31 +127,35 @@ export function SaleSuccessModal({ sale, cashSessionId, onNewSale, onPrintTicket
 
         <dl className="sale-amounts">
           <div>
-            <dt>Paiement</dt>
-            <dd>{paymentLabel}</dd>
-          </div>
-          <div>
             <dt>Total</dt>
             <dd>
               <Money value={sale.total} />
             </dd>
           </div>
-          {sale.payment.receivedAmount !== null ? (
-            <div>
-              <dt>Reçu</dt>
+          {sale.payments.map((payment, index) => (
+            <div key={`method-${payment.method}-${index}`}>
+              <dt>{isSplitPayment ? `Paiement ${index + 1}` : "Paiement"}</dt>
               <dd>
-                <Money value={sale.payment.receivedAmount} />
+                {paymentLabels[payment.method]}
+                {isSplitPayment ? (
+                  <>
+                    {" — "}
+                    <Money value={payment.amount} />
+                  </>
+                ) : null}
               </dd>
             </div>
-          ) : null}
-          {sale.payment.changeAmount !== null ? (
-            <div className="sale-change">
-              <dt>Monnaie</dt>
-              <dd>
-                <Money value={sale.payment.changeAmount} />
-              </dd>
-            </div>
-          ) : null}
+          ))}
+          {sale.payments.map((payment, index) =>
+            payment.receivedAmount !== null ? (
+              <div key={`received-${index}`}>
+                <dt>{isSplitPayment ? `Reçu (paiement ${index + 1})` : "Reçu"}</dt>
+                <dd>
+                  <Money value={payment.receivedAmount} />
+                </dd>
+              </div>
+            ) : null,
+          )}
         </dl>
 
         <div className="sale-success-actions">
@@ -111,7 +175,58 @@ export function SaleSuccessModal({ sale, cashSessionId, onNewSale, onPrintTicket
             Nouvelle vente
           </Button>
         </div>
+
+        {/* Correction d'une erreur repérée immédiatement — délibérément en
+            retrait par rapport aux deux actions attendues ci-dessus. */}
+        <button
+          type="button"
+          className="sale-success-cancel-trigger"
+          onClick={() => setIsConfirmingCancel(true)}
+        >
+          Erreur ? Annuler cette vente
+        </button>
       </section>
+
+      {isConfirmingCancel ? (
+        <Dialog
+          eyebrow="Vente validée"
+          title="Annuler cette vente ?"
+          size="sm"
+          initialFocusRef={keepSaleButtonRef}
+          dismissible={!isCancelling}
+          onClose={() => setIsConfirmingCancel(false)}
+        >
+          <DialogBody>
+            <p>
+              Le stock sera remis à jour. Si le client a déjà payé
+              ({sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}),
+              cette action ne touche pas le paiement — c'est à vous de le
+              rembourser si besoin.
+            </p>
+            {cancelErrorMessage ? (
+              <InlineAlert tone="error">{cancelErrorMessage}</InlineAlert>
+            ) : null}
+            <DialogFooter>
+              <Button
+                ref={keepSaleButtonRef}
+                variant="secondary"
+                disabled={isCancelling}
+                onClick={() => setIsConfirmingCancel(false)}
+              >
+                Garder la vente
+              </Button>
+              <Button
+                variant="destructive"
+                loading={isCancelling}
+                loadingLabel="Annulation…"
+                onClick={() => void confirmCancelSale()}
+              >
+                Confirmer l'annulation
+              </Button>
+            </DialogFooter>
+          </DialogBody>
+        </Dialog>
+      ) : null}
     </div>
   )
 }

@@ -44,7 +44,7 @@ type Callbacks = {
 function renderCart(
   items: CartItem[],
   overrides: Partial<Callbacks> = {},
-  lastUsedMethod: PaymentMethod | null = null,
+  primaryMethod: PaymentMethod | null = null,
 ) {
   const callbacks: Callbacks = {
     onQuantityChange: vi.fn(),
@@ -66,7 +66,7 @@ function renderCart(
       onRemove={callbacks.onRemove}
       onClear={callbacks.onClear}
       onCheckoutMethod={callbacks.onCheckoutMethod}
-      lastUsedMethod={lastUsedMethod}
+      primaryMethod={primaryMethod}
       onSuspend={callbacks.onSuspend}
     />,
   )

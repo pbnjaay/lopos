@@ -7,6 +7,7 @@ import { identifyUser } from "../analytics/posthog"
 import { setSentryUser } from "../analytics/sentry"
 import { Button } from "../components/ui/Button"
 import { InlineAlert } from "../components/ui/InlineAlert"
+import { Logo } from "../components/ui/Logo"
 import { RouteLoading } from "../components/ui/RouteState"
 import { currentUserQueryKey, useCurrentUser } from "../features/auth/queries"
 import { describeErrorShort } from "../utils/errorCopy"
@@ -49,7 +50,7 @@ export function LoginPage() {
   return (
     <main className="setup-page">
       <section className="setup-card" aria-labelledby="login-title">
-        <p className="brand">LoPOS</p>
+        <Logo size={44} className="logo-login" />
         <p className="eyebrow">Point de vente</p>
         <h1 id="login-title">Connexion caisse</h1>
         <p className="metadata">Connectez-vous avec votre compte caissier.</p>

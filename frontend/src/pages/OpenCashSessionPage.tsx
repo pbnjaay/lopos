@@ -13,7 +13,7 @@ import { saveLocalCashSession } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
 import { storeCashRegisterId, usePosSession } from "../features/cash-session/queries"
 import { describeErrorShort } from "../utils/errorCopy"
-import { formatMoney, parseMoneyInput, toBackendMoney } from "../utils/money"
+import { formatMoney, formatMoneyInput, parseMoneyInput, toBackendMoney } from "../utils/money"
 
 export function OpenCashSessionPage() {
   const navigate = useNavigate()
@@ -101,7 +101,7 @@ export function OpenCashSessionPage() {
 
   function handleBalanceChange(value: string) {
     if (!/^[\d\s]*$/.test(value)) return
-    setOpeningBalance(value)
+    setOpeningBalance(formatMoneyInput(value))
     setFieldError(null)
     openingMutation.reset()
   }

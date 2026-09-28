@@ -87,6 +87,16 @@ export function removeItem(items: CartItem[], productId: string): CartItem[] {
   return items.filter((item) => item.productId !== productId)
 }
 
+/**
+ * Remet une ligne retirée à sa place d'origine. Si le produit a été rescanné
+ * entre-temps, la ligne présente fait foi : on n'en crée pas une seconde.
+ */
+export function restoreItem(items: CartItem[], item: CartItem, index: number): CartItem[] {
+  if (items.some((current) => current.productId === item.productId)) return items
+  const position = Math.min(Math.max(index, 0), items.length)
+  return [...items.slice(0, position), item, ...items.slice(position)]
+}
+
 export function clearCart(): CartItem[] {
   return []
 }

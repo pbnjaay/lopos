@@ -46,6 +46,12 @@ describe("PaymentMethodModal", () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
+  it("shows \"Reste à payer\" instead of \"Total à payer\" once a first payment has been applied", () => {
+    render(<PaymentMethodModal total={400} isPartial onClose={vi.fn()} onSelect={vi.fn()} />)
+
+    expect(screen.getByText("Reste à payer").parentElement).toHaveTextContent("400 FCFA")
+  })
+
   it("highlights and focuses the last used method", () => {
     const onSelect = vi.fn()
     render(

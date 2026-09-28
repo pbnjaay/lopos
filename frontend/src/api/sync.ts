@@ -10,10 +10,11 @@ export type SyncEventPayload = {
     catalog_unit_price?: string
     quantity: string
   }>
-  payment: {
+  payments: Array<{
     method: PaymentMethod
+    amount: string
     received_amount?: string
-  }
+  }>
 }
 
 export type SyncEvent = {

@@ -1,4 +1,6 @@
 import { execSync } from "node:child_process"
+import { readdirSync } from "node:fs"
+import { join, relative, sep } from "node:path"
 
 import { defineConfig, loadEnv, type Plugin } from "vite"
 import react from "@vitejs/plugin-react"
@@ -11,13 +13,33 @@ function gitShortSha(): string {
   }
 }
 
+/** Fichiers de `public/` (manifest, icônes) : copiés tels quels par Vite, ils
+ *  n'apparaissent pas dans le bundle et doivent être ajoutés à la main. */
+function listPublicFiles(publicDir: string): string[] {
+  if (!publicDir) return []
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory() ? walk(join(dir, entry.name)) : [join(dir, entry.name)],
+    )
+  try {
+    return walk(publicDir).map((file) => `/${relative(publicDir, file).split(sep).join("/")}`)
+  } catch {
+    return []
+  }
+}
+
 function offlineShellPlugin(release: string): Plugin {
+  let publicDir = ""
   return {
     name: "lopos-offline-shell",
     enforce: "post",
+    configResolved(config) {
+      publicDir = config.publicDir
+    },
     generateBundle(_options, bundle) {
       const precacheUrls = [...new Set([
         "/index.html",
+        ...listPublicFiles(publicDir),
         ...Object.keys(bundle)
           .filter((fileName) => !fileName.endsWith(".map") && fileName !== "sw.js")
           .map((fileName) => `/${fileName}`),

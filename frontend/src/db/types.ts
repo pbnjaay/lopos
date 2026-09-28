@@ -69,7 +69,7 @@ export type LocalSale = {
   conflictCode: string | null
   conflictMessage: string | null
   items: LocalSaleItem[]
-  payment: LocalPayment
+  payments: LocalPayment[]
   subtotal: number
   discount: number
   total: number

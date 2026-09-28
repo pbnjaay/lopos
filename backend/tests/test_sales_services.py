@@ -71,8 +71,9 @@ def test_complete_sale_decrements_stock_and_creates_audit_records(
     sale = complete_sale(
         cash_session=cash_session,
         items=[{"product_id": product.id, "quantity": 2}],
-        payment_method=Payment.Method.CASH,
-        received_amount=Decimal("2000.00"),
+        payments=[
+            {"method": Payment.Method.CASH, "amount": Decimal("1000.00"), "received_amount": Decimal("2000.00")}
+        ],
     )
 
     stock.refresh_from_db()
@@ -120,7 +121,7 @@ def test_complete_sale_handles_multiple_products(
             {"product_id": coca.id, "quantity": 2},
             {"product_id": bread.id, "quantity": 1},
         ],
-        payment_method=Payment.Method.WAVE,
+        payments=[{"method": Payment.Method.WAVE, "amount": Decimal("1200.00")}],
     )
 
     coca_stock.refresh_from_db()
@@ -156,7 +157,7 @@ def test_complete_sale_aggregates_duplicate_product_lines(
             {"product_id": product.id, "quantity": 1},
             {"product_id": product.id, "quantity": 2},
         ],
-        payment_method=Payment.Method.ORANGE_MONEY,
+        payments=[{"method": Payment.Method.ORANGE_MONEY, "amount": Decimal("1500.00")}],
     )
 
     stock.refresh_from_db()
@@ -181,8 +182,9 @@ def test_complete_sale_rejects_insufficient_cash_without_side_effects(
         complete_sale(
             cash_session=cash_session,
             items=[{"product_id": product.id, "quantity": 2}],
-            payment_method=Payment.Method.CASH,
-            received_amount=Decimal("500.00"),
+            payments=[
+                {"method": Payment.Method.CASH, "amount": Decimal("1000.00"), "received_amount": Decimal("500.00")}
+            ],
         )
 
     stock.refresh_from_db()
@@ -207,8 +209,9 @@ def test_complete_sale_rejects_insufficient_stock_without_side_effects(
         complete_sale(
             cash_session=cash_session,
             items=[{"product_id": product.id, "quantity": 2}],
-            payment_method=Payment.Method.CASH,
-            received_amount=Decimal("2000.00"),
+            payments=[
+                {"method": Payment.Method.CASH, "amount": Decimal("1000.00"), "received_amount": Decimal("2000.00")}
+            ],
         )
 
     stock.refresh_from_db()
@@ -236,7 +239,7 @@ def test_complete_sale_rejects_closed_session(
         complete_sale(
             cash_session=cash_session,
             items=[{"product_id": product.id, "quantity": 2}],
-            payment_method=Payment.Method.WAVE,
+            payments=[{"method": Payment.Method.WAVE, "amount": Decimal("1000.00")}],
         )
 
     stock.refresh_from_db()
@@ -261,7 +264,7 @@ def test_complete_sale_rejects_inactive_product(
         complete_sale(
             cash_session=cash_session,
             items=[{"product_id": product.id, "quantity": 2}],
-            payment_method=Payment.Method.WAVE,
+            payments=[{"method": Payment.Method.WAVE, "amount": Decimal("1000.00")}],
         )
 
     stock.refresh_from_db()
@@ -276,7 +279,7 @@ def test_complete_sale_rejects_empty_or_invalid_items(
         complete_sale(
             cash_session=cash_session,
             items=[],
-            payment_method=Payment.Method.WAVE,
+            payments=[{"method": Payment.Method.WAVE, "amount": Decimal("1.00")}],
         )
 
 
@@ -289,7 +292,7 @@ def test_complete_sale_rejects_unknown_product(
         complete_sale(
             cash_session=cash_session,
             items=[{"product_id": unknown_product_id, "quantity": 1}],
-            payment_method=Payment.Method.WAVE,
+            payments=[{"method": Payment.Method.WAVE, "amount": Decimal("1.00")}],
         )
 
     assert exc_info.value.product_id == unknown_product_id
@@ -311,13 +314,87 @@ def test_complete_sale_rejects_received_amount_for_mobile_payment(
         complete_sale(
             cash_session=cash_session,
             items=[{"product_id": product.id, "quantity": 1}],
-            payment_method=Payment.Method.WAVE,
-            received_amount=Decimal("500.00"),
+            payments=[
+                {"method": Payment.Method.WAVE, "amount": Decimal("500.00"), "received_amount": Decimal("500.00")}
+            ],
         )
 
     stock.refresh_from_db()
     assert stock.quantity == 20
     assert Sale.objects.count() == 0
+
+
+def test_complete_sale_accepts_a_split_payment_across_methods(
+    store: Store,
+    cash_session: CashSession,
+) -> None:
+    product, stock = create_product_with_stock(
+        store=store, name="Riz 5kg", price=Decimal("3000.00"), quantity=10,
+    )
+
+    sale = complete_sale(
+        cash_session=cash_session,
+        items=[{"product_id": product.id, "quantity": 1}],
+        payments=[
+            {"method": Payment.Method.WAVE, "amount": Decimal("1000.00")},
+            {
+                "method": Payment.Method.CASH,
+                "amount": Decimal("2000.00"),
+                "received_amount": Decimal("2500.00"),
+            },
+        ],
+    )
+
+    payments = list(Payment.objects.filter(sale=sale).order_by("method"))
+    assert sale.total == Decimal("3000.00")
+    assert len(payments) == 2
+    cash_leg = next(p for p in payments if p.method == Payment.Method.CASH)
+    wave_leg = next(p for p in payments if p.method == Payment.Method.WAVE)
+    assert cash_leg.amount == Decimal("2000.00")
+    assert cash_leg.received_amount == Decimal("2500.00")
+    assert cash_leg.change_amount == Decimal("500.00")
+    assert wave_leg.amount == Decimal("1000.00")
+    assert wave_leg.received_amount is None
+
+
+def test_complete_sale_rejects_payments_that_dont_sum_to_the_total(
+    store: Store,
+    cash_session: CashSession,
+) -> None:
+    product, stock = create_product_with_stock(
+        store=store, name="Riz 5kg", price=Decimal("3000.00"), quantity=10,
+    )
+
+    with pytest.raises(InvalidPayment):
+        complete_sale(
+            cash_session=cash_session,
+            items=[{"product_id": product.id, "quantity": 1}],
+            payments=[
+                {"method": Payment.Method.WAVE, "amount": Decimal("1000.00")},
+                {"method": Payment.Method.CASH, "amount": Decimal("1500.00"), "received_amount": Decimal("1500.00")},
+            ],
+        )
+
+    stock.refresh_from_db()
+    assert stock.quantity == 10
+    assert Sale.objects.count() == 0
+    assert Payment.objects.count() == 0
+
+
+def test_complete_sale_rejects_no_payments(
+    store: Store,
+    cash_session: CashSession,
+) -> None:
+    product, _stock = create_product_with_stock(
+        store=store, name="Riz 5kg", price=Decimal("3000.00"), quantity=10,
+    )
+
+    with pytest.raises(InvalidPayment):
+        complete_sale(
+            cash_session=cash_session,
+            items=[{"product_id": product.id, "quantity": 1}],
+            payments=[],
+        )
 
 
 def test_complete_sale_rolls_back_everything_on_late_failure(
@@ -342,8 +419,9 @@ def test_complete_sale_rolls_back_everything_on_late_failure(
         complete_sale(
             cash_session=cash_session,
             items=[{"product_id": product.id, "quantity": 2}],
-            payment_method=Payment.Method.CASH,
-            received_amount=Decimal("2000.00"),
+            payments=[
+                {"method": Payment.Method.CASH, "amount": Decimal("1000.00"), "received_amount": Decimal("2000.00")}
+            ],
         )
 
     stock.refresh_from_db()

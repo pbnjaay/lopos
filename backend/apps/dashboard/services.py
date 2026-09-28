@@ -304,8 +304,10 @@ def get_manager_dashboard(
 
     recent_sales = list(
         sales.select_related(
-            "cash_session__cash_register", "cash_session__cash_register__store", "cashier", "payment"
-        ).order_by("-occurred_at")[:10]
+            "cash_session__cash_register", "cash_session__cash_register__store", "cashier"
+        )
+        .prefetch_related("payments")
+        .order_by("-occurred_at")[:10]
     )
 
     alerts = _build_alerts(

@@ -124,16 +124,14 @@ afterEach(async () => {
 })
 
 describe("CloseCashSessionPage", () => {
-  it("shows the session totals without revealing expected cash", () => {
+  it("shows no amount before the blind count", () => {
     renderPage()
 
     expect(screen.getByRole("link", { name: "Retour au point de vente" })).toHaveAttribute("href", "/pos")
     expect(screen.getByText("3")).toBeInTheDocument()
-    expect(screen.getByText("43 000 FCFA")).toBeInTheDocument()
-    expect(screen.getAllByText("15 000 FCFA")).toHaveLength(2)
-    expect(screen.getByText("20 000 FCFA")).toBeInTheDocument()
-    expect(screen.getByText("8 000 FCFA")).toBeInTheDocument()
-    expect(screen.queryByText("30 000 FCFA")).not.toBeInTheDocument()
+    // Aucun montant dont le caissier pourrait déduire le cash attendu.
+    expect(screen.queryByText(/\d[\d ]* FCFA/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Espèces|Fond initial|Chiffre d’affaires/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Cash attendu/i)).not.toBeInTheDocument()
   })
 

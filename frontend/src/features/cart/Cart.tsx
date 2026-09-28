@@ -34,8 +34,8 @@ type CartProps = {
   onRemove: (productId: string) => void
   onClear: () => void
   onCheckoutMethod: (method: PaymentMethod) => void
-  /** Moyen de paiement le plus recent, mis en avant dans le pied du panier. */
-  lastUsedMethod?: PaymentMethod | null
+  /** Moyen de paiement dominant de la session, mis en avant dans le pied du panier. */
+  primaryMethod?: PaymentMethod | null
   onSuspend: () => void
   onDialogOpenChange?: (isOpen: boolean) => void
   onInteractionComplete?: () => void
@@ -59,7 +59,7 @@ export function Cart({
   onRemove,
   onClear,
   onCheckoutMethod,
-  lastUsedMethod = null,
+  primaryMethod = null,
   onSuspend,
   onDialogOpenChange,
   onInteractionComplete,
@@ -224,7 +224,7 @@ export function Cart({
               // Seul l'accent suit le moyen de paiement dominant du magasin,
               // pour qu'une boutique a 94 % Wave n'ait pas son geste courant
               // en bouton secondaire.
-              variant={method === (lastUsedMethod ?? "CASH") ? "primary" : "secondary"}
+              variant={method === (primaryMethod ?? "CASH") ? "primary" : "secondary"}
               size="lg"
               className="checkout-method"
               disabled={items.length === 0}

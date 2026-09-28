@@ -10,10 +10,11 @@ import { Money } from "../components/ui/Money"
 import { SectionHeader } from "../components/ui/SectionHeader"
 import { SkeletonRows } from "../components/ui/Skeleton"
 import { useToast } from "../components/ui/Toast"
-import { listConflictLocalSales, listPendingLocalSales } from "../db/sales"
+import { countPendingLocalSales, listConflictLocalSales, listPendingLocalSales } from "../db/sales"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { withSaleOrigin } from "../features/sales/origin"
-import { describeSyncOutcome } from "../features/sync/syncCopy"
+import { describeSyncNotice } from "../features/sync/syncCopy"
+import { describeErrorShort } from "../utils/errorCopy"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
 import { formatDate, formatTime } from "../utils/date"
 
@@ -44,14 +45,16 @@ export function PendingSalesPage() {
   const isLoading = pendingSalesQuery.isLoading || conflictSalesQuery.isLoading
 
   async function handleSyncClick() {
-    const outcome = await triggerSync()
-    void queryClient.invalidateQueries({ queryKey: pendingSalesQueryKey })
-    void queryClient.invalidateQueries({ queryKey: conflictSalesQueryKey })
-    // Événement court : un toast, pas un message qui reste dans la page.
-    if (outcome.conflicts > 0) {
-      toast.warning("Synchronisation terminée", { description: describeSyncOutcome(outcome) })
-    } else {
-      toast.success("Synchronisation terminée", { description: describeSyncOutcome(outcome) })
+    try {
+      const outcome = await triggerSync()
+      // Événement court : un toast, pas un message qui reste dans la page.
+      const notice = describeSyncNotice(outcome, await countPendingLocalSales())
+      toast[notice.tone](notice.title, { description: notice.description })
+    } catch (error) {
+      toast.error("Synchronisation impossible", { description: describeErrorShort(error) })
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: pendingSalesQueryKey })
+      void queryClient.invalidateQueries({ queryKey: conflictSalesQueryKey })
     }
   }
 
@@ -138,7 +141,9 @@ export function PendingSalesPage() {
                   title={<Money value={sale.total} />}
                   meta={
                     <>
-                      <span>{paymentLabels[sale.payment.method]}</span>
+                      <span>
+                        {sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}
+                      </span>
                       <span aria-hidden="true">·</span>
                       <span>{formatDate(sale.createdAt)}</span>
                     </>

@@ -198,9 +198,9 @@ export function ProductSearch({ storeId, onProductSelect, restContent }: Product
                 >
                   <div>
                     <strong>{product.name}</strong>
-                    <span>
-                      {product.barcode ? `Code : ${product.barcode}` : "Sans code-barres"}
-                    </span>
+                    {/* Sans code, rien : « Sans code-barres » répété sur chaque
+                        ligne n'aidait pas à choisir le bon produit. */}
+                    {product.barcode ? <span>Code : {product.barcode}</span> : null}
                   </div>
                   <div className="product-numbers">
                     <strong><Money value={product.sellingPrice} /></strong>

@@ -54,6 +54,7 @@ def product(store: Store) -> Product:
 
 
 def _sale_event(*, cash_session, product, event_id=None, entity_id=None, quantity=2):
+    amount = Decimal("500.00") * quantity
     return {
         "event_id": str(event_id or uuid4()),
         "type": "SALE_COMPLETED",
@@ -69,7 +70,9 @@ def _sale_event(*, cash_session, product, event_id=None, entity_id=None, quantit
                     "quantity": quantity,
                 }
             ],
-            "payment": {"method": "CASH", "received_amount": "2000.00"},
+            "payments": [
+                {"method": "CASH", "amount": str(amount), "received_amount": "2000.00"}
+            ],
         },
     }
 

@@ -56,6 +56,15 @@ afterEach(() => {
 })
 
 describe("ProductGrid", () => {
+  it("dit que les raccourcis manquent au lieu de laisser un rail vide", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"))
+    renderGrid()
+
+    expect(
+      await screen.findByText("Raccourcis produits indisponibles — scannez ou recherchez l’article."),
+    ).toBeInTheDocument()
+  })
+
   it("demande les meilleures ventes, jamais le catalogue entier", async () => {
     const urls = mockTopProducts([product({ id: "coca", name: "Coca 50cl" })])
     renderGrid()

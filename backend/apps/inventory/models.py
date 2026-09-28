@@ -46,6 +46,9 @@ class InventoryMovement(models.Model):
         SALE = "SALE", "Vente"
         ADJUSTMENT = "ADJUSTMENT", "Ajustement"
         RETURN_IN = "RETURN_IN", "Retour remis en stock"
+        # Distinct de RETURN_IN : ici la vente est annulée dans la foulée,
+        # aucune marchandise n'est physiquement rapportée par un client.
+        CANCELLATION = "CANCELLATION", "Vente annulée"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     store = models.ForeignKey(

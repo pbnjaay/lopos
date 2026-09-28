@@ -14,6 +14,24 @@ for (const asset of requiredAssets) {
     throw new Error(`Le service worker ne précharge pas ${asset}.`)
   }
 }
+for (const file of ["/manifest.webmanifest", "/icons/logo.svg", "/icons/icon-192.png", "/icons/icon-512.png"]) {
+  if (!index.includes(file) && !file.startsWith("/icons/icon-")) {
+    throw new Error(`index.html ne référence pas ${file}.`)
+  }
+  if (!worker.includes(`"${file}"`)) {
+    throw new Error(`Le service worker ne précharge pas ${file} : l'icône manquerait hors ligne.`)
+  }
+}
+const manifest = JSON.parse(await readFile(new URL("../dist/manifest.webmanifest", import.meta.url), "utf8"))
+for (const size of ["192x192", "512x512"]) {
+  if (!manifest.icons.some((icon) => icon.sizes === size && icon.type === "image/png")) {
+    throw new Error(`Le manifest n'a pas d'icône PNG ${size} : l'app ne serait pas installable.`)
+  }
+}
+if (!manifest.icons.some((icon) => icon.purpose === "maskable")) {
+  throw new Error("Le manifest n'a pas d'icône maskable pour Android.")
+}
+
 if (!worker.includes('url.pathname.startsWith("/api/")')) {
   throw new Error("Le service worker doit exclure explicitement les API métier.")
 }

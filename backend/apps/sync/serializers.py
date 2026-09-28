@@ -26,6 +26,9 @@ class SyncOfflineItemSerializer(serializers.Serializer):
 
 class SyncPaymentSerializer(serializers.Serializer):
     method = serializers.ChoiceField(choices=Payment.Method.choices)
+    amount = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0.01")
+    )
     received_amount = serializers.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -38,7 +41,7 @@ class SyncPaymentSerializer(serializers.Serializer):
 class SyncSalePayloadSerializer(serializers.Serializer):
     cash_session_id = serializers.UUIDField()
     items = SyncOfflineItemSerializer(many=True, allow_empty=False)
-    payment = SyncPaymentSerializer()
+    payments = SyncPaymentSerializer(many=True, allow_empty=False)
 
 
 class SyncEventSerializer(serializers.Serializer):

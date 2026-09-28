@@ -30,7 +30,7 @@ def _payload(*, cash_session_id, product_id, product_name, unit_price, quantity)
                 "quantity": quantity,
             }
         ],
-        "payment": {"method": Payment.Method.WAVE},
+        "payments": [{"method": Payment.Method.WAVE, "amount": unit_price * quantity}],
     }
 
 

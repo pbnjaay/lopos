@@ -17,6 +17,12 @@ class SaleItemInputSerializer(serializers.Serializer):
 
 class PaymentInputSerializer(serializers.Serializer):
     method = serializers.ChoiceField(choices=Payment.Method.choices)
+    # Part du total couverte par ce paiement — obligatoire dès qu'un paiement
+    # peut n'être qu'un des plusieurs qui couvrent une même vente (paiement
+    # mixte). La somme de tous les `amount` doit égaler le total de la vente.
+    amount = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0.01")
+    )
     received_amount = serializers.DecimalField(
         max_digits=14,
         decimal_places=2,
@@ -32,7 +38,7 @@ class CompleteSaleSerializer(serializers.Serializer):
         queryset=CashSession.objects.all(),
     )
     items = SaleItemInputSerializer(many=True, allow_empty=False)
-    payment = PaymentInputSerializer()
+    payments = PaymentInputSerializer(many=True, allow_empty=False)
 
 
 class SaleListQuerySerializer(serializers.Serializer):
@@ -74,7 +80,7 @@ class PaymentSerializer(serializers.ModelSerializer):
 
 class SaleSerializer(serializers.ModelSerializer):
     items = SaleItemSerializer(many=True, read_only=True)
-    payment = PaymentSerializer(read_only=True)
+    payments = PaymentSerializer(many=True, read_only=True)
     store = serializers.SerializerMethodField()
     cash_register = serializers.SerializerMethodField()
     cashier = serializers.SerializerMethodField()
@@ -95,7 +101,7 @@ class SaleSerializer(serializers.ModelSerializer):
             "total",
             "returned_total",
             "net_total",
-            "payment",
+            "payments",
             "items",
         )
 
@@ -131,7 +137,7 @@ class SaleSummarySerializer(SaleSerializer):
             "total",
             "returned_total",
             "net_total",
-            "payment",
+            "payments",
         )
 
 

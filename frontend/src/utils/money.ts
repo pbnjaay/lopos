@@ -36,6 +36,16 @@ export function parseMoneyInput(value: string): number | null {
   return amount
 }
 
+/**
+ * Montant saisi, regroupé par milliers au fil de la frappe : « 25000 » se lit
+ * « 25 000 », et un zéro de trop saute aux yeux avant la validation. Ne garde
+ * que les chiffres — `parseMoneyInput` relit la valeur telle quelle.
+ */
+export function formatMoneyInput(value: string): string {
+  const digits = value.replace(/\D/g, "").replace(/^0+(?=\d)/, "")
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, " ")
+}
+
 export function toBackendMoney(amount: number): string {
   return `${amount}.00`
 }

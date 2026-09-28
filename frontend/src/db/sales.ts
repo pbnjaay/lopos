@@ -32,30 +32,58 @@ export class InsufficientLocalStockError extends Error {
   }
 }
 
-export type CreateLocalSaleInput = {
-  session: LocalCashSession
-  items: Array<{ productId: string; quantityMilli?: number; quantity?: number; unitPrice?: number }>
-  payment: {
-    method: PaymentMethod
-    receivedAmount?: number | null
+export class InvalidLocalPaymentError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "InvalidLocalPaymentError"
   }
 }
 
-function buildLocalPayment(
-  payment: CreateLocalSaleInput["payment"],
+export type CreateLocalSaleInput = {
+  session: LocalCashSession
+  items: Array<{ productId: string; quantityMilli?: number; quantity?: number; unitPrice?: number }>
+  // Un seul élément pour un paiement classique, plusieurs pour un paiement
+  // mixte (espèces + Wave, par exemple) — la somme des `amount` doit égaler
+  // le total de la vente.
+  payments: Array<{
+    method: PaymentMethod
+    amount: number
+    receivedAmount?: number | null
+  }>
+}
+
+function buildLocalPayments(
+  payments: CreateLocalSaleInput["payments"],
   total: number,
-): LocalPayment {
-  if (payment.method !== "CASH") {
-    return { method: payment.method, amount: total, receivedAmount: null, changeAmount: null }
+): LocalPayment[] {
+  if (payments.length === 0) {
+    throw new InvalidLocalPaymentError("Au moins un paiement est requis.")
+  }
+  const covered = payments.reduce((sum, payment) => sum + payment.amount, 0)
+  if (covered !== total) {
+    throw new InvalidLocalPaymentError(
+      "La somme des paiements ne correspond pas au total de la vente.",
+    )
   }
 
-  const receivedAmount = payment.receivedAmount ?? 0
-  return {
-    method: "CASH",
-    amount: total,
-    receivedAmount,
-    changeAmount: receivedAmount - total,
-  }
+  return payments.map((payment) => {
+    if (payment.method !== "CASH") {
+      return {
+        method: payment.method,
+        amount: payment.amount,
+        receivedAmount: null,
+        changeAmount: null,
+      }
+    }
+
+    const receivedAmount = payment.receivedAmount ?? 0
+    return {
+      method: "CASH",
+      amount: payment.amount,
+      receivedAmount,
+      changeAmount: receivedAmount - payment.amount,
+    }
+  })
 }
 
 /**
@@ -66,7 +94,7 @@ export async function createLocalSale(
   input: CreateLocalSaleInput,
   database: PosDatabase = db,
 ): Promise<LocalSale> {
-  const { session, items, payment } = input
+  const { session, items, payments } = input
   if (items.length === 0) throw new Error("Le panier est vide.")
 
   return database.transaction("rw", [database.products, database.localSales], async () => {
@@ -132,7 +160,7 @@ export async function createLocalSale(
       conflictCode: null,
       conflictMessage: null,
       items: saleItems,
-      payment: buildLocalPayment(payment, total),
+      payments: buildLocalPayments(payments, total),
       subtotal: total,
       discount: 0,
       total,
@@ -255,6 +283,54 @@ export async function markLocalSaleSynced(
       conflictCode: null,
       conflictMessage: null,
     })
+  })
+}
+
+/**
+ * Annule une vente locale pas encore synchronisée : elle n'existe nulle part
+ * côté serveur, donc "annuler" revient à faire comme si elle n'avait jamais
+ * eu lieu — suppression pure, jamais un nouveau statut CANCELLED (qui
+ * obligerait à le traiter partout où PENDING_SYNC est filtré aujourd'hui).
+ *
+ * Retourne `false` sans rien modifier si la vente a déjà synchronisé (ou
+ * n'existe pas localement) entre le moment où l'appelant l'a vue et cet
+ * appel — l'appelant doit alors passer par l'annulation serveur à la place.
+ */
+export async function cancelPendingLocalSale(
+  id: string,
+  database: PosDatabase = db,
+): Promise<boolean> {
+  return database.transaction("rw", [database.products, database.localSales], async () => {
+    const sale = await database.localSales.get(id)
+    if (!sale || sale.status !== "PENDING_SYNC") return false
+
+    const soldByProduct = new Map<string, number>()
+    for (const item of sale.items) {
+      const quantityMilli = item.quantityMilli ?? (item.quantity ?? 0) * 1000
+      soldByProduct.set(
+        item.productId,
+        (soldByProduct.get(item.productId) ?? 0) + quantityMilli,
+      )
+    }
+
+    for (const [productId, soldQuantityMilli] of soldByProduct) {
+      const product = await database.products.get([sale.storeId, productId])
+      if (!product) continue
+      const pendingQuantityMilli =
+        product.pendingSoldQuantityMilli ??
+        (product.pendingSoldQuantity ?? 0) * 1000
+      const nextPendingQuantityMilli = Math.max(
+        pendingQuantityMilli - soldQuantityMilli,
+        0,
+      )
+      await database.products.update([sale.storeId, productId], {
+        pendingSoldQuantityMilli: nextPendingQuantityMilli,
+        pendingSoldQuantity: nextPendingQuantityMilli / 1000,
+      })
+    }
+
+    await database.localSales.delete(id)
+    return true
   })
 }
 

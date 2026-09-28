@@ -9,11 +9,16 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { listSales } from "../api/sales"
+import { listRecentLocalSales } from "../db/sales"
+import type { LocalSale } from "../db/types"
 import type { CashRegister, CashSession, CurrentUser } from "../types/api"
 import { formatDate } from "../utils/date"
 import { SalesPage } from "./SalesPage"
 
 vi.mock("../api/sales", () => ({ listSales: vi.fn() }))
+vi.mock("../db/sales", () => ({ listRecentLocalSales: vi.fn() }))
+
+const network = vi.hoisted(() => ({ online: true }))
 
 const user: CurrentUser = {
   id: 7,
@@ -59,7 +64,7 @@ vi.mock("../features/cash-session/queries", () => ({
 }))
 
 vi.mock("../features/offline/useNetworkStatus", () => ({
-  useNetworkStatus: () => true,
+  useNetworkStatus: () => network.online,
 }))
 
 function renderPage() {
@@ -87,12 +92,14 @@ function saleFixture(id: string, overrides: Partial<Awaited<ReturnType<typeof li
     total: "2000.00",
     returned_total: "0.00",
     net_total: "2000.00",
-    payment: {
-      method: "CASH" as const,
-      amount: "2000.00",
-      received_amount: "2000.00",
-      change_amount: "0.00",
-    },
+    payments: [
+      {
+        method: "CASH" as const,
+        amount: "2000.00",
+        received_amount: "2000.00",
+        change_amount: "0.00",
+      },
+    ],
     ...overrides,
   }
 }
@@ -100,6 +107,66 @@ function saleFixture(id: string, overrides: Partial<Awaited<ReturnType<typeof li
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  network.online = true
+})
+
+function localSaleFixture(id: string, overrides: Partial<LocalSale> = {}): LocalSale {
+  return {
+    id,
+    serverId: null,
+    syncEventId: `event-${id}`,
+    cashSessionId: session.id,
+    storeId: "store-a",
+    storeName: "Boutique A",
+    cashRegisterId: register.id,
+    cashRegisterName: register.name,
+    cashierId: user.id,
+    cashierName: user.username,
+    createdAt: new Date().toISOString(),
+    status: "SYNCED",
+    conflictCode: null,
+    conflictMessage: null,
+    items: [],
+    payments: [{ method: "CASH", amount: 1_500, receivedAmount: 2_000, changeAmount: 500 }],
+    subtotal: 1_500,
+    discount: 0,
+    total: 1_500,
+    ...overrides,
+  } as LocalSale
+}
+
+describe("SalesPage offline", () => {
+  it("lists this device's sales of the session, each opening its ticket", async () => {
+    network.online = false
+    vi.mocked(listRecentLocalSales).mockResolvedValue([
+      localSaleFixture("aaaa1111-0000-4000-8000-000000000000", { status: "PENDING_SYNC" }),
+      localSaleFixture("bbbb2222-0000-4000-8000-000000000000", {
+        total: 2_500,
+        payments: [{ method: "WAVE", amount: 2_500, receivedAmount: null, changeAmount: null }],
+      }),
+    ])
+    renderPage()
+
+    expect(await screen.findByText("Ticket AAAA1111")).toBeInTheDocument()
+    expect(listRecentLocalSales).toHaveBeenCalledWith(session.id, Number.POSITIVE_INFINITY)
+    expect(listSales).not.toHaveBeenCalled()
+    expect(screen.getByText("En attente d’envoi")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: /Ticket BBBB2222/ })).toHaveAttribute(
+      "href",
+      "/sales/bbbb2222-0000-4000-8000-000000000000/receipt",
+    )
+    expect(screen.getByLabelText("Ventes de cet appareil", { selector: "div" })).toHaveTextContent(
+      "4 000 FCFA",
+    )
+  })
+
+  it("says so when this device has no sale yet", async () => {
+    network.online = false
+    vi.mocked(listRecentLocalSales).mockResolvedValue([])
+    renderPage()
+
+    expect(await screen.findByText("Aucune vente sur cet appareil")).toBeInTheDocument()
+  })
 })
 
 describe("SalesPage", () => {
@@ -118,7 +185,9 @@ describe("SalesPage", () => {
         total: "2000.00",
         returned_total: "500.00",
         net_total: "1500.00",
-        payment: { method: "WAVE", amount: "2000.00", received_amount: null, change_amount: null },
+        payments: [
+          { method: "WAVE", amount: "2000.00", received_amount: null, change_amount: null },
+        ],
       }],
     })
 
@@ -151,7 +220,9 @@ describe("SalesPage", () => {
         total: "2000.00",
         returned_total: "0.00",
         net_total: "2000.00",
-        payment: { method: "CASH", amount: "2000.00", received_amount: "2000.00", change_amount: "0.00" },
+        payments: [
+          { method: "CASH", amount: "2000.00", received_amount: "2000.00", change_amount: "0.00" },
+        ],
       }],
     })
 

@@ -74,16 +74,17 @@ def _sell(
     method: str,
     price: Decimal,
 ) -> dict[str, Any]:
-    payment: dict[str, Any] = {"method": method}
+    amount = price * quantity
+    payment: dict[str, Any] = {"method": method, "amount": str(amount)}
     if method == "CASH":
-        payment["received_amount"] = str(price * quantity)
+        payment["received_amount"] = str(amount)
 
     response = client.post(
         reverse("sale-complete"),
         {
             "cash_session_id": cash_session_id,
             "items": [{"product_id": product_id, "quantity": quantity}],
-            "payment": payment,
+            "payments": [payment],
         },
         format="json",
     )
@@ -224,7 +225,7 @@ def test_sale_rejected_after_close(api_client: APIClient) -> None:
         {
             "cash_session_id": context["cash_session"]["id"],
             "items": [{"product_id": context["product"]["id"], "quantity": 1}],
-            "payment": {"method": "WAVE"},
+            "payments": [{"method": "WAVE", "amount": "500.00"}],
         },
         format="json",
     )
@@ -319,7 +320,7 @@ def test_sale_detail_returns_full_ticket_data(api_client: APIClient) -> None:
             "quantity_returnable": "2.000",
         }
     ]
-    assert data["payment"]["method"] == "CASH"
+    assert data["payments"][0]["method"] == "CASH"
 
 
 def test_sale_detail_keeps_historical_price_after_product_price_change(

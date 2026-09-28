@@ -3,11 +3,12 @@ import { useParams, useSearchParams } from "react-router-dom"
 
 import { getSaleReceipt } from "../api/sales"
 import { PageHeader } from "../components/layout/PageHeader"
-import { ReceiptHeading } from "../components/receipt/ReceiptHeading"
+import { ReceiptHeading, ReceiptSignature } from "../components/receipt/ReceiptHeading"
 import { Button } from "../components/ui/Button"
 import { Money } from "../components/ui/Money"
 import { RouteError, RouteLoading } from "../components/ui/RouteState"
 import { getLocalSaleById } from "../db/sales"
+import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { readSaleOrigin, saleOriginBack } from "../features/sales/origin"
 import { receiptViewFromApiReceipt, receiptViewFromLocalSale } from "../features/sales/receiptView"
 import { formatDateTime } from "../utils/date"
@@ -24,6 +25,7 @@ export function SaleReceiptPage() {
   const { saleId } = useParams<{ saleId: string }>()
   const [searchParams] = useSearchParams()
   const cashSessionId = searchParams.get("cash_session_id") ?? undefined
+  const isOnline = useNetworkStatus()
   const receiptQuery = useQuery({
     queryKey: ["sales", saleId, "receipt", cashSessionId],
     queryFn: async () => {
@@ -49,7 +51,7 @@ export function SaleReceiptPage() {
 
   const receipt = receiptQuery.data
   if (!receipt) return <RouteLoading message="Chargement du ticket…" />
-  const isCash = receipt.payment.method === "CASH"
+  const isSplitPayment = receipt.payments.length > 1
   const hasReturns = receipt.returnedTotal > 0
   const isFullyReturned = hasReturns && receipt.returnedTotal >= receipt.total
   // Une vente pas encore synchronisée n'a pas de page de détail côté
@@ -61,7 +63,11 @@ export function SaleReceiptPage() {
       ? saleOriginBack(origin)
       : receipt.isPendingSync
         ? saleOriginBack("pending")
-        : { to: `/sales/${receipt.id}`, label: "Retour à la vente" }
+        // Hors connexion, la page de détail est serveur : on revient à la
+        // liste locale d'où le ticket a été ouvert.
+        : !isOnline
+          ? saleOriginBack(null)
+          : { to: `/sales/${receipt.id}`, label: "Retour à la vente" }
 
   return (
     <main className="operational-page operational-page-narrow receipt-screen-page">
@@ -150,22 +156,36 @@ export function SaleReceiptPage() {
               </div>
             </>
           ) : null}
-          <div>
-            <dt>Paiement</dt>
-            <dd>{paymentLabels[receipt.payment.method]}</dd>
-          </div>
-          {isCash && receipt.payment.receivedAmount !== null ? (
-            <div>
-              <dt>Reçu</dt>
-              <dd><Money value={receipt.payment.receivedAmount} /></dd>
+          {receipt.payments.map((payment, index) => (
+            <div key={`method-${payment.method}-${index}`}>
+              <dt>{isSplitPayment ? `Paiement ${index + 1}` : "Paiement"}</dt>
+              <dd>
+                {paymentLabels[payment.method]}
+                {isSplitPayment ? (
+                  <>
+                    {" — "}
+                    <Money value={payment.amount} />
+                  </>
+                ) : null}
+              </dd>
             </div>
-          ) : null}
-          {isCash && receipt.payment.changeAmount !== null ? (
-            <div>
-              <dt>Monnaie</dt>
-              <dd><Money value={receipt.payment.changeAmount} /></dd>
-            </div>
-          ) : null}
+          ))}
+          {receipt.payments.map((payment, index) =>
+            payment.receivedAmount !== null ? (
+              <div key={`received-${index}`}>
+                <dt>{isSplitPayment ? `Reçu (paiement ${index + 1})` : "Reçu"}</dt>
+                <dd><Money value={payment.receivedAmount} /></dd>
+              </div>
+            ) : null,
+          )}
+          {receipt.payments.map((payment, index) =>
+            payment.changeAmount !== null ? (
+              <div key={`change-${index}`}>
+                <dt>{isSplitPayment ? `Monnaie (paiement ${index + 1})` : "Monnaie"}</dt>
+                <dd><Money value={payment.changeAmount} /></dd>
+              </div>
+            ) : null,
+          )}
         </dl>
 
         <footer className="receipt-footer">
@@ -175,6 +195,7 @@ export function SaleReceiptPage() {
               <span>Le ticket de retour constitue le justificatif du remboursement.</span>
             </>
           ) : "Merci !"}
+          <ReceiptSignature />
         </footer>
       </article>
     </main>

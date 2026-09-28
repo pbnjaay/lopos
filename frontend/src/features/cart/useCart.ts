@@ -18,6 +18,7 @@ import {
   getCartTotal,
   incrementItem,
   removeItem,
+  restoreItem,
   setItemQuantity,
   setItemPrice,
 } from "./cartState"
@@ -61,10 +62,14 @@ export function useCart(cashSessionId: string | null = null, storeId: string | n
   function mutateItems(mutator: (items: CartItem[]) => CartItem[]): Promise<void> {
     if (!cashSessionId) return Promise.resolve()
     const queryKey = activeCartQueryKey(cashSessionId)
+    // Le cache plutôt que la valeur capturée au rendu : un appel différé
+    // (l'« Annuler » d'un toast, secondes plus tard) partirait sinon d'un
+    // panier périmé et écraserait les articles scannés entre-temps.
+    const latest = queryClient.getQueryData<NonNullable<typeof cart>>(queryKey) ?? cart
 
-    if (cart) {
-      const nextItems = mutator(items)
-      queryClient.setQueryData(queryKey, { ...cart, items: nextItems })
+    if (latest) {
+      const nextItems = mutator((latest.items as CartItem[] | undefined) ?? [])
+      queryClient.setQueryData(queryKey, { ...latest, items: nextItems })
       return saveActiveCartItems(cashSessionId, nextItems)
     }
 
@@ -123,6 +128,8 @@ export function useCart(cashSessionId: string | null = null, storeId: string | n
     setItemPrice: (productId: string, unitPrice: number) =>
       mutateItems((current) => setItemPrice(current, productId, unitPrice)),
     removeItem: (productId: string) => mutateItems((current) => removeItem(current, productId)),
+    restoreItem: (item: CartItem, index: number) =>
+      mutateItems((current) => restoreItem(current, item, index)),
     clearCart: () => mutateItems(() => clearCart()),
     holdCart,
     heldCarts: {

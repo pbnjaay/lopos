@@ -27,8 +27,9 @@ def _attempt_sale(*, cash_session_id, product_id, start_barrier: Barrier) -> str
             complete_sale(
                 cash_session=cash_session,
                 items=[{"product_id": product_id, "quantity": 1}],
-                payment_method=Payment.Method.CASH,
-                received_amount=Decimal("500.00"),
+                payments=[
+                    {"method": Payment.Method.CASH, "amount": Decimal("500.00"), "received_amount": Decimal("500.00")}
+                ],
             )
         except CashSessionClosed:
             return "rejected_closed"

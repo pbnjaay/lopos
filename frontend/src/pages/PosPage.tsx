@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { getStore } from "../api/stores"
@@ -16,12 +16,14 @@ import {
   InsufficientLocalStockError,
   LocalSaleProductNotFoundError,
   createLocalSale,
+  listRecentLocalSales,
 } from "../db/sales"
 import {
   getLocalCashSessionForRegister,
   saveLocalCashSession,
   updateLocalCashSessionStoreName,
 } from "../db/sessions"
+import { HeldCartNotFoundError } from "../db/carts"
 import type { LocalCashSession } from "../db/types"
 import { useCurrentUser } from "../features/auth/queries"
 import { Cart } from "../features/cart/Cart"
@@ -39,19 +41,27 @@ import { MobileMoneyConfirmation } from "../features/checkout/MobileMoneyConfirm
 import { PaymentMethodModal } from "../features/checkout/PaymentMethodModal"
 import { getLastPaymentMethod, storeLastPaymentMethod } from "../features/checkout/paymentMethodStorage"
 import { SaleSuccessModal } from "../features/checkout/SaleSuccessModal"
+import { dominantPaymentMethod } from "../features/checkout/dominantPaymentMethod"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { pendingSalesCountQueryKey } from "../features/offline/usePendingSalesCount"
 import { ProductGrid } from "../features/products/ProductGrid"
 import { ProductSearch } from "../features/products/ProductSearch"
 import { useProductCatalog } from "../features/products/queries"
 import type { CatalogProduct } from "../features/products/types"
+import { cancelSaleEverywhere } from "../features/sales/cancelSale"
 import { type ReceiptView, receiptViewFromLocalSale } from "../features/sales/receiptView"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
 import type { PaymentMethod } from "../types/api"
+import { describeErrorShort } from "../utils/errorCopy"
 import { formatQuantity } from "../utils/quantity"
 
-type CheckoutPayment = {
+/** Une part d'un encaissement — le seul élément d'une vente classique, un
+ * des plusieurs d'un paiement mixte (espèces + Wave, par exemple). */
+type PaymentLeg = {
   method: PaymentMethod
+  /** Part du total réellement couverte par ce versement (jamais plus que le reste dû). */
+  amount: number
+  /** Espèces uniquement — ce que le client a physiquement donné, peut dépasser `amount` (monnaie à rendre). */
   receivedAmount?: number
 }
 
@@ -84,6 +94,13 @@ export function PosPage() {
   const toast = useToast()
   const cart = useCart(ownSession?.id ?? null, selectedRegister?.store_id ?? null)
   const [checkoutStep, setCheckoutStep] = useState<"METHODS" | PaymentMethod | null>(null)
+  // Versements déjà appliqués à la vente en cours d'encaissement — vide pour
+  // un paiement classique, se remplit à mesure qu'un paiement mixte
+  // s'enchaîne sur plusieurs moyens.
+  const [paymentLegs, setPaymentLegs] = useState<PaymentLeg[]>([])
+  const paidSoFar = paymentLegs.reduce((sum, leg) => sum + leg.amount, 0)
+  const remainingAmount = Math.max(cart.total - paidSoFar, 0)
+  const isSplitPayment = paymentLegs.length > 0
   const [completedSale, setCompletedSale] = useState<ReceiptView | null>(null)
   const [weighedProduct, setWeighedProduct] = useState<CatalogProduct | null>(null)
   const [isCartDialogOpen, setIsCartDialogOpen] = useState(false)
@@ -92,7 +109,19 @@ export function PosPage() {
   const [lastPaymentMethod, setLastPaymentMethod] = useState<PaymentMethod | null>(
     getLastPaymentMethod,
   )
+  // Toast « Annuler » de la dernière ligne retirée : il n'a de sens que
+  // pour la vente en cours, on le retire dès que le panier change de vie.
+  const removalUndoToastRef = useRef<number | null>(null)
   const catalog = useProductCatalog(selectedRegister?.store_id ?? null)
+  const sessionSalesQuery = useQuery({
+    queryKey: ["local-sales-for-session", ownSession?.id],
+    queryFn: () => listRecentLocalSales(ownSession!.id, Number.POSITIVE_INFINITY),
+    enabled: ownSession !== null,
+  })
+  // L'accent du pied de panier suit l'habitude de la session ; avant la
+  // première vente, le dernier moyen utilisé sur cet appareil fait foi.
+  const primaryPaymentMethod =
+    dominantPaymentMethod(sessionSalesQuery.data ?? []) ?? lastPaymentMethod
   const storeQuery = useQuery({
     queryKey: ["stores", selectedRegister?.store_id],
     queryFn: () => getStore(selectedRegister!.store_id),
@@ -125,7 +154,7 @@ export function PosPage() {
   }
 
   const saleMutation = useMutation({
-    mutationFn: async (payment: CheckoutPayment): Promise<ReceiptView> => {
+    mutationFn: async (legs: PaymentLeg[]): Promise<ReceiptView> => {
       // Encaissement local-first : la vente est durable dès que la
       // transaction Dexie (vente + stock + statut PENDING_SYNC) a committé.
       // La disponibilité du serveur n'entre jamais dans ce chemin — la
@@ -139,18 +168,25 @@ export function PosPage() {
           quantityMilli: item.quantityMilli ?? (item.quantity ?? 0) * 1000,
           unitPrice: item.unitPrice,
         }) : ({ productId: item.productId, quantity: item.quantity ?? 1 })),
-        payment: { method: payment.method, receivedAmount: payment.receivedAmount ?? null },
+        payments: legs.map((leg) => ({
+          method: leg.method,
+          amount: leg.amount,
+          receivedAmount: leg.receivedAmount ?? null,
+        })),
       })
       return receiptViewFromLocalSale(sale)
     },
     onSuccess: (sale) => {
       cart.clearCart()
       setCheckoutStep(null)
+      setPaymentLegs([])
       setCompletedSale(sale)
-      storeLastPaymentMethod(sale.payment.method)
-      setLastPaymentMethod(sale.payment.method)
+      const lastMethod = sale.payments[sale.payments.length - 1]!.method
+      storeLastPaymentMethod(lastMethod)
+      setLastPaymentMethod(lastMethod)
       void queryClient.invalidateQueries({ queryKey: ["products"] })
       void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })
+      void queryClient.invalidateQueries({ queryKey: ["local-sales-for-session"] })
       // Hors ligne, conserver la vente dans l’outbox et laisser le compteur
       // global refléter toutes les ventes en attente. La reconnexion déclenche
       // déjà une synchronisation groupée via SyncStatusProvider.
@@ -160,13 +196,14 @@ export function PosPage() {
         store_id: selectedRegister?.store_id ?? null,
         cash_register_id: selectedRegister?.id ?? null,
         cash_session_id: ownSession?.id ?? null,
-        payment_method: sale.payment.method,
+        payment_method: sale.payments[0]!.method,
+        is_split_payment: sale.payments.length > 1,
         items_count: sale.items.length,
         total_amount: sale.total,
         offline: !isOnline,
       })
     },
-    onError: (error, payment) => {
+    onError: (error, legs) => {
       // Seuls des échecs de persistance locale arrivent ici (stock local
       // insuffisant, produit absent du catalogue local, écriture IndexedDB) :
       // ils sont critiques et la vente n'est pas considérée comme terminée.
@@ -183,9 +220,24 @@ export function PosPage() {
             : error instanceof LocalSaleProductNotFoundError
               ? "PRODUCT_NOT_FOUND"
               : "LOCAL_PERSIST_FAILED",
-        payment_method: payment.method,
+        payment_method: legs[0]?.method ?? null,
+        is_split_payment: legs.length > 1,
         offline: !isOnline,
       })
+    },
+  })
+
+  // Local d'abord, retombe sur le serveur si la synchronisation en tâche de
+  // fond a déjà eu lieu entre l'encaissement et le clic — cf. cancelSale.ts.
+  const cancelSaleMutation = useMutation({
+    mutationFn: (saleId: string) => cancelSaleEverywhere(saleId),
+    onSuccess: () => {
+      setCompletedSale(null)
+      toast.success("Vente annulée")
+      void queryClient.invalidateQueries({ queryKey: ["local-sales-for-session"] })
+      void queryClient.invalidateQueries({ queryKey: ["products"] })
+      void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })
+      focusProductSearch()
     },
   })
 
@@ -210,17 +262,35 @@ export function PosPage() {
     }
   }
 
-  async function submitPayment(payment: CheckoutPayment) {
+  /**
+   * Un versement couvre tout ou partie du reste dû. S'il ne couvre pas
+   * tout, on l'ajoute aux versements déjà appliqués et on renvoie choisir un
+   * moyen de paiement pour le solde — rien n'est encore soumis. S'il couvre
+   * le reste (avec éventuellement de la monnaie sur la part espèces), la
+   * vente part en un seul encaissement avec tous les versements accumulés.
+   */
+  async function handleLegConfirmed(leg: PaymentLeg) {
     if (!ownSession || cart.items.length === 0) return
-    await saleMutation.mutateAsync(payment)
+    const legs = [...paymentLegs, leg]
+    const covered = legs.reduce((sum, l) => sum + l.amount, 0)
+    if (covered < cart.total) {
+      setPaymentLegs(legs)
+      setCheckoutStep("METHODS")
+      return
+    }
+    await saleMutation.mutateAsync(legs)
   }
 
   function handleCashPayment(receivedAmount: number) {
-    return submitPayment({ method: "CASH", receivedAmount })
+    return handleLegConfirmed({
+      method: "CASH",
+      amount: Math.min(receivedAmount, remainingAmount),
+      receivedAmount,
+    })
   }
 
-  function handleMobilePayment(method: Exclude<PaymentMethod, "CASH">) {
-    return submitPayment({ method })
+  function handleMobilePayment(method: Exclude<PaymentMethod, "CASH">, amount: number) {
+    return handleLegConfirmed({ method, amount })
   }
 
   function focusProductSearch() {
@@ -229,10 +299,54 @@ export function PosPage() {
     })
   }
 
-  function handleSuspendCart() {
-    void cart.holdCart()
-    toast.success("Vente mise en attente")
-    focusProductSearch()
+  function dropRemovalUndo() {
+    if (removalUndoToastRef.current === null) return
+    toast.dismiss(removalUndoToastRef.current)
+    removalUndoToastRef.current = null
+  }
+
+  /**
+   * Le ✕ d'une ligne est à un doigt du crayon : une suppression ne demande
+   * pas de confirmation (ce serait une modale par article), mais elle se
+   * rattrape en un clic pendant quelques secondes.
+   */
+  function handleRemoveItem(productId: string) {
+    const index = cart.items.findIndex((item) => item.productId === productId)
+    const item = cart.items[index]
+    if (!item) return
+    void cart.removeItem(productId)
+    removalUndoToastRef.current = toast.info(`${item.name} retiré du panier`, {
+      action: {
+        label: "Annuler",
+        onClick: () => {
+          removalUndoToastRef.current = null
+          void cart.restoreItem(item, index)
+          focusProductSearch()
+        },
+      },
+    })
+  }
+
+  function handleClearCart() {
+    dropRemovalUndo()
+    return cart.clearCart()
+  }
+
+  async function handleSuspendCart() {
+    dropRemovalUndo()
+    // Le succès n'est annoncé qu'une fois le panier réellement écrit : un
+    // échec IndexedDB affichait sinon « mise en attente » sur une vente
+    // restée à l'écran.
+    try {
+      await cart.holdCart()
+      toast.success("Vente mise en attente")
+    } catch {
+      toast.error("Impossible de mettre la vente en attente", {
+        description: "La vente reste en cours sur cet écran. Réessayez.",
+      })
+    } finally {
+      focusProductSearch()
+    }
   }
 
   function handleDeleteHeldCart(cartId: string) {
@@ -271,10 +385,24 @@ export function PosPage() {
   async function handleResumeHeldCart(cartId: string, strategy: ResumeStrategy) {
     setIsHeldCartsOpen(false)
     setHeldCartAction(null)
-    if (strategy === "hold") await cart.holdCart()
-    else if (strategy === "clear") await cart.clearCart()
-
-    const revalidation = await cart.resumeCart(cartId)
+    dropRemovalUndo()
+    let revalidation: Awaited<ReturnType<typeof cart.resumeCart>>
+    try {
+      if (strategy === "hold") await cart.holdCart()
+      else if (strategy === "clear") await cart.clearCart()
+      revalidation = await cart.resumeCart(cartId)
+    } catch (error) {
+      // Double clic sur « Reprendre », ou panier déjà repris dans un autre
+      // onglet : l'échec se dit, au lieu de laisser le caissier sans réponse.
+      toast.error("Impossible de reprendre ce panier", {
+        description:
+          error instanceof HeldCartNotFoundError
+            ? "Il a déjà été repris ou supprimé."
+            : "Réessayez.",
+      })
+      focusProductSearch()
+      return
+    }
     if (!revalidation) {
       toast.error("Impossible de reprendre ce panier", { description: "Réessayez." })
       return
@@ -296,6 +424,9 @@ export function PosPage() {
 
   function closeCheckout() {
     setCheckoutStep(null)
+    // Rien n'est jamais écrit tant que la vente n'est pas soumise : abandonner
+    // ici oublie sans risque les versements déjà appliqués à ce paiement mixte.
+    setPaymentLegs([])
     focusProductSearch()
   }
 
@@ -306,7 +437,9 @@ export function PosPage() {
    */
   function startCheckout(method: PaymentMethod) {
     if (!ownSession || cart.items.length === 0) return
+    dropRemovalUndo()
     saleMutation.reset()
+    setPaymentLegs([])
     setCheckoutStep(method)
     trackCheckoutOpened({ cart_items_count: cart.items.length, cart_total: cart.total })
     trackPaymentMethodSelected({ method })
@@ -408,12 +541,12 @@ export function PosPage() {
             onDecrement={cart.decrementItem}
             onQuantityChange={cart.setItemQuantity}
             onPriceChange={cart.setItemPrice}
-            onRemove={cart.removeItem}
-            onClear={cart.clearCart}
-            onSuspend={handleSuspendCart}
+            onRemove={handleRemoveItem}
+            onClear={handleClearCart}
+            onSuspend={() => void handleSuspendCart()}
             onDialogOpenChange={setIsCartDialogOpen}
             onInteractionComplete={focusProductSearch}
-            lastUsedMethod={lastPaymentMethod}
+            primaryMethod={primaryPaymentMethod}
             onCheckoutMethod={startCheckout}
           />
         </div>
@@ -425,7 +558,8 @@ export function PosPage() {
       )}
       {checkoutStep === "METHODS" ? (
         <PaymentMethodModal
-          total={cart.total}
+          total={remainingAmount}
+          isPartial={isSplitPayment}
           lastUsedMethod={lastPaymentMethod}
           onClose={closeCheckout}
           onSelect={(method) => {
@@ -437,7 +571,8 @@ export function PosPage() {
       ) : null}
       {checkoutStep === "CASH" ? (
         <CashPaymentModal
-          total={cart.total}
+          total={remainingAmount}
+          isPartial={isSplitPayment}
           isSubmitting={saleMutation.isPending}
           errorMessage={getCheckoutErrorMessage(saleMutation.error)}
           onBack={() => {
@@ -453,7 +588,8 @@ export function PosPage() {
       {checkoutStep === "WAVE" || checkoutStep === "ORANGE_MONEY" ? (
         <MobileMoneyConfirmation
           method={checkoutStep}
-          total={cart.total}
+          total={remainingAmount}
+          isPartial={isSplitPayment}
           isSubmitting={saleMutation.isPending}
           errorMessage={getCheckoutErrorMessage(saleMutation.error)}
           onBack={() => {
@@ -463,7 +599,7 @@ export function PosPage() {
           onClose={() => {
             if (!saleMutation.isPending) closeCheckout()
           }}
-          onConfirm={() => handleMobilePayment(checkoutStep)}
+          onConfirm={(amount) => handleMobilePayment(checkoutStep, amount)}
         />
       ) : null}
       {completedSale ? (
@@ -478,6 +614,13 @@ export function PosPage() {
             setCompletedSale(null)
             focusProductSearch()
           }}
+          onCancelSale={() => cancelSaleMutation.mutateAsync(completedSale.id)}
+          isCancelling={cancelSaleMutation.isPending}
+          cancelErrorMessage={
+            cancelSaleMutation.error
+              ? describeErrorShort(cancelSaleMutation.error, "vente")
+              : null
+          }
         />
       ) : null}
       {weighedProduct ? (

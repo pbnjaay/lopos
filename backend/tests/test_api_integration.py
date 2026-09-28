@@ -124,10 +124,13 @@ def test_complete_pos_scenario_through_api(
                     "quantity": 2,
                 }
             ],
-            "payment": {
-                "method": "CASH",
-                "received_amount": "2000.00",
-            },
+            "payments": [
+                {
+                    "method": "CASH",
+                    "amount": "1000.00",
+                    "received_amount": "2000.00",
+                }
+            ],
         },
         format="json",
     )
@@ -138,12 +141,14 @@ def test_complete_pos_scenario_through_api(
     assert sale_data["subtotal"] == "1000.00"
     assert sale_data["discount"] == "0.00"
     assert sale_data["total"] == "1000.00"
-    assert sale_data["payment"] == {
-        "method": "CASH",
-        "amount": "1000.00",
-        "received_amount": "2000.00",
-        "change_amount": "1000.00",
-    }
+    assert sale_data["payments"] == [
+        {
+            "method": "CASH",
+            "amount": "1000.00",
+            "received_amount": "2000.00",
+            "change_amount": "1000.00",
+        }
+    ]
     assert sale_data["items"] == [
         {
             "id": sale_data["items"][0]["id"],
@@ -232,7 +237,7 @@ def test_insufficient_cash_rolls_back_api_sale(api_client: APIClient) -> None:
             "items": [
                 {"product_id": context["product"]["id"], "quantity": 2}
             ],
-            "payment": {"method": "CASH", "received_amount": "500.00"},
+            "payments": [{"method": "CASH", "amount": "1000.00", "received_amount": "500.00"}],
         },
         format="json",
     )
@@ -257,7 +262,7 @@ def test_insufficient_stock_rolls_back_api_sale(api_client: APIClient) -> None:
             "items": [
                 {"product_id": context["product"]["id"], "quantity": 2}
             ],
-            "payment": {"method": "CASH", "received_amount": "2000.00"},
+            "payments": [{"method": "CASH", "amount": "1000.00", "received_amount": "2000.00"}],
         },
         format="json",
     )
@@ -285,7 +290,7 @@ def test_cashier_cannot_sell_on_another_cashiers_session(
             "items": [
                 {"product_id": context["product"]["id"], "quantity": 1}
             ],
-            "payment": {"method": "WAVE"},
+            "payments": [{"method": "WAVE", "amount": "500.00"}],
         },
         format="json",
     )
@@ -307,7 +312,7 @@ def test_inactive_product_returns_business_error(api_client: APIClient) -> None:
             "items": [
                 {"product_id": context["product"]["id"], "quantity": 1}
             ],
-            "payment": {"method": "WAVE"},
+            "payments": [{"method": "WAVE", "amount": "500.00"}],
         },
         format="json",
     )

@@ -48,10 +48,15 @@ function toSyncEvent(sale: LocalSale): SyncEvent {
         ...(item.catalogUnitPrice ? { catalog_unit_price: toBackendMoney(item.catalogUnitPrice) } : {}),
         quantity: milliToBackendQuantity(item.quantityMilli ?? (item.quantity ?? 0) * 1000),
       })),
-      payment:
-        sale.payment.method === "CASH"
-          ? { method: "CASH", received_amount: toBackendMoney(sale.payment.receivedAmount ?? 0) }
-          : { method: sale.payment.method },
+      payments: sale.payments.map((payment) =>
+        payment.method === "CASH"
+          ? {
+              method: "CASH" as const,
+              amount: toBackendMoney(payment.amount),
+              received_amount: toBackendMoney(payment.receivedAmount ?? 0),
+            }
+          : { method: payment.method, amount: toBackendMoney(payment.amount) },
+      ),
     },
   }
 }

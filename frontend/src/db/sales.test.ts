@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { PosDatabase } from "./database"
 import {
   InsufficientLocalStockError,
+  cancelPendingLocalSale,
   countConflictLocalSales,
   countPendingLocalSales,
   countPendingLocalSalesForSession,
@@ -60,7 +61,7 @@ describe("createLocalSale", () => {
       {
         session,
         items: [{ productId: coca.id, quantity: 2 }],
-        payment: { method: "CASH", receivedAmount: 2_000 },
+        payments: [{ method: "CASH", amount: 1_000, receivedAmount: 2_000 }],
       },
       database,
     )
@@ -77,12 +78,14 @@ describe("createLocalSale", () => {
         lineTotal: 1_000,
       },
     ])
-    expect(sale.payment).toEqual({
-      method: "CASH",
-      amount: 1_000,
-      receivedAmount: 2_000,
-      changeAmount: 1_000,
-    })
+    expect(sale.payments).toEqual([
+      {
+        method: "CASH",
+        amount: 1_000,
+        receivedAmount: 2_000,
+        changeAmount: 1_000,
+      },
+    ])
     expect(sale.total).toBe(1_000)
     expect(sale.syncEventId).toMatch(/^[0-9a-f-]{36}$/)
     expect(sale.syncEventId).not.toBe(sale.id)
@@ -95,7 +98,7 @@ describe("createLocalSale", () => {
       {
         session,
         items: [{ productId: coca.id, quantity: 2 }],
-        payment: { method: "CASH", receivedAmount: 2_000 },
+        payments: [{ method: "CASH", amount: 1_000, receivedAmount: 2_000 }],
       },
       database,
     )
@@ -107,7 +110,7 @@ describe("createLocalSale", () => {
       {
         session,
         items: [{ productId: coca.id, quantity: 5 }],
-        payment: { method: "WAVE" },
+        payments: [{ method: "WAVE", amount: 2_500 }],
       },
       database,
     )
@@ -125,7 +128,7 @@ describe("createLocalSale", () => {
         {
           session,
           items: [{ productId: coca.id, quantity: 3 }],
-          payment: { method: "CASH", receivedAmount: 3_000 },
+          payments: [{ method: "CASH", amount: 1_500, receivedAmount: 3_000 }],
         },
         database,
       ),
@@ -145,7 +148,7 @@ describe("createLocalSale", () => {
             { productId: coca.id, quantity: 1 },
             { productId: "unknown-product", quantity: 1 },
           ],
-          payment: { method: "CASH", receivedAmount: 1_000 },
+          payments: [{ method: "CASH", amount: 1_000, receivedAmount: 1_000 }],
         },
         database,
       ),
@@ -153,6 +156,40 @@ describe("createLocalSale", () => {
 
     const product = await database.products.get([coca.storeId, coca.id])
     expect(product?.pendingSoldQuantity).toBe(0)
+    await expect(database.localSales.count()).resolves.toBe(0)
+  })
+
+  it("accepts a split payment across several methods, summing to the total", async () => {
+    const sale = await createLocalSale(
+      {
+        session,
+        items: [{ productId: coca.id, quantity: 3 }],
+        payments: [
+          { method: "WAVE", amount: 1_000 },
+          { method: "CASH", amount: 500, receivedAmount: 500 },
+        ],
+      },
+      database,
+    )
+
+    expect(sale.total).toBe(1_500)
+    expect(sale.payments).toEqual([
+      { method: "WAVE", amount: 1_000, receivedAmount: null, changeAmount: null },
+      { method: "CASH", amount: 500, receivedAmount: 500, changeAmount: 0 },
+    ])
+  })
+
+  it("rejects payments that don't sum to the total", async () => {
+    await expect(
+      createLocalSale(
+        {
+          session,
+          items: [{ productId: coca.id, quantity: 2 }],
+          payments: [{ method: "WAVE", amount: 500 }],
+        },
+        database,
+      ),
+    ).rejects.toThrow("La somme des paiements ne correspond pas au total de la vente.")
     await expect(database.localSales.count()).resolves.toBe(0)
   })
 })
@@ -163,7 +200,7 @@ describe("pending sale queue", () => {
       {
         session,
         items: [{ productId: coca.id, quantity: 1 }],
-        payment: { method: "CASH", receivedAmount: 500 },
+        payments: [{ method: "CASH", amount: 500, receivedAmount: 500 }],
       },
       database,
     )
@@ -171,7 +208,7 @@ describe("pending sale queue", () => {
       {
         session,
         items: [{ productId: coca.id, quantity: 1 }],
-        payment: { method: "ORANGE_MONEY" },
+        payments: [{ method: "ORANGE_MONEY", amount: 500 }],
       },
       database,
     )
@@ -184,11 +221,19 @@ describe("pending sale queue", () => {
   it("scopes the pending count to a single cash session", async () => {
     const otherSession: LocalCashSession = { ...session, id: "other-session-id" }
     await createLocalSale(
-      { session, items: [{ productId: coca.id, quantity: 1 }], payment: { method: "CASH", receivedAmount: 500 } },
+      {
+        session,
+        items: [{ productId: coca.id, quantity: 1 }],
+        payments: [{ method: "CASH", amount: 500, receivedAmount: 500 }],
+      },
       database,
     )
     await createLocalSale(
-      { session: otherSession, items: [{ productId: coca.id, quantity: 1 }], payment: { method: "WAVE" } },
+      {
+        session: otherSession,
+        items: [{ productId: coca.id, quantity: 1 }],
+        payments: [{ method: "WAVE", amount: 500 }],
+      },
       database,
     )
 
@@ -201,7 +246,11 @@ describe("pending sale queue", () => {
 describe("sync status transitions", () => {
   it("marks a sale SYNCED with its server id and clears any prior conflict", async () => {
     const sale = await createLocalSale(
-      { session, items: [{ productId: coca.id, quantity: 1 }], payment: { method: "CASH", receivedAmount: 500 } },
+      {
+        session,
+        items: [{ productId: coca.id, quantity: 1 }],
+        payments: [{ method: "CASH", amount: 500, receivedAmount: 500 }],
+      },
       database,
     )
     await markLocalSaleConflict(sale.id, { code: "X", message: "y" }, database)
@@ -221,7 +270,11 @@ describe("sync status transitions", () => {
 
   it("releases the local stock effect exactly once after an idempotent sync result", async () => {
     const sale = await createLocalSale(
-      { session, items: [{ productId: coca.id, quantity: 2 }], payment: { method: "WAVE" } },
+      {
+        session,
+        items: [{ productId: coca.id, quantity: 2 }],
+        payments: [{ method: "WAVE", amount: 1_000 }],
+      },
       database,
     )
 
@@ -235,7 +288,11 @@ describe("sync status transitions", () => {
 
   it("marks a sale CONFLICT with the server's code and message, removing it from the pending queue", async () => {
     const sale = await createLocalSale(
-      { session, items: [{ productId: coca.id, quantity: 1 }], payment: { method: "CASH", receivedAmount: 500 } },
+      {
+        session,
+        items: [{ productId: coca.id, quantity: 1 }],
+        payments: [{ method: "CASH", amount: 500, receivedAmount: 500 }],
+      },
       database,
     )
 
@@ -253,5 +310,47 @@ describe("sync status transitions", () => {
     await expect(countConflictLocalSales(database)).resolves.toBe(1)
     const conflicts = await listConflictLocalSales(database)
     expect(conflicts.map((item) => item.id)).toEqual([sale.id])
+  })
+})
+
+describe("cancelPendingLocalSale", () => {
+  it("deletes a PENDING_SYNC sale and releases its local stock effect", async () => {
+    const sale = await createLocalSale(
+      {
+        session,
+        items: [{ productId: coca.id, quantity: 2 }],
+        payments: [{ method: "CASH", amount: 1_000, receivedAmount: 1_000 }],
+      },
+      database,
+    )
+
+    await expect(cancelPendingLocalSale(sale.id, database)).resolves.toBe(true)
+
+    await expect(database.localSales.get(sale.id)).resolves.toBeUndefined()
+    const product = await database.products.get([coca.storeId, coca.id])
+    expect(product?.pendingSoldQuantityMilli).toBe(0)
+    expect(product?.pendingSoldQuantity).toBe(0)
+    await expect(countPendingLocalSales(database)).resolves.toBe(0)
+  })
+
+  it("does nothing and returns false once the sale has already synced", async () => {
+    const sale = await createLocalSale(
+      {
+        session,
+        items: [{ productId: coca.id, quantity: 1 }],
+        payments: [{ method: "WAVE", amount: 500 }],
+      },
+      database,
+    )
+    await markLocalSaleSynced(sale.id, sale.id, database)
+
+    await expect(cancelPendingLocalSale(sale.id, database)).resolves.toBe(false)
+
+    const stillThere = await database.localSales.get(sale.id)
+    expect(stillThere?.status).toBe("SYNCED")
+  })
+
+  it("returns false for a sale that doesn't exist locally", async () => {
+    await expect(cancelPendingLocalSale("unknown-id", database)).resolves.toBe(false)
   })
 })

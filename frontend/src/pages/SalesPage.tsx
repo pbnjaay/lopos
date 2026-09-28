@@ -9,9 +9,12 @@ import { EmptyState } from "../components/ui/EmptyState"
 import { ErrorState } from "../components/ui/ErrorState"
 import { IconButton } from "../components/ui/IconButton"
 import { ChevronLeftIcon, ChevronRightIcon } from "../components/ui/Icons"
+import { InlineAlert } from "../components/ui/InlineAlert"
 import { ListRow } from "../components/ui/ListRow"
 import { Money } from "../components/ui/Money"
 import { SkeletonRows } from "../components/ui/Skeleton"
+import { listRecentLocalSales } from "../db/sales"
+import type { LocalSale } from "../db/types"
 import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
@@ -26,14 +29,14 @@ const paymentLabels: Record<PaymentMethod, string> = {
   ORANGE_MONEY: "Orange Money",
 }
 
+// Pas de filtre de dates : la liste est déjà bornée à la session de caisse
+// en cours, et des bornes « Du / Au » y filtraient une journée déjà filtrée.
 type Filters = {
   search: string
-  dateFrom: string
-  dateTo: string
   paymentMethod: PaymentMethod | ""
 }
 
-const emptyFilters: Filters = { search: "", dateFrom: "", dateTo: "", paymentMethod: "" }
+const emptyFilters: Filters = { search: "", paymentMethod: "" }
 const SALES_PAGE_SIZE = 20
 
 type PaginationItem = number | "ellipsis-start" | "ellipsis-end"
@@ -54,6 +57,94 @@ function getPaginationItems(currentPage: number, totalPages: number): Pagination
   return [1, "ellipsis-start", currentPage - 1, currentPage, currentPage + 1, "ellipsis-end", totalPages]
 }
 
+const localStatusBadges: Partial<Record<LocalSale["status"], { tone: "warning" | "neutral"; label: string }>> = {
+  PENDING_SYNC: { tone: "neutral", label: "En attente d’envoi" },
+  CONFLICT: { tone: "warning", label: "À vérifier" },
+}
+
+/**
+ * Hors connexion, l'historique serveur est hors d'atteinte, mais les ventes
+ * encaissées sur cet appareil sont dans Dexie : le caissier retrouve et
+ * réimprime un ticket sans attendre le réseau. Seul le ticket est ouvert —
+ * le détail et les retours passent par le serveur.
+ */
+function OfflineSalesList({ cashSessionId }: { cashSessionId: string }) {
+  const localSalesQuery = useQuery({
+    queryKey: ["local-sales-for-session", cashSessionId],
+    queryFn: () => listRecentLocalSales(cashSessionId, Number.POSITIVE_INFINITY),
+  })
+  const sales = localSalesQuery.data ?? []
+  const today = formatDate(new Date().toISOString())
+  const total = sales.reduce((sum, sale) => sum + sale.total, 0)
+
+  return (
+    <>
+      <InlineAlert title="Hors connexion : ventes de cet appareil">
+        Seules les ventes encaissées sur cette caisse apparaissent, sans les retours
+        ni les annulations faits ailleurs. Le détail et les retours reviennent avec
+        la connexion.
+      </InlineAlert>
+
+      {localSalesQuery.isLoading ? (
+        <SkeletonRows count={4} label="Chargement des ventes de cet appareil…" />
+      ) : sales.length === 0 ? (
+        <EmptyState
+          role="status"
+          title="Aucune vente sur cet appareil"
+          description="Les ventes encaissées ici pendant cette session apparaîtront dans cette liste."
+        />
+      ) : (
+        <>
+          <div className="sales-summary" role="status" aria-label="Ventes de cet appareil">
+            <span>
+              <strong>{sales.length}</strong> vente{sales.length > 1 ? "s" : ""} sur cet appareil
+            </span>
+            <span className="sales-summary-total">
+              <span>Total</span>
+              <strong>
+                <Money value={total} />
+              </strong>
+            </span>
+          </div>
+          <section className="sales-list" aria-label="Ventes de cet appareil">
+            {sales.map((sale) => {
+              const day = formatDate(sale.createdAt)
+              const badge = localStatusBadges[sale.status]
+              return (
+                <ListRow
+                  key={sale.id}
+                  to={`/sales/${encodeURIComponent(sale.id)}/receipt`}
+                  leading={formatTime(sale.createdAt)}
+                  title={`Ticket ${sale.id.slice(0, 8).toUpperCase()}`}
+                  meta={
+                    <>
+                      <span>
+                        {sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}
+                      </span>
+                      {day !== today ? (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span>{day}</span>
+                        </>
+                      ) : null}
+                    </>
+                  }
+                  trailing={
+                    <span className="sales-row-financial-primary">
+                      {badge ? <Badge tone={badge.tone}>{badge.label}</Badge> : null}
+                      <Money value={sale.total} />
+                    </span>
+                  }
+                />
+              )
+            })}
+          </section>
+        </>
+      )}
+    </>
+  )
+}
+
 export function SalesPage() {
   const user = useCurrentUser().data!
   const { ownSession, selectedRegister, localSession } = usePosSession(user)
@@ -67,9 +158,7 @@ export function SalesPage() {
   // pas demander un clic ici et rien là-bas.
   const debouncedSearch = useDebouncedValue(draft.search.trim(), 250)
   const filters: Filters = { ...draft, search: debouncedSearch }
-  const hasFilters = Boolean(
-    debouncedSearch || draft.dateFrom || draft.dateTo || draft.paymentMethod,
-  )
+  const hasFilters = Boolean(debouncedSearch || draft.paymentMethod)
 
   // La page repart à 1 dans le gestionnaire, pas dans un effet : sinon la
   // requête part une première fois avec le nouveau filtre et l'ancienne page
@@ -84,8 +173,6 @@ export function SalesPage() {
     queryFn: () => listSales({
       cashSessionId: ownSession!.id,
       search: filters.search,
-      dateFrom: filters.dateFrom,
-      dateTo: filters.dateTo,
       paymentMethod: filters.paymentMethod,
       page,
       pageSize: SALES_PAGE_SIZE,
@@ -149,11 +236,7 @@ export function SalesPage() {
       />
 
       {!online ? (
-        <EmptyState
-          role="status"
-          title="Historique indisponible hors connexion"
-          description="Vous pouvez continuer à vendre. L'historique redeviendra consultable dès le retour de la connexion."
-        />
+        ownSession ? <OfflineSalesList cashSessionId={ownSession.id} /> : null
       ) : (
         <>
           <form className="sales-filters" role="search" onSubmit={(event) => event.preventDefault()}>
@@ -168,14 +251,6 @@ export function SalesPage() {
                 onKeyDown={handleSearchKeyDown}
                 placeholder="Ex. A12F…"
               />
-            </div>
-            <div className="field">
-              <label htmlFor="sales-date-from">Du</label>
-              <input id="sales-date-from" type="date" value={draft.dateFrom} onChange={(event) => updateFilter({ dateFrom: event.target.value })} />
-            </div>
-            <div className="field">
-              <label htmlFor="sales-date-to">Au</label>
-              <input id="sales-date-to" type="date" value={draft.dateTo} onChange={(event) => updateFilter({ dateTo: event.target.value })} />
             </div>
             <div className="field">
               <label htmlFor="sales-payment">Paiement</label>
@@ -198,7 +273,7 @@ export function SalesPage() {
               le changement de ligne visée n'atteindrait aucun lecteur d'écran. */}
           <p className="visually-hidden" role="status">
             {aimedSale && !areResultsStale
-              ? `Vente visée : ticket ${aimedSale.id.slice(0, 8).toUpperCase()}, ${paymentLabels[aimedSale.payment.method]}, ${formatBackendMoney(aimedSale.net_total ?? aimedSale.total)}`
+              ? `Vente visée : ticket ${aimedSale.id.slice(0, 8).toUpperCase()}, ${aimedSale.payments.map((p) => paymentLabels[p.method]).join(" + ")}, ${formatBackendMoney(aimedSale.net_total ?? aimedSale.total)}`
               : ""}
           </p>
 
@@ -261,7 +336,9 @@ export function SalesPage() {
                       title={`Ticket ${sale.id.slice(0, 8).toUpperCase()}`}
                       meta={
                         <>
-                          <span>{paymentLabels[sale.payment.method]}</span>
+                          <span>
+                            {sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}
+                          </span>
                           {/* La caisse est déjà dans l'en-tête, et la date ne
                               distingue rien tant que la liste tient sur le jour
                               courant : elle n'apparaît que si elle informe. */}

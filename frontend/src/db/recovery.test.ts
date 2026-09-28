@@ -43,7 +43,7 @@ function sale(id: string, status: LocalSale["status"], quantityMilli: number): L
       quantityMilli,
       lineTotal: 500 * quantityMilli / 1000,
     }],
-    payment: { method: "WAVE", amount: 500, receivedAmount: null, changeAmount: null },
+    payments: [{ method: "WAVE", amount: 500, receivedAmount: null, changeAmount: null }],
     subtotal: 500,
     discount: 0,
     total: 500,

@@ -67,9 +67,8 @@ class SaleItemInline(ReadOnlyTabularInline):
 class PaymentInline(ReadOnlyTabularInline):
     model = Payment
     fields = ("method", "amount", "received_amount", "change_amount")
-    max_num = 1
     verbose_name = "paiement"
-    verbose_name_plural = "paiement"
+    verbose_name_plural = "paiements"
 
 
 class SaleReturnItemInline(ReadOnlyTabularInline):
@@ -94,7 +93,7 @@ class SaleAdmin(ReadOnlySalesAdmin):
         "cash_session__cash_register__store",
         "cash_session__cash_register",
         "cashier",
-        "payment__method",
+        "payments__method",
     )
     date_hierarchy = "occurred_at"
     search_fields = ("id", "cashier__username")
@@ -139,8 +138,12 @@ class SaleAdmin(ReadOnlySalesAdmin):
         return (
             super()
             .get_queryset(request)
-            .select_related("cash_session__cash_register", "cashier", "payment")
-            .prefetch_related("returns")
+            .select_related("cash_session__cash_register", "cashier")
+            .prefetch_related("returns", "payments")
+            # `payments__method` dans list_filter joint la table des
+            # paiements : sans distinct(), une vente à paiement mixte
+            # (plusieurs méthodes) apparaîtrait plusieurs fois dans la liste.
+            .distinct()
         )
 
     @admin.display(description=_("total"), ordering="total")
@@ -149,8 +152,8 @@ class SaleAdmin(ReadOnlySalesAdmin):
 
     @admin.display(description=_("paiement"))
     def payment_method(self, obj: Sale) -> str:
-        payment = getattr(obj, "payment", None)
-        return payment.get_method_display() if payment else "—"
+        methods = [payment.get_method_display() for payment in obj.payments.all()]
+        return " + ".join(methods) if methods else "—"
 
     @admin.display(description=_("ticket"))
     def ticket_link(self, obj: Sale) -> str:
