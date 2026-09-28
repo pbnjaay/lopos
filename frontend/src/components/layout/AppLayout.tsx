@@ -6,11 +6,11 @@ import { logout } from "../../api/auth"
 import { API_BASE_URL } from "../../api/client"
 import { resetAnalytics } from "../../analytics/posthog"
 import { clearSentryUser } from "../../analytics/sentry"
-import { CashRegisterIcon, ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, SettingsIcon, UserIcon } from "../ui/Icons"
-import { Logo } from "../ui/Logo"
+import { CashRegisterIcon, ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, SettingsIcon } from "../ui/Icons"
+import { LogoMark } from "../ui/Logo"
 import { ToastProvider, useToast } from "../ui/Toast"
 import { CashContextLabel } from "../../features/cash-session/CashContextLabel"
-import { SessionStatsLabel } from "../../features/cash-session/SessionStatsLabel"
+import { SessionMenuStats } from "../../features/cash-session/SessionStatsLabel"
 import { ConnectionStatus, NetworkNotifications } from "../../features/offline/OfflineBanner"
 import type { CurrentUser } from "../../types/api"
 import { describeErrorShort } from "../../utils/errorCopy"
@@ -40,6 +40,12 @@ function AppShell({ user }: AppLayoutProps) {
   const sessionMenuRef = useRef<HTMLDivElement>(null)
   const sessionMenuButtonRef = useRef<HTMLButtonElement>(null)
   const userName = user.first_name || user.username
+  const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username
+  const initials = (
+    user.first_name && user.last_name
+      ? `${user.first_name[0]}${user.last_name[0]}`
+      : userName.slice(0, 2)
+  ).toUpperCase()
   const showCashSessionActions =
     location.pathname === "/pos" ||
     location.pathname === "/cash/close" ||
@@ -92,14 +98,17 @@ function AppShell({ user }: AppLayoutProps) {
   return (
     <div className="app-shell">
       <header className="app-header">
+        {/* Le symbole occupe la colonne de la barre latérale, centré comme
+            ses icônes : en-tête et navigation forment un seul chrome. Le
+            contexte démarre ensuite au bord du contenu. */}
         <div className="app-header-status">
-          <Link className="brand-link" to="/" aria-label="LoPOS — Accueil"><Logo /></Link>
+          <Link className="brand-link" to="/" aria-label="LoPOS — Accueil">
+            <LogoMark size={34} />
+          </Link>
           <CashContextLabel />
-          <SessionStatsLabel />
         </div>
         <div className="app-header-right">
           <ConnectionStatus />
-          <span className="app-header-divider" aria-hidden="true" />
           <div ref={sessionMenuRef} className="user-menu">
             <button
               ref={sessionMenuButtonRef}
@@ -110,12 +119,18 @@ function AppShell({ user }: AppLayoutProps) {
               aria-label={`Menu de session — ${userName}`}
               onClick={() => setIsSessionMenuOpen((isOpen) => !isOpen)}
             >
-              <UserIcon className="session-menu-user-icon" />
-              <span className="header-user-name">{userName}</span>
+              <span className="session-menu-avatar" aria-hidden="true">{initials}</span>
               <ChevronDownIcon className="session-menu-chevron" />
             </button>
             {isSessionMenuOpen ? (
               <div id="session-menu-panel" className="session-menu-panel" aria-label="Actions de session">
+                {/* Le nom vit ici, pas dans l'en-tête : les initiales suffisent
+                    à reconnaître sa session, le détail vient au clic. */}
+                <div className="session-menu-identity">
+                  <strong>{fullName}</strong>
+                  {fullName !== user.username ? <span>{user.username}</span> : null}
+                </div>
+                <SessionMenuStats />
                 {/* Sur grand écran la clôture est déjà dans la barre latérale :
                     l'entrée du menu ne sert qu'en barre basse, où elle est
                     masquée. Voir .session-menu-close. */}

@@ -24,8 +24,8 @@ export function formatSessionDuration(openedAt: string, now: number): string | n
 }
 
 /**
- * Etat de la session dans le chrome global : depuis combien de temps la
- * caisse est ouverte, et ce qu'elle a encaisse.
+ * Etat de la session : depuis combien de temps la caisse est ouverte, et ce
+ * qu'elle a encaisse.
  *
  * Deux niveaux, volontairement :
  * la duree vient de Dexie et reste donc juste hors ligne ; le nombre de
@@ -34,7 +34,7 @@ export function formatSessionDuration(openedAt: string, now: number): string | n
  * sur un poste qui rejoint une session deja entamee. Quand le serveur n'est
  * pas joignable, ces deux chiffres disparaissent au lieu de mentir.
  */
-export function SessionStatsLabel() {
+export function useSessionStats() {
   const isOnline = useNetworkStatus()
   // Pas de dependance a la caisse memorisee : elle peut etre absente alors
   // qu'une session est ouverte (voir getOpenLocalCashSession).
@@ -69,35 +69,40 @@ export function SessionStatsLabel() {
     return () => window.clearInterval(timer)
   }, [sessionId])
 
-  if (!session) return null
+  return {
+    duration: session ? formatSessionDuration(session.openedAt, now) : null,
+    summary: session ? summaryQuery.data ?? null : null,
+  }
+}
 
-  const duration = formatSessionDuration(session.openedAt, now)
-  const summary = summaryQuery.data ?? null
+/**
+ * Ventes et encaissement de la session, dans le menu de session : utiles a
+ * la demande, trop bavards en permanence dans l'en-tete.
+ */
+export function SessionMenuStats() {
+  const { duration, summary } = useSessionStats()
   if (duration === null && summary === null) return null
 
   return (
-    <>
-      <span className="app-header-divider" aria-hidden="true" />
-      <dl className="app-header-stats">
-        {duration !== null ? (
+    <dl className="session-menu-stats" aria-label="Session en cours">
+      {duration !== null ? (
+        <div>
+          <dt>Ouverte depuis</dt>
+          <dd>{duration}</dd>
+        </div>
+      ) : null}
+      {summary !== null ? (
+        <>
           <div>
-            <dt>Session</dt>
-            <dd>{duration}</dd>
+            <dt>Ventes</dt>
+            <dd>{summary.sales_count}</dd>
           </div>
-        ) : null}
-        {summary !== null ? (
-          <>
-            <div>
-              <dt>Ventes</dt>
-              <dd>{summary.sales_count}</dd>
-            </div>
-            <div>
-              <dt>Encaissé</dt>
-              <dd><Money backend={summary.gross_sales} /></dd>
-            </div>
-          </>
-        ) : null}
-      </dl>
-    </>
+          <div>
+            <dt>Encaissé</dt>
+            <dd><Money backend={summary.gross_sales} /></dd>
+          </div>
+        </>
+      ) : null}
+    </dl>
   )
 }

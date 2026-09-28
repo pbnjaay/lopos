@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 
 import { getLocalCashSessionForRegister } from "../../db/sessions"
+import { useSessionStats } from "./SessionStatsLabel"
 import { getStoredCashRegisterId } from "./storage"
 
 /**
@@ -21,18 +22,28 @@ export function CashContextLabel() {
     staleTime: Infinity,
   })
 
+  const { duration } = useSessionStats()
+
   const session = sessionQuery.data
   if (!session) return null
+  if (!session.storeName && !session.cashRegisterName) return null
 
-  const parts = [session.storeName, session.cashRegisterName].filter(Boolean)
-  if (parts.length === 0) return null
+  const label = [session.storeName, session.cashRegisterName, duration && `ouverte depuis ${duration}`]
+    .filter(Boolean)
+    .join(" · ")
 
+  // Une seule ligne, sans séparateur vertical : la boutique porte le poids,
+  // la caisse et la durée suivent en gris.
   return (
-    <>
-      <span className="app-header-divider" aria-hidden="true" />
-      <p className="app-header-context" title={parts.join(" · ")}>
-        {parts.join(" · ")}
-      </p>
-    </>
+    <p className="app-header-context" title={label}>
+      {session.storeName ? <strong>{session.storeName}</strong> : null}
+      {session.cashRegisterName ? (
+        <span>
+          {session.storeName ? " · " : ""}
+          {session.cashRegisterName}
+        </span>
+      ) : null}
+      {duration ? <span className="app-header-context-duration"> · ouverte depuis {duration}</span> : null}
+    </p>
   )
 }
