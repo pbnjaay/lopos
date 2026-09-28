@@ -7,6 +7,7 @@ import { API_BASE_URL } from "../../api/client"
 import { resetAnalytics } from "../../analytics/posthog"
 import { clearSentryUser } from "../../analytics/sentry"
 import { CashRegisterIcon, ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, SettingsIcon, UserIcon } from "../ui/Icons"
+import { Logo } from "../ui/Logo"
 import { ToastProvider, useToast } from "../ui/Toast"
 import { CashContextLabel } from "../../features/cash-session/CashContextLabel"
 import { SessionStatsLabel } from "../../features/cash-session/SessionStatsLabel"
@@ -92,7 +93,7 @@ function AppShell({ user }: AppLayoutProps) {
     <div className="app-shell">
       <header className="app-header">
         <div className="app-header-status">
-          <Link className="brand brand-link" to="/" aria-label="LoPOS — Accueil">LoPOS</Link>
+          <Link className="brand-link" to="/" aria-label="LoPOS — Accueil"><Logo /></Link>
           <CashContextLabel />
           <SessionStatsLabel />
         </div>

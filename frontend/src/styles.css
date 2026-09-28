@@ -155,23 +155,49 @@ select {
   box-shadow: var(--shadow-card);
 }
 
-.brand {
-  margin: 0;
-  color: var(--color-primary);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .brand-link {
   display: inline-flex;
   align-items: center;
   min-height: 2.5rem;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
   text-decoration: none;
 }
 
-.brand-link:hover {
+.brand-link:hover .logo-wordmark-lo {
   color: var(--color-primary-hover);
+}
+
+/* Symbole + nom. Le nom garde sa casse — « LoPOS », le Lo en vert — pour
+   que le jeu de mots reste lisible. */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logo svg {
+  flex: none;
+}
+
+.logo-wordmark {
+  color: var(--color-text);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.logo-wordmark-lo {
+  color: var(--color-primary);
+}
+
+.logo-login {
+  margin-bottom: var(--space-5);
+}
+
+.logo-login .logo-wordmark {
+  font-size: 1.6rem;
 }
 
 .eyebrow {
@@ -2460,6 +2486,24 @@ a.list-row:active {
 .receipt-footer span {
   font-size: var(--text-caption);
   font-weight: 600;
+}
+
+.receipt-footer .receipt-signature {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-top: var(--space-2);
+  color: #555;
+  font-size: 0.7rem;
+  font-weight: 600;
+  /* Découpe du symbole : la couleur du papier, écran comme impression. */
+  --logo-mono-cutout: #ffffff;
+}
+
+/* Symbole en noir franc : un gris se tramerait sur l'imprimante thermique. */
+.receipt-footer .receipt-signature svg {
+  color: #111;
 }
 
 .return-detail-receipt {

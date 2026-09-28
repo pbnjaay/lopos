@@ -1,5 +1,7 @@
 import type { ReactNode } from "react"
 
+import { LogoMark } from "../ui/Logo"
+
 type ReceiptHeadingProps = {
   titleId?: string
   storeName: string
@@ -37,5 +39,19 @@ export function ReceiptHeading({
       <p>Caissier : {cashierName}</p>
       {note}
     </header>
+  )
+}
+
+/**
+ * Signature en pied de ticket, discrète : le ticket appartient à la
+ * boutique, dont le nom reste en tête. Symbole en noir seul, pour le
+ * papier thermique.
+ */
+export function ReceiptSignature() {
+  return (
+    <span className="receipt-signature">
+      <LogoMark size={14} tone="mono" />
+      Encaissé avec LoPOS
+    </span>
   )
 }

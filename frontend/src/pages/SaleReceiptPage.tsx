@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom"
 
 import { getSaleReceipt } from "../api/sales"
 import { PageHeader } from "../components/layout/PageHeader"
-import { ReceiptHeading } from "../components/receipt/ReceiptHeading"
+import { ReceiptHeading, ReceiptSignature } from "../components/receipt/ReceiptHeading"
 import { Button } from "../components/ui/Button"
 import { Money } from "../components/ui/Money"
 import { RouteError, RouteLoading } from "../components/ui/RouteState"
@@ -195,6 +195,7 @@ export function SaleReceiptPage() {
               <span>Le ticket de retour constitue le justificatif du remboursement.</span>
             </>
           ) : "Merci !"}
+          <ReceiptSignature />
         </footer>
       </article>
     </main>

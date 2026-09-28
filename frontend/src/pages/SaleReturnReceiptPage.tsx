@@ -4,7 +4,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 
 import { getSaleReceipt, getSaleReturn } from "../api/sales";
 import { PageHeader } from "../components/layout/PageHeader";
-import { ReceiptHeading } from "../components/receipt/ReceiptHeading";
+import { ReceiptHeading, ReceiptSignature } from "../components/receipt/ReceiptHeading";
 import { Button } from "../components/ui/Button";
 import { Money } from "../components/ui/Money";
 import { RouteError, RouteLoading } from "../components/ui/RouteState";
@@ -175,7 +175,10 @@ export function SaleReturnReceiptPage() {
           </div>
         </dl>
 
-        <footer className="receipt-footer">Retour traité</footer>
+        <footer className="receipt-footer">
+          Retour traité
+          <ReceiptSignature />
+        </footer>
       </article>
     </main>
   );
