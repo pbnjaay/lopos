@@ -1,11 +1,15 @@
+from decimal import Decimal
+
 import pytest
 from django.conf import settings
 from django.contrib import admin
 from django.test import RequestFactory
 from django.urls import reverse
 
+from apps.customers.services import create_customer, record_opening_balance
 from apps.sales.admin import PaymentInline, SaleAdmin, SaleItemInline
 from apps.sales.models import Sale
+from apps.stores.models import Store
 
 
 pytestmark = pytest.mark.django_db
@@ -77,3 +81,18 @@ def test_admin_index_renders_manager_dashboard(client, django_user_model) -> Non
     assert "Panier moyen" in content
     assert "Rien à signaler" in content
     assert "Toutes les applications" not in content
+
+
+def test_admin_index_shows_the_customer_book_once_used(client, django_user_model) -> None:
+    user = django_user_model.objects.create_superuser(
+        username="gerant", password="pw", email="gerant@example.com"
+    )
+    client.force_login(user)
+    customer = create_customer(store=Store.objects.create(name="Boutique"), name="Moussa", phone="771234567")
+    record_opening_balance(customer=customer, amount=Decimal("18500"))
+
+    content = client.get(reverse("admin:index")).content.decode()
+
+    assert "Cahier clients" in content
+    assert "Encours total" in content
+    assert "18 500 FCFA" in content
