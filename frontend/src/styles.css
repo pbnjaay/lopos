@@ -3584,6 +3584,38 @@ a.list-row:active {
   opacity: 0.7;
 }
 
+/* Cahier client : sous la rangée des moyens de paiement, en retrait. */
+.checkout-credit {
+  margin-top: var(--space-2);
+  gap: var(--space-2);
+}
+
+.checkout-credit small {
+  font-size: var(--text-eyebrow);
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+/* Le cahier n'est pas un encaissement : même carte, bordure pointillée. */
+.payment-method-card-credit {
+  border-style: dashed;
+}
+
+.credit-confirmation-customer {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.credit-confirmation-customer span {
+  color: var(--color-text-muted);
+}
+
+.sale-credit-amount dd {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
 /* Deux crans au-dessus de --text-amount-hero. Le total a payer est la
    derniere chose lue avant d'encaisser : dans un pied qui ne porte plus que
    lui et le bouton, il peut prendre toute la place que son importance

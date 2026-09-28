@@ -22,12 +22,7 @@ import { useDebouncedValue } from "../hooks/useDebouncedValue"
 import type { PaymentMethod } from "../types/api"
 import { formatDate, formatTime } from "../utils/date"
 import { formatBackendMoney } from "../utils/money"
-
-const paymentLabels: Record<PaymentMethod, string> = {
-  CASH: "Espèces",
-  WAVE: "Wave",
-  ORANGE_MONEY: "Orange Money",
-}
+import { describeSettlement } from "../features/sales/paymentLabels"
 
 // Pas de filtre de dates : la liste est déjà bornée à la session de caisse
 // en cours, et des bornes « Du / Au » y filtraient une journée déjà filtrée.
@@ -119,7 +114,7 @@ function OfflineSalesList({ cashSessionId }: { cashSessionId: string }) {
                   meta={
                     <>
                       <span>
-                        {sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}
+                        {describeSettlement(sale.payments, sale.creditAmount ?? 0)}
                       </span>
                       {day !== today ? (
                         <>
@@ -273,7 +268,7 @@ export function SalesPage() {
               le changement de ligne visée n'atteindrait aucun lecteur d'écran. */}
           <p className="visually-hidden" role="status">
             {aimedSale && !areResultsStale
-              ? `Vente visée : ticket ${aimedSale.id.slice(0, 8).toUpperCase()}, ${aimedSale.payments.map((p) => paymentLabels[p.method]).join(" + ")}, ${formatBackendMoney(aimedSale.net_total ?? aimedSale.total)}`
+              ? `Vente visée : ticket ${aimedSale.id.slice(0, 8).toUpperCase()}, ${describeSettlement(aimedSale.payments, Math.round(Number(aimedSale.credit_amount ?? 0)))}, ${formatBackendMoney(aimedSale.net_total ?? aimedSale.total)}`
               : ""}
           </p>
 
@@ -337,7 +332,7 @@ export function SalesPage() {
                       meta={
                         <>
                           <span>
-                            {sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}
+                            {describeSettlement(sale.payments, Math.round(Number(sale.credit_amount ?? 0)))}
                           </span>
                           {/* La caisse est déjà dans l'en-tête, et la date ne
                               distingue rien tant que la liste tient sur le jour

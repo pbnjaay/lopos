@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { formatPhone, normalizePhone, phoneSearchDigits } from "./phone"
+import { formatPhone, maskPhone, normalizePhone, phoneSearchDigits } from "./phone"
 
 describe("normalizePhone", () => {
   it.each([
@@ -51,5 +51,13 @@ describe("phoneSearchDigits", () => {
     expect(phoneSearchDigits("Moussa")).toBeNull()
     expect(phoneSearchDigits("7")).toBeNull()
     expect(phoneSearchDigits("")).toBeNull()
+  })
+})
+
+describe("maskPhone", () => {
+  it("keeps only what lets the customer recognise their number", () => {
+    expect(maskPhone("+221771234567")).toBe("77 ••• •• 67")
+    expect(maskPhone("+33612345678")).toBe("••• 78")
+    expect(maskPhone(null)).toBe("")
   })
 })

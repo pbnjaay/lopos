@@ -6,6 +6,7 @@ import { InlineAlert } from "../../components/ui/InlineAlert"
 import { Money } from "../../components/ui/Money"
 import { useDialogFocusTrap } from "../../components/ui/useDialogFocusTrap"
 import { withSaleOrigin } from "../sales/origin"
+import { describeSettlement, PAYMENT_LABELS } from "../sales/paymentLabels"
 import type { ReceiptView } from "../sales/receiptView"
 
 type SaleSuccessModalProps = {
@@ -38,13 +39,12 @@ export function SaleSuccessModal({
   useDialogFocusTrap(dialogRef)
   const [isConfirmingCancel, setIsConfirmingCancel] = useState(false)
   const isSplitPayment = sale.payments.length > 1
+  const hasCredit = sale.creditAmount > 0
+  // Avec une part au cahier, un paiement unique ne couvre plus le total :
+  // son montant doit s'afficher, comme pour un paiement mixte.
+  const showLegAmounts = isSplitPayment || hasCredit
   const changePayments = sale.payments.filter((payment) => payment.changeAmount !== null)
   const changeTotal = changePayments.reduce((sum, payment) => sum + (payment.changeAmount ?? 0), 0)
-  const paymentLabels = {
-    CASH: "Espèces",
-    WAVE: "Wave",
-    ORANGE_MONEY: "Orange Money",
-  }
 
   // L'action suivante attendue après une vente est la vente suivante : le
   // focus y va, donc Entrée l'enchaîne sans quitter le clavier.
@@ -136,8 +136,8 @@ export function SaleSuccessModal({
             <div key={`method-${payment.method}-${index}`}>
               <dt>{isSplitPayment ? `Paiement ${index + 1}` : "Paiement"}</dt>
               <dd>
-                {paymentLabels[payment.method]}
-                {isSplitPayment ? (
+                {PAYMENT_LABELS[payment.method]}
+                {showLegAmounts ? (
                   <>
                     {" — "}
                     <Money value={payment.amount} />
@@ -156,6 +156,20 @@ export function SaleSuccessModal({
               </div>
             ) : null,
           )}
+          {hasCredit ? (
+            <>
+              <div className="sale-credit-amount">
+                <dt>Mis au cahier</dt>
+                <dd>
+                  <Money value={sale.creditAmount} />
+                </dd>
+              </div>
+              <div>
+                <dt>Client</dt>
+                <dd>{sale.customer?.name ?? "—"}</dd>
+              </div>
+            </>
+          ) : null}
         </dl>
 
         <div className="sale-success-actions">
@@ -198,10 +212,20 @@ export function SaleSuccessModal({
         >
           <DialogBody>
             <p>
-              Le stock sera remis à jour. Si le client a déjà payé
-              ({sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}),
-              cette action ne touche pas le paiement — c'est à vous de le
-              rembourser si besoin.
+              Le stock sera remis à jour.
+              {sale.payments.length > 0 ? (
+                <>
+                  {" "}Si le client a déjà payé ({describeSettlement(sale.payments, 0)}),
+                  cette action ne touche pas le paiement — c'est à vous de le
+                  rembourser si besoin.
+                </>
+              ) : null}
+              {hasCredit ? (
+                <>
+                  {" "}La somme mise au cahier de {sale.customer?.name ?? "ce client"} sera
+                  retirée de son solde.
+                </>
+              ) : null}
             </p>
             {cancelErrorMessage ? (
               <InlineAlert tone="error">{cancelErrorMessage}</InlineAlert>

@@ -285,3 +285,39 @@ describe("syncPendingSales", () => {
     expect(refreshed?.pendingSoldQuantityMilli).toBe(0)
   })
 })
+
+describe("sync payload of a credit sale", () => {
+  it("sends the customer and the credit amount alongside the payments", async () => {
+    await db.localSales.add({
+      ...buildPendingSale("sale-credit", "event-credit"),
+      payments: [{ method: "CASH", amount: 400, receivedAmount: 400, changeAmount: 0 }],
+      creditAmount: 600,
+      customer: { id: "moussa", name: "Moussa Fall", phone: "+221771234567" },
+    })
+    vi.mocked(pushSyncEvents).mockResolvedValue({
+      results: [{ event_id: "event-credit", status: "SYNCED", entity_id: "sale-credit" }],
+    })
+
+    await syncPendingSales()
+
+    const [, events] = vi.mocked(pushSyncEvents).mock.calls[0]!
+    expect(events[0]!.payload).toMatchObject({
+      payments: [{ method: "CASH", amount: "400.00", received_amount: "400.00" }],
+      customer_id: "moussa",
+      credit_amount: "600.00",
+    })
+  })
+
+  it("sends no credit fields for an ordinary sale", async () => {
+    await db.localSales.add(buildPendingSale("sale-cash", "event-cash"))
+    vi.mocked(pushSyncEvents).mockResolvedValue({
+      results: [{ event_id: "event-cash", status: "SYNCED", entity_id: "sale-cash" }],
+    })
+
+    await syncPendingSales()
+
+    const [, events] = vi.mocked(pushSyncEvents).mock.calls[0]!
+    expect(events[0]!.payload).not.toHaveProperty("customer_id")
+    expect(events[0]!.payload).not.toHaveProperty("credit_amount")
+  })
+})

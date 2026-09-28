@@ -64,6 +64,13 @@ export type LocalPayment = {
   changeAmount: number | null
 }
 
+/** Instantané du client d'une vente à crédit : le ticket doit rester lisible hors ligne. */
+export type LocalSaleCustomer = {
+  id: string
+  name: string
+  phone: string | null
+}
+
 export type LocalSale = {
   id: string
   serverId: string | null
@@ -84,6 +91,9 @@ export type LocalSale = {
   conflictMessage: string | null
   items: LocalSaleItem[]
   payments: LocalPayment[]
+  /** Part non encaissée, mise au cahier de `customer`. Absente sur les ventes antérieures au cahier. */
+  creditAmount?: number
+  customer?: LocalSaleCustomer | null
   subtotal: number
   discount: number
   total: number

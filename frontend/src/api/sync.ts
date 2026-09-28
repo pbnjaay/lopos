@@ -15,6 +15,9 @@ export type SyncEventPayload = {
     amount: string
     received_amount?: string
   }>
+  /** Vente mise (en partie) au cahier : client obligatoire côté serveur. */
+  customer_id?: string
+  credit_amount?: string
 }
 
 export type SyncEvent = {

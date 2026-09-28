@@ -1,5 +1,5 @@
 import type { LocalSale } from "../../db/types"
-import type { PaymentMethod, SaleReceipt } from "../../types/api"
+import type { PaymentMethod, SaleCustomer, SaleReceipt } from "../../types/api"
 import { backendQuantityToMilli } from "../../utils/quantity"
 
 export type ReceiptView = {
@@ -30,6 +30,9 @@ export type ReceiptView = {
     receivedAmount: number | null
     changeAmount: number | null
   }>
+  /** Part non encaissée, mise au cahier de `customer` (0 sinon). */
+  creditAmount: number
+  customer: SaleCustomer | null
 }
 
 function toIntegerAmount(value: string | null): number | null {
@@ -66,6 +69,8 @@ export function receiptViewFromApiReceipt(receipt: SaleReceipt): ReceiptView {
       receivedAmount: toIntegerAmount(payment.received_amount),
       changeAmount: toIntegerAmount(payment.change_amount),
     })),
+    creditAmount: Math.round(Number(receipt.credit_amount ?? 0)),
+    customer: receipt.customer ?? null,
   }
 }
 
@@ -88,5 +93,12 @@ export function receiptViewFromLocalSale(sale: LocalSale): ReceiptView {
     returnedTotal: 0,
     netTotal: sale.total,
     payments: sale.payments,
+    creditAmount: sale.creditAmount ?? 0,
+    customer: sale.customer ?? null,
   }
+}
+
+/** Montant réellement encaissé maintenant : le total moins la part mise au cahier. */
+export function paidNowAmount(receipt: Pick<ReceiptView, "payments">): number {
+  return receipt.payments.reduce((sum, payment) => sum + payment.amount, 0)
 }

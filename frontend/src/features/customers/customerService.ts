@@ -6,6 +6,7 @@ import {
   searchLocalCustomers,
   upsertLocalCustomer,
 } from "../../db/customers"
+import { pendingCreditByCustomer } from "../../db/sales"
 import type { LocalCustomer } from "../../db/types"
 import type { Customer } from "../../types/api"
 
@@ -37,12 +38,13 @@ export class DuplicateCustomerError extends Error {
   }
 }
 
-export function fromLocalCustomer(customer: LocalCustomer): CustomerSummary {
+/** `pendingCredit` : dette des ventes à crédit de ce terminal pas encore synchronisées. */
+export function fromLocalCustomer(customer: LocalCustomer, pendingCredit = 0): CustomerSummary {
   return {
     id: customer.id,
     name: customer.name,
     phone: customer.phone,
-    balance: customer.serverBalance,
+    balance: customer.serverBalance + pendingCredit,
     isActive: customer.isActive,
   }
 }
@@ -61,7 +63,11 @@ export async function searchCustomers(storeId: string, query: string): Promise<C
       throw new LocalCustomerBookUnavailableError()
     }
   }
-  return (await searchLocalCustomers(storeId, query)).map(fromLocalCustomer)
+  const [customers, pending] = await Promise.all([
+    searchLocalCustomers(storeId, query),
+    pendingCreditByCustomer(storeId),
+  ])
+  return customers.map((customer) => fromLocalCustomer(customer, pending.get(customer.id) ?? 0))
 }
 
 /**
@@ -78,7 +84,8 @@ export async function quickCreateCustomer(input: {
   } catch (error) {
     if (error instanceof ApiError && error.code === "CUSTOMER_DUPLICATE" && error.body?.customer) {
       const existing = await upsertLocalCustomer(error.body.customer as Customer)
-      throw new DuplicateCustomerError(fromLocalCustomer(existing))
+      const pending = await pendingCreditByCustomer(input.storeId)
+      throw new DuplicateCustomerError(fromLocalCustomer(existing, pending.get(existing.id) ?? 0))
     }
     throw error
   }

@@ -50,3 +50,17 @@ export function phoneSearchDigits(query: string): string | null {
   const digits = trimmed.replaceAll(/\D/g, "")
   return digits.length >= 2 ? digits : null
 }
+
+/**
+ * `+221771234567` → `77 ••• •• 67` : assez pour que le client reconnaisse
+ * son numéro sur un ticket papier, sans l'exposer à qui le ramasse.
+ */
+export function maskPhone(phone: string | null): string {
+  if (!phone) return ""
+  const digits = phone.replaceAll(/\D/g, "")
+  if (phone.startsWith(`+${SENEGAL_PREFIX}`) && digits.length === 12) {
+    const national = digits.slice(3)
+    return `${national.slice(0, 2)} ••• •• ${national.slice(7)}`
+  }
+  return `••• ${digits.slice(-2)}`
+}

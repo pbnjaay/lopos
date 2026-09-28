@@ -99,6 +99,13 @@ export type Customer = {
 
 export type PaymentMethod = "CASH" | "WAVE" | "ORANGE_MONEY"
 
+/** Client d'une vente mise au cahier, tel que la vente le référence. */
+export type SaleCustomer = {
+  id: string
+  name: string
+  phone: string | null
+}
+
 export type SaleResponse = {
   id: string
   status: "COMPLETED" | "CANCELLED"
@@ -115,6 +122,9 @@ export type SaleResponse = {
     received_amount: string | null
     change_amount: string | null
   }>
+  /** Part non encaissée, inscrite au cahier du client ("0.00" sinon). */
+  credit_amount?: string
+  customer?: SaleCustomer | null
   items: Array<{
     product_id: string
     id: string
@@ -157,6 +167,8 @@ export type SaleSummary = Pick<
   | "returned_total"
   | "net_total"
   | "payments"
+  | "credit_amount"
+  | "customer"
 >
 
 export type PaginatedSales = {

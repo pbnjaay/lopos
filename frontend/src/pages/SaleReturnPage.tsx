@@ -279,6 +279,18 @@ export function SaleReturnPage() {
       />
     );
   }
+  // Provisoire, aligné sur le serveur : sur une vente mise au cahier, un
+  // retour doit d'abord réduire la dette, pas sortir de l'argent. Tant que
+  // cette règle n'existe pas, on l'annonce ici plutôt qu'après la saisie.
+  if (Number(sale.credit_amount ?? 0) > 0) {
+    return (
+      <RouteError
+        context="retour"
+        title="Retour indisponible pour cette vente"
+        description="Les retours sur une vente mise au cahier ne sont pas encore disponibles."
+      />
+    );
+  }
 
   return (
     <main className="operational-page">

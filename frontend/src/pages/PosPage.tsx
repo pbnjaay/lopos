@@ -5,6 +5,7 @@ import { getStore } from "../api/stores"
 import { Button } from "../components/ui/Button"
 import { ErrorState } from "../components/ui/ErrorState"
 import { InlineAlert } from "../components/ui/InlineAlert"
+import { Money } from "../components/ui/Money"
 import { useToast } from "../components/ui/Toast"
 import {
   trackCheckoutOpened,
@@ -14,6 +15,7 @@ import {
 } from "../analytics/events"
 import {
   InsufficientLocalStockError,
+  InvalidLocalPaymentError,
   LocalSaleProductNotFoundError,
   createLocalSale,
   listRecentLocalSales,
@@ -48,6 +50,9 @@ import { ProductGrid } from "../features/products/ProductGrid"
 import { ProductSearch } from "../features/products/ProductSearch"
 import { useProductCatalog } from "../features/products/queries"
 import { useCustomerBook } from "../features/customers/queries"
+import { CustomerPicker } from "../features/customers/CustomerPicker"
+import type { CustomerSummary } from "../features/customers/customerService"
+import { CreditConfirmation } from "../features/checkout/CreditConfirmation"
 import type { CatalogProduct } from "../features/products/types"
 import { cancelSaleEverywhere } from "../features/sales/cancelSale"
 import { type ReceiptView, receiptViewFromLocalSale } from "../features/sales/receiptView"
@@ -66,6 +71,12 @@ type PaymentLeg = {
   receivedAmount?: number
 }
 
+/** METHODS : choix du moyen ; CREDIT_* : choix du client puis confirmation du cahier. */
+type CheckoutStep = "METHODS" | PaymentMethod | "CREDIT_CUSTOMER" | "CREDIT_CONFIRM"
+
+/** Part non encaissée, mise au cahier d'un client — toujours le reste exact. */
+type CheckoutCredit = { customer: CustomerSummary; amount: number }
+
 const checkoutFKeyToMethod: Record<string, PaymentMethod> = {
   F1: "CASH",
   F2: "WAVE",
@@ -79,7 +90,8 @@ function getCheckoutErrorMessage(error: Error | null): string | undefined {
   if (!error) return undefined
   if (
     error instanceof InsufficientLocalStockError ||
-    error instanceof LocalSaleProductNotFoundError
+    error instanceof LocalSaleProductNotFoundError ||
+    error instanceof InvalidLocalPaymentError
   ) {
     return error.message
   }
@@ -94,7 +106,9 @@ export function PosPage() {
   const queryClient = useQueryClient()
   const toast = useToast()
   const cart = useCart(ownSession?.id ?? null, selectedRegister?.store_id ?? null)
-  const [checkoutStep, setCheckoutStep] = useState<"METHODS" | PaymentMethod | null>(null)
+  const [checkoutStep, setCheckoutStep] = useState<CheckoutStep | null>(null)
+  // Client choisi pour la part mise au cahier, le temps de la confirmation.
+  const [creditCustomer, setCreditCustomer] = useState<CustomerSummary | null>(null)
   // Versements déjà appliqués à la vente en cours d'encaissement — vide pour
   // un paiement classique, se remplit à mesure qu'un paiement mixte
   // s'enchaîne sur plusieurs moyens.
@@ -158,7 +172,13 @@ export function PosPage() {
   }
 
   const saleMutation = useMutation({
-    mutationFn: async (legs: PaymentLeg[]): Promise<ReceiptView> => {
+    mutationFn: async ({
+      legs,
+      credit,
+    }: {
+      legs: PaymentLeg[]
+      credit: CheckoutCredit | null
+    }): Promise<ReceiptView> => {
       // Encaissement local-first : la vente est durable dès que la
       // transaction Dexie (vente + stock + statut PENDING_SYNC) a committé.
       // La disponibilité du serveur n'entre jamais dans ce chemin — la
@@ -177,6 +197,18 @@ export function PosPage() {
           amount: leg.amount,
           receivedAmount: leg.receivedAmount ?? null,
         })),
+        ...(credit
+          ? {
+              credit: {
+                customer: {
+                  id: credit.customer.id,
+                  name: credit.customer.name,
+                  phone: credit.customer.phone,
+                },
+                amount: credit.amount,
+              },
+            }
+          : {}),
       })
       return receiptViewFromLocalSale(sale)
     },
@@ -184,10 +216,18 @@ export function PosPage() {
       cart.clearCart()
       setCheckoutStep(null)
       setPaymentLegs([])
+      setCreditCustomer(null)
       setCompletedSale(sale)
-      const lastMethod = sale.payments[sale.payments.length - 1]!.method
-      storeLastPaymentMethod(lastMethod)
-      setLastPaymentMethod(lastMethod)
+      // Une vente entièrement mise au cahier n'a aucun paiement : le dernier
+      // moyen utilisé reste celui de la vente précédente.
+      const lastMethod = sale.payments[sale.payments.length - 1]?.method
+      if (lastMethod) {
+        storeLastPaymentMethod(lastMethod)
+        setLastPaymentMethod(lastMethod)
+      }
+      if (sale.creditAmount > 0) {
+        void queryClient.invalidateQueries({ queryKey: ["customers"] })
+      }
       void queryClient.invalidateQueries({ queryKey: ["products"] })
       void queryClient.invalidateQueries({ queryKey: pendingSalesCountQueryKey })
       void queryClient.invalidateQueries({ queryKey: ["local-sales-for-session"] })
@@ -200,14 +240,15 @@ export function PosPage() {
         store_id: selectedRegister?.store_id ?? null,
         cash_register_id: selectedRegister?.id ?? null,
         cash_session_id: ownSession?.id ?? null,
-        payment_method: sale.payments[0]!.method,
+        payment_method: sale.payments[0]?.method ?? "CREDIT",
         is_split_payment: sale.payments.length > 1,
+        is_credit_sale: sale.creditAmount > 0,
         items_count: sale.items.length,
         total_amount: sale.total,
         offline: !isOnline,
       })
     },
-    onError: (error, legs) => {
+    onError: (error, { legs, credit }) => {
       // Seuls des échecs de persistance locale arrivent ici (stock local
       // insuffisant, produit absent du catalogue local, écriture IndexedDB) :
       // ils sont critiques et la vente n'est pas considérée comme terminée.
@@ -224,7 +265,7 @@ export function PosPage() {
             : error instanceof LocalSaleProductNotFoundError
               ? "PRODUCT_NOT_FOUND"
               : "LOCAL_PERSIST_FAILED",
-        payment_method: legs[0]?.method ?? null,
+        payment_method: legs[0]?.method ?? (credit ? "CREDIT" : null),
         is_split_payment: legs.length > 1,
         offline: !isOnline,
       })
@@ -282,7 +323,26 @@ export function PosPage() {
       setCheckoutStep("METHODS")
       return
     }
-    await saleMutation.mutateAsync(legs)
+    await saleMutation.mutateAsync({ legs, credit: null })
+  }
+
+  /** Le reste dû part au cahier : on choisit d'abord le client. */
+  function goToCreditCustomer() {
+    saleMutation.reset()
+    setCheckoutStep("CREDIT_CUSTOMER")
+  }
+
+  function handleCreditCustomerSelected(customer: CustomerSummary) {
+    setCreditCustomer(customer)
+    setCheckoutStep("CREDIT_CONFIRM")
+  }
+
+  async function confirmCreditSale() {
+    if (!ownSession || cart.items.length === 0 || !creditCustomer) return
+    await saleMutation.mutateAsync({
+      legs: paymentLegs,
+      credit: { customer: creditCustomer, amount: remainingAmount },
+    })
   }
 
   function handleCashPayment(receivedAmount: number) {
@@ -431,6 +491,7 @@ export function PosPage() {
     // Rien n'est jamais écrit tant que la vente n'est pas soumise : abandonner
     // ici oublie sans risque les versements déjà appliqués à ce paiement mixte.
     setPaymentLegs([])
+    setCreditCustomer(null)
     focusProductSearch()
   }
 
@@ -449,6 +510,17 @@ export function PosPage() {
     trackPaymentMethodSelected({ method })
   }
 
+  /** Vente entièrement mise au cahier, depuis le pied de panier ou F4. */
+  function startCreditCheckout() {
+    if (!ownSession || cart.items.length === 0) return
+    dropRemovalUndo()
+    saleMutation.reset()
+    setPaymentLegs([])
+    setCreditCustomer(null)
+    setCheckoutStep("CREDIT_CUSTOMER")
+    trackCheckoutOpened({ cart_items_count: cart.items.length, cart_total: cart.total })
+  }
+
   // F1/F2/F3 open a payment screen directly from the POS, bypassing the
   // method-selection modal entirely. Safe to intercept unconditionally
   // (unlike digits or Enter) because function keys never collide with
@@ -459,7 +531,7 @@ export function PosPage() {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.repeat) return
       const method = checkoutFKeyToMethod[event.key]
-      if (!method) return
+      if (!method && event.key !== "F4") return
       event.preventDefault()
       if (
         checkoutStep !== null ||
@@ -469,7 +541,8 @@ export function PosPage() {
         isHeldCartsOpen
       )
         return
-      startCheckout(method)
+      if (method) startCheckout(method)
+      else startCreditCheckout()
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
@@ -552,6 +625,7 @@ export function PosPage() {
             onInteractionComplete={focusProductSearch}
             primaryMethod={primaryPaymentMethod}
             onCheckoutMethod={startCheckout}
+            onCredit={startCreditCheckout}
           />
         </div>
       ) : (
@@ -570,6 +644,41 @@ export function PosPage() {
             saleMutation.reset()
             setCheckoutStep(method)
             trackPaymentMethodSelected({ method })
+          }}
+          onCredit={goToCreditCustomer}
+        />
+      ) : null}
+      {checkoutStep === "CREDIT_CUSTOMER" && selectedRegister ? (
+        <CustomerPicker
+          storeId={selectedRegister.store_id}
+          isOnline={isOnline}
+          summary={
+            <div className="payment-total">
+              <span>{isSplitPayment ? "Reste à mettre au cahier" : "À mettre au cahier"}</span>
+              <strong>
+                <Money value={remainingAmount} />
+              </strong>
+            </div>
+          }
+          onSelect={handleCreditCustomerSelected}
+          onBack={() => setCheckoutStep("METHODS")}
+          onClose={closeCheckout}
+        />
+      ) : null}
+      {checkoutStep === "CREDIT_CONFIRM" && creditCustomer ? (
+        <CreditConfirmation
+          customer={creditCustomer}
+          creditAmount={remainingAmount}
+          paidAmount={paidSoFar}
+          isSubmitting={saleMutation.isPending}
+          errorMessage={getCheckoutErrorMessage(saleMutation.error)}
+          onConfirm={confirmCreditSale}
+          onBack={() => {
+            saleMutation.reset()
+            setCheckoutStep("CREDIT_CUSTOMER")
+          }}
+          onClose={() => {
+            if (!saleMutation.isPending) closeCheckout()
           }}
         />
       ) : null}

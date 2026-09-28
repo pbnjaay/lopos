@@ -141,6 +141,8 @@ function buildLocalSaleResult(input: CreateLocalSaleInput): LocalSale {
     conflictMessage: null,
     items,
     payments,
+    creditAmount: input.credit?.amount ?? 0,
+    customer: input.credit?.customer ?? null,
     subtotal: total,
     discount: 0,
     total,
@@ -747,5 +749,121 @@ describe("POS keyboard shortcuts", () => {
     await userEvents.keyboard("{Escape}")
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
     await waitFor(() => expect(scanner).toHaveFocus())
+  })
+})
+
+describe("POS credit sale (cahier client)", () => {
+  const moussa = {
+    id: "moussa",
+    store_id: store.id,
+    name: "Moussa Fall",
+    phone: "+221771234567",
+    is_active: true,
+    balance: "12500.00",
+    last_activity_at: null,
+    updated_at: "2026-09-01T00:00:00Z",
+  }
+
+  function mockServer() {
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      if (url.includes("/customers/")) return jsonResponse([moussa])
+      throw new Error(`Unexpected request: ${url}`)
+    })
+  }
+
+  async function pickMoussa(userEvents: ReturnType<typeof userEvent.setup>) {
+    await userEvents.type(await screen.findByLabelText("Téléphone ou nom du client"), "moussa")
+    await userEvents.click(await screen.findByRole("button", { name: "Choisir Moussa Fall" }))
+  }
+
+  afterEach(async () => {
+    await db.customers.clear()
+    await db.metadata.clear()
+  })
+
+  it("puts a whole sale on the customer's book from the cart footer", async () => {
+    const userEvents = userEvent.setup()
+    mockServer()
+
+    renderPos()
+    await scanCoca(userEvents)
+    await userEvents.click(screen.getByRole("button", { name: /Mettre au cahier/ }))
+    expect(await screen.findByText("À mettre au cahier")).toBeInTheDocument()
+    await pickMoussa(userEvents)
+
+    const confirmation = await screen.findByRole("dialog", { name: "Mettre au cahier" })
+    expect(within(confirmation).getByText("Moussa Fall")).toBeInTheDocument()
+    expect(within(confirmation).getByText("Nouveau solde").nextSibling).toHaveTextContent("13 000 FCFA")
+    await userEvents.click(within(confirmation).getByRole("button", { name: "Valider la vente" }))
+
+    expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
+    expect(createLocalSale).toHaveBeenCalledWith({
+      session: expect.objectContaining({ id: cashSession.id }),
+      items: [{ productId: coca.id, quantity: 1 }],
+      payments: [],
+      credit: {
+        customer: { id: "moussa", name: "Moussa Fall", phone: "+221771234567" },
+        amount: 500,
+      },
+    })
+    expect(screen.getByText("Mis au cahier")).toBeInTheDocument()
+    expect(screen.getByText("Client").nextSibling).toHaveTextContent("Moussa Fall")
+  })
+
+  it("puts only the rest on the book after a partial cash payment", async () => {
+    const userEvents = userEvent.setup()
+    mockServer()
+
+    renderPos()
+    await scanCoca(userEvents)
+    await openCashPayment(userEvents)
+    await userEvents.type(screen.getByLabelText("Montant reçu"), "300")
+    await userEvents.click(screen.getByRole("button", { name: "Continuer avec un autre moyen" }))
+    const methodDialog = await screen.findByRole("dialog", { name: "Mode de paiement" })
+    await userEvents.click(within(methodDialog).getByRole("button", { name: /Cahier client/ }))
+
+    expect(await screen.findByText("Reste à mettre au cahier")).toBeInTheDocument()
+    await pickMoussa(userEvents)
+    const confirmation = await screen.findByRole("dialog", { name: "Mettre au cahier" })
+    expect(within(confirmation).getByText("Déjà payé").nextSibling).toHaveTextContent("300 FCFA")
+    expect(within(confirmation).getByText("À mettre au cahier").nextSibling).toHaveTextContent("200 FCFA")
+    await userEvents.click(within(confirmation).getByRole("button", { name: "Valider la vente" }))
+
+    expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
+    expect(createLocalSale).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payments: [{ method: "CASH", amount: 300, receivedAmount: 300 }],
+        credit: expect.objectContaining({ amount: 200 }),
+      }),
+    )
+  })
+
+  it("opens the customer choice with F4", async () => {
+    const userEvents = userEvent.setup()
+    mockServer()
+
+    renderPos()
+    await scanCoca(userEvents)
+    fireEvent.keyDown(window, { key: "F4" })
+
+    expect(await screen.findByRole("dialog", { name: "Choisir le client" })).toBeInTheDocument()
+  })
+
+  it("goes back to the customer choice without submitting anything", async () => {
+    const userEvents = userEvent.setup()
+    mockServer()
+
+    renderPos()
+    await scanCoca(userEvents)
+    await userEvents.click(screen.getByRole("button", { name: /Mettre au cahier/ }))
+    await pickMoussa(userEvents)
+    const confirmation = await screen.findByRole("dialog", { name: "Mettre au cahier" })
+    await userEvents.click(within(confirmation).getAllByRole("button", { name: "Changer de client" })[0]!)
+
+    expect(await screen.findByRole("dialog", { name: "Choisir le client" })).toBeInTheDocument()
+    expect(createLocalSale).not.toHaveBeenCalled()
   })
 })
