@@ -26,3 +26,19 @@ class NegativeCustomerBalance(InvalidLedgerEntry):
 
 class ImmutableLedgerEntry(Exception):
     """Raised on any attempt to update or delete a ledger entry."""
+
+
+class InvalidCustomerPayment(Exception):
+    """Raised when a customer repayment cannot be recorded as requested."""
+
+
+class CustomerOverpayment(InvalidCustomerPayment):
+    """Raised when a repayment exceeds what the customer owes."""
+
+    def __init__(self, balance) -> None:
+        from apps.dashboard.formatting import format_fcfa
+
+        self.balance = balance
+        super().__init__(
+            f"Le montant dépasse le solde dû par le client ({format_fcfa(balance)})."
+        )

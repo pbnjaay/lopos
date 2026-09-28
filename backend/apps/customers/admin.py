@@ -10,7 +10,7 @@ from unfold.admin import ModelAdmin, TabularInline
 from apps.dashboard.formatting import format_fcfa
 
 from .exceptions import InvalidPhone
-from .models import Customer, CustomerLedgerEntry
+from .models import Customer, CustomerLedgerEntry, CustomerPayment
 from .phone import normalize_phone
 from .services import (
     customer_balance,
@@ -242,6 +242,44 @@ class CustomerLedgerEntryAdmin(ModelAdmin):
         # L'écriture est créée par le service (verrou + contrôles) ; l'admin
         # n'a besoin que de son identité pour le message et la redirection.
         obj.__dict__.update(entry.__dict__)
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        return False
+
+
+@admin.register(CustomerPayment)
+class CustomerPaymentAdmin(ModelAdmin):
+    """Remboursements encaissés en caisse : consultables, jamais modifiables
+    (l'argent est déjà dans la caisse et l'écriture du cahier est immuable)."""
+
+    list_display = (
+        "created_at",
+        "reference",
+        "customer",
+        "method",
+        "amount_display",
+        "balance_after_display",
+        "cash_session",
+        "created_by",
+    )
+    list_filter = ("method", "store")
+    list_select_related = ("customer", "cash_session__cash_register", "created_by")
+    search_fields = ("reference", "customer__name", "customer__phone")
+    date_hierarchy = "created_at"
+
+    @admin.display(description=_("montant"), ordering="amount")
+    def amount_display(self, obj: CustomerPayment) -> str:
+        return format_fcfa(obj.amount)
+
+    @admin.display(description=_("nouveau solde"), ordering="balance_after")
+    def balance_after_display(self, obj: CustomerPayment) -> str:
+        return format_fcfa(obj.balance_after)
+
+    def has_add_permission(self, request) -> bool:
+        return False
 
     def has_change_permission(self, request, obj=None) -> bool:
         return False

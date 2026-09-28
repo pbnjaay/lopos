@@ -241,6 +241,11 @@ UNFOLD = {
                         "link": reverse_lazy("admin:customers_customer_changelist"),
                     },
                     {
+                        "title": _("Paiements clients"),
+                        "icon": "payments",
+                        "link": reverse_lazy("admin:customers_customerpayment_changelist"),
+                    },
+                    {
                         "title": _("Écritures du cahier"),
                         "icon": "menu_book",
                         "link": reverse_lazy(

@@ -1,19 +1,26 @@
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from uuid import UUID
 
 from django.db import IntegrityError, transaction
 from django.db.models import DecimalField, OuterRef, QuerySet, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
+from django.utils import timezone
 
+from apps.cash.exceptions import CashSessionClosed
+from apps.cash.models import CashSession
+from apps.sales.models import Payment
 from apps.stores.models import Store
 
 from .exceptions import (
+    CustomerOverpayment,
     DuplicateCustomer,
     InvalidCustomer,
+    InvalidCustomerPayment,
     InvalidLedgerEntry,
     NegativeCustomerBalance,
 )
-from .models import Customer, CustomerLedgerEntry
+from .models import Customer, CustomerLedgerEntry, CustomerPayment
 from .phone import normalize_phone
 
 ZERO = Decimal("0.00")
@@ -240,3 +247,135 @@ def reverse_ledger_entry(
         reason=normalized_reason,
         created_by=created_by,
     )
+
+
+def _validated_idempotent_payment(
+    existing: CustomerPayment | None,
+    *,
+    customer: Customer,
+    cash_session: CashSession,
+    created_by,
+) -> CustomerPayment | None:
+    if existing is None:
+        return None
+    if (
+        existing.customer_id != customer.pk
+        or existing.cash_session_id != cash_session.pk
+        or existing.created_by_id != created_by.pk
+    ):
+        raise InvalidCustomerPayment("Cette clé d’idempotence appartient à un autre paiement.")
+    return existing
+
+
+def _validate_repayment_method(
+    *, method: str, amount: Decimal, received_amount
+) -> tuple[Decimal | None, Decimal | None]:
+    if method == Payment.Method.CASH:
+        if isinstance(received_amount, bool) or not isinstance(received_amount, (Decimal, int)):
+            raise InvalidCustomerPayment("Le montant reçu est obligatoire pour un paiement en espèces.")
+        received = Decimal(received_amount)
+        if received < amount:
+            raise InvalidCustomerPayment("Le montant reçu est insuffisant.")
+        return received, received - amount
+    if method in (Payment.Method.WAVE, Payment.Method.ORANGE_MONEY):
+        if received_amount is not None:
+            raise InvalidCustomerPayment(
+                "Le montant reçu ne doit pas être renseigné pour un paiement mobile."
+            )
+        return None, None
+    raise InvalidCustomerPayment("Mode de paiement invalide.")
+
+
+@transaction.atomic
+def record_customer_payment(
+    *,
+    customer: Customer,
+    cash_session: CashSession,
+    created_by,
+    method: str,
+    amount: Decimal | int,
+    received_amount: Decimal | int | None = None,
+    idempotency_key: UUID,
+) -> CustomerPayment:
+    """Enregistre un remboursement client : `CustomerPayment` + écriture PAYMENT.
+
+    - En ligne uniquement, dans une session de caisse ouverte du caissier :
+      l'argent entre physiquement dans une caisse (espèces attendues pour
+      CASH, simple mouvement pour Wave/OM).
+    - Jamais plus que le solde dû, contrôlé sous verrou du client : deux
+      caisses qui encaissent le même client en même temps sont sérialisées.
+    - Idempotent : rejouer la même `idempotency_key` renvoie le paiement
+      déjà enregistré, sans en créer un second.
+
+    Ordre des verrous : session → client, comme pour une vente.
+    """
+    existing = _validated_idempotent_payment(
+        CustomerPayment.objects.filter(idempotency_key=idempotency_key).first(),
+        customer=customer,
+        cash_session=cash_session,
+        created_by=created_by,
+    )
+    if existing:
+        return existing
+
+    locked_session = (
+        CashSession.objects.select_for_update()
+        .select_related("cash_register")
+        .get(pk=cash_session.pk)
+    )
+    # Relu sous verrou : un doublon concurrent a pu committer pendant l'attente.
+    existing = _validated_idempotent_payment(
+        CustomerPayment.objects.filter(idempotency_key=idempotency_key).first(),
+        customer=customer,
+        cash_session=locked_session,
+        created_by=created_by,
+    )
+    if existing:
+        return existing
+    if locked_session.status != CashSession.Status.OPEN:
+        raise CashSessionClosed("La session de caisse est fermée.")
+    if locked_session.cashier_id != created_by.pk:
+        raise InvalidCustomerPayment("Cette session appartient à un autre caissier.")
+    if customer.store_id != locked_session.cash_register.store_id:
+        raise InvalidCustomerPayment("Ce client appartient à un autre magasin.")
+
+    try:
+        normalized = _normalize_amount(amount)
+    except InvalidLedgerEntry as exc:
+        raise InvalidCustomerPayment(str(exc)) from exc
+    if normalized <= ZERO:
+        raise InvalidCustomerPayment("Le montant du paiement doit être strictement positif.")
+    received, change = _validate_repayment_method(
+        method=method, amount=normalized, received_amount=received_amount
+    )
+
+    locked_customer = _lock_customer(customer)
+    balance = customer_balance(locked_customer)
+    if normalized > balance:
+        raise CustomerOverpayment(balance)
+
+    now = timezone.now()
+    payment = CustomerPayment.objects.create(
+        customer=locked_customer,
+        store_id=locked_customer.store_id,
+        cash_session=locked_session,
+        method=method,
+        amount=normalized,
+        received_amount=received,
+        change_amount=change,
+        balance_before=balance,
+        balance_after=balance - normalized,
+        idempotency_key=idempotency_key,
+        created_by=created_by,
+        created_at=now,
+    )
+    CustomerLedgerEntry.objects.create(
+        customer=locked_customer,
+        store_id=locked_customer.store_id,
+        entry_type=CustomerLedgerEntry.EntryType.PAYMENT,
+        amount=-normalized,
+        customer_payment=payment,
+        occurred_at=now,
+        created_by=created_by,
+    )
+    return payment

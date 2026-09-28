@@ -35,7 +35,9 @@ def test_sidebar_does_not_link_technical_models() -> None:
     ]
 
     assert not any("saleitem" in link for link in all_links)
-    assert not any("payment" in link for link in all_links)
+    # Les lignes de paiement d'une vente sont techniques (vues en inline) ;
+    # les paiements clients du cahier, eux, sont un écran métier.
+    assert not any("/sales/payment/" in link for link in all_links)
     assert not any("processedsyncevent" in link for link in all_links)
 
 

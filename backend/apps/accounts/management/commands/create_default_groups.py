@@ -27,6 +27,7 @@ MANAGER_PERMISSIONS = [
     # "add" = ajustement ou solde d'ouverture saisi à la main ; jamais de
     # "change"/"delete", une écriture du cahier est immuable.
     ("customers", "customerledgerentry", ("add", "view")),
+    ("customers", "customerpayment", ("view",)),
     ("sync", "processedsyncevent", ("view",)),
 ]
 

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from typing import NamedTuple
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
@@ -103,6 +104,10 @@ class CashSessionSummary:
     cash_refunds: Decimal
     wave_refunds: Decimal
     orange_money_refunds: Decimal
+    credit_sales: Decimal
+    cash_customer_payments: Decimal
+    wave_customer_payments: Decimal
+    orange_money_customer_payments: Decimal
     opening_balance: Decimal
     expected_cash: Decimal
     counted_cash: Decimal | None
@@ -110,7 +115,40 @@ class CashSessionSummary:
     closed_at: datetime | None
 
 
-def _aggregate_totals(cash_session: CashSession):
+class _SessionTotals(NamedTuple):
+    sales_count: int
+    gross_sales: Decimal
+    cash_sales: Decimal
+    wave_sales: Decimal
+    orange_money_sales: Decimal
+    returns_total: Decimal
+    cash_refunds: Decimal
+    wave_refunds: Decimal
+    orange_money_refunds: Decimal
+    credit_sales: Decimal
+    cash_customer_payments: Decimal
+    wave_customer_payments: Decimal
+    orange_money_customer_payments: Decimal
+
+
+def _expected_cash(opening_balance: Decimal, totals: _SessionTotals) -> Decimal:
+    """Espèces qui doivent se trouver dans le tiroir. Seule formule du genre :
+    le résumé et la clôture l'appellent tous deux.
+
+    Les remboursements de cahier en espèces y entrent (l'argent est bien dans
+    la caisse) sans être des ventes ; la part mise au cahier n'y entre pas
+    (aucun argent reçu).
+    """
+    return (
+        opening_balance
+        + totals.cash_sales
+        - totals.cash_refunds
+        + totals.cash_customer_payments
+    )
+
+
+def _aggregate_totals(cash_session: CashSession) -> _SessionTotals:
+    from apps.customers.models import CustomerPayment
     from apps.sales.models import Payment, Sale, SaleReturn
 
     sale_totals = Sale.objects.filter(
@@ -119,6 +157,7 @@ def _aggregate_totals(cash_session: CashSession):
     ).aggregate(
         sales_count=Count("id"),
         gross_sales=Sum("total"),
+        credit_sales=Sum("credit_amount"),
     )
     payment_totals = Payment.objects.filter(
         sale__cash_session=cash_session,
@@ -137,48 +176,52 @@ def _aggregate_totals(cash_session: CashSession):
         orange_money=Sum("total_refund", filter=Q(payment_method="ORANGE_MONEY")),
     )
 
-    return (
-        sale_totals["sales_count"] or 0,
-        sale_totals["gross_sales"] or ZERO,
-        payment_totals["cash"] or ZERO,
-        payment_totals["wave"] or ZERO,
-        payment_totals["orange_money"] or ZERO,
-        refunds["total"] or ZERO,
-        refunds["cash"] or ZERO,
-        refunds["wave"] or ZERO,
-        refunds["orange_money"] or ZERO,
+    customer_payments = CustomerPayment.objects.filter(
+        cash_session=cash_session
+    ).aggregate(
+        cash=Sum("amount", filter=Q(method="CASH")),
+        wave=Sum("amount", filter=Q(method="WAVE")),
+        orange_money=Sum("amount", filter=Q(method="ORANGE_MONEY")),
+    )
+
+    return _SessionTotals(
+        sales_count=sale_totals["sales_count"] or 0,
+        gross_sales=sale_totals["gross_sales"] or ZERO,
+        cash_sales=payment_totals["cash"] or ZERO,
+        wave_sales=payment_totals["wave"] or ZERO,
+        orange_money_sales=payment_totals["orange_money"] or ZERO,
+        returns_total=refunds["total"] or ZERO,
+        cash_refunds=refunds["cash"] or ZERO,
+        wave_refunds=refunds["wave"] or ZERO,
+        orange_money_refunds=refunds["orange_money"] or ZERO,
+        credit_sales=sale_totals["credit_sales"] or ZERO,
+        cash_customer_payments=customer_payments["cash"] or ZERO,
+        wave_customer_payments=customer_payments["wave"] or ZERO,
+        orange_money_customer_payments=customer_payments["orange_money"] or ZERO,
     )
 
 
 def get_cash_session_summary(*, cash_session: CashSession) -> CashSessionSummary:
-    (
-        sales_count,
-        gross_sales,
-        cash_sales,
-        wave_sales,
-        orange_money_sales,
-        returns_total,
-        cash_refunds,
-        wave_refunds,
-        orange_money_refunds,
-    ) = _aggregate_totals(cash_session)
-
-    expected_cash = cash_session.opening_balance + cash_sales - cash_refunds
+    totals = _aggregate_totals(cash_session)
 
     return CashSessionSummary(
         cash_session=cash_session,
-        sales_count=sales_count,
-        gross_sales=gross_sales,
-        returns_total=returns_total,
-        net_sales=gross_sales - returns_total,
-        cash_sales=cash_sales,
-        wave_sales=wave_sales,
-        orange_money_sales=orange_money_sales,
-        cash_refunds=cash_refunds,
-        wave_refunds=wave_refunds,
-        orange_money_refunds=orange_money_refunds,
+        sales_count=totals.sales_count,
+        gross_sales=totals.gross_sales,
+        returns_total=totals.returns_total,
+        net_sales=totals.gross_sales - totals.returns_total,
+        cash_sales=totals.cash_sales,
+        wave_sales=totals.wave_sales,
+        orange_money_sales=totals.orange_money_sales,
+        cash_refunds=totals.cash_refunds,
+        wave_refunds=totals.wave_refunds,
+        orange_money_refunds=totals.orange_money_refunds,
+        credit_sales=totals.credit_sales,
+        cash_customer_payments=totals.cash_customer_payments,
+        wave_customer_payments=totals.wave_customer_payments,
+        orange_money_customer_payments=totals.orange_money_customer_payments,
         opening_balance=cash_session.opening_balance,
-        expected_cash=expected_cash,
+        expected_cash=_expected_cash(cash_session.opening_balance, totals),
         counted_cash=cash_session.closing_balance,
         cash_difference=cash_session.difference,
         closed_at=cash_session.closed_at,
@@ -216,8 +259,9 @@ def close_cash_session(
         store_id=locked_session.cash_register.store_id,
     )
 
-    _, _, cash_sales, _, _, _, cash_refunds, _, _ = _aggregate_totals(locked_session)
-    expected_cash = locked_session.opening_balance + cash_sales - cash_refunds
+    expected_cash = _expected_cash(
+        locked_session.opening_balance, _aggregate_totals(locked_session)
+    )
     difference = normalized_counted - expected_cash
 
     locked_session.closing_balance = normalized_counted

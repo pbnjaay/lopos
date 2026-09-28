@@ -3,9 +3,11 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils import timezone
 
+from apps.cash.models import CashSession
+from apps.sales.models import Payment
 from apps.stores.models import Store
 
 from .exceptions import ImmutableLedgerEntry
@@ -77,6 +79,99 @@ class Customer(models.Model):
         return f"{self.name} ({self.phone})" if self.phone else self.name
 
 
+class CustomerPayment(models.Model):
+    """Argent reçu d'un client pour réduire son cahier.
+
+    Porte ce que l'écriture du cahier ne doit pas porter : le moyen de
+    paiement, la session de caisse où l'argent est entré, la monnaie rendue,
+    l'idempotence et un instantané du solde pour le reçu. Chaque paiement a
+    exactement une écriture PAYMENT (`ledger_entry`), créée dans la même
+    transaction.
+
+    Ce n'est pas une vente : il entre dans les espèces attendues de la session
+    mais jamais dans le chiffre d'affaires.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    reference = models.CharField("référence", max_length=16, unique=True, editable=False)
+    customer = models.ForeignKey(
+        Customer, on_delete=models.PROTECT, related_name="payments", verbose_name="client"
+    )
+    store = models.ForeignKey(
+        Store, on_delete=models.PROTECT, related_name="customer_payments", verbose_name="magasin"
+    )
+    cash_session = models.ForeignKey(
+        CashSession,
+        on_delete=models.PROTECT,
+        related_name="customer_payments",
+        verbose_name="session de caisse",
+    )
+    method = models.CharField("mode de paiement", max_length=16, choices=Payment.Method.choices)
+    amount = models.DecimalField("montant", max_digits=14, decimal_places=2)
+    received_amount = models.DecimalField(
+        "montant reçu", max_digits=14, decimal_places=2, blank=True, null=True
+    )
+    change_amount = models.DecimalField(
+        "monnaie rendue", max_digits=14, decimal_places=2, blank=True, null=True
+    )
+    balance_before = models.DecimalField("ancien solde", max_digits=14, decimal_places=2)
+    balance_after = models.DecimalField("nouveau solde", max_digits=14, decimal_places=2)
+    idempotency_key = models.UUIDField("clé d’idempotence", unique=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="customer_payments",
+        verbose_name="encaissé par",
+    )
+    created_at = models.DateTimeField("encaissé le", default=timezone.now)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "paiement client"
+        verbose_name_plural = "paiements clients"
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(amount__gt=Decimal("0")),
+                name="customers_payment_amount_positive",
+            ),
+            # Pas de trop-perçu : un paiement ne dépasse jamais le solde dû.
+            models.CheckConstraint(
+                condition=Q(balance_after=F("balance_before") - F("amount"))
+                & Q(balance_after__gte=Decimal("0")),
+                name="customers_payment_balance_snapshot_consistent",
+            ),
+            # Même règle que les paiements de vente (sales_payment_details_match_method).
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        method="CASH",
+                        received_amount__isnull=False,
+                        change_amount__isnull=False,
+                        received_amount__gte=F("amount"),
+                        change_amount=F("received_amount") - F("amount"),
+                    )
+                    | Q(
+                        method__in=("WAVE", "ORANGE_MONEY"),
+                        received_amount__isnull=True,
+                        change_amount__isnull=True,
+                    )
+                ),
+                name="customers_payment_details_match_method",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("cash_session", "method"), name="customers_payment_session_idx"),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.reference:
+            self.reference = f"RMB-{str(self.id).split('-')[0].upper()}"
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return self.reference
+
+
 class CustomerLedgerEntryQuerySet(models.QuerySet):
     def update(self, **kwargs):
         raise ImmutableLedgerEntry("Une écriture du cahier ne peut pas être modifiée.")
@@ -136,6 +231,14 @@ class CustomerLedgerEntry(models.Model):
         blank=True,
         null=True,
     )
+    customer_payment = models.OneToOneField(
+        CustomerPayment,
+        on_delete=models.PROTECT,
+        related_name="ledger_entry",
+        verbose_name="paiement client",
+        blank=True,
+        null=True,
+    )
     reversal_of = models.OneToOneField(
         "self",
         on_delete=models.PROTECT,
@@ -175,8 +278,14 @@ class CustomerLedgerEntry(models.Model):
                 name="customers_entry_amount_nonzero",
                 violation_error_message="Le montant ne peut pas être nul.",
             ),
-            # Signe et références imposés par type. La référence d'un
-            # PAYMENT vers son CustomerPayment sera ajoutée avec ce modèle.
+            # Une écriture PAYMENT naît toujours d'un CustomerPayment, et
+            # c'est la seule qui puisse en référencer un.
+            models.CheckConstraint(
+                condition=Q(entry_type="PAYMENT", customer_payment__isnull=False)
+                | (~Q(entry_type="PAYMENT") & Q(customer_payment__isnull=True)),
+                name="customers_entry_payment_link",
+            ),
+            # Signe et références imposés par type.
             models.CheckConstraint(
                 condition=(
                     Q(
