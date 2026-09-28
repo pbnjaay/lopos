@@ -14,6 +14,40 @@ class CustomerBriefSerializer(serializers.ModelSerializer):
         fields = ("id", "name", "phone")
 
 
+class CustomerBookQuerySerializer(serializers.Serializer):
+    store_id = serializers.UUIDField()
+
+
+class CustomerSerializer(serializers.ModelSerializer):
+    """Client avec son solde, tel que le POS le met en cache (snapshot)."""
+
+    store_id = serializers.UUIDField(read_only=True)
+    balance = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    last_activity_at = serializers.DateTimeField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = Customer
+        fields = (
+            "id",
+            "store_id",
+            "name",
+            "phone",
+            "is_active",
+            "balance",
+            "last_activity_at",
+            "updated_at",
+        )
+
+
+class CreateCustomerSerializer(serializers.Serializer):
+    store_id = serializers.UUIDField()
+    name = serializers.CharField(max_length=255)
+    # Obligatoire depuis la caisse : seule clé de déduplication fiable, et le
+    # moyen de relancer le client (le modèle, lui, l'accepte vide pour les
+    # reprises et l'admin).
+    phone = serializers.CharField(max_length=32)
+
+
 class CreateCustomerPaymentSerializer(serializers.Serializer):
     idempotency_key = serializers.UUIDField()
     customer_id = serializers.PrimaryKeyRelatedField(

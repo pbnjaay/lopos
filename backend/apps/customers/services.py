@@ -52,6 +52,17 @@ def with_balance(queryset: QuerySet[Customer]) -> QuerySet[Customer]:
     )
 
 
+def with_book_summary(queryset: QuerySet[Customer]) -> QuerySet[Customer]:
+    """Solde (`balance`) et date de la dernière écriture (`last_activity_at`,
+    nulle pour un client sans historique) : ce qu'affiche la liste du cahier."""
+    last_activity = (
+        CustomerLedgerEntry.objects.filter(customer_id=OuterRef("pk"))
+        .order_by("-occurred_at")
+        .values("occurred_at")[:1]
+    )
+    return with_balance(queryset).annotate(last_activity_at=Subquery(last_activity))
+
+
 def _normalize_amount(value) -> Decimal:
     if isinstance(value, (bool, float)) or not isinstance(value, (Decimal, int)):
         raise InvalidLedgerEntry("Le montant doit être un montant exact.")

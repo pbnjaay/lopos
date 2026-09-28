@@ -6,11 +6,100 @@ from rest_framework.views import APIView
 from apps.cash.exceptions import CashSessionClosed
 from apps.sales.access import get_pos_cash_session
 from apps.sales.serializers import SaleListQuerySerializer
+from apps.stores.access import user_can_access_store
+from apps.stores.models import Store
 
-from .exceptions import CustomerOverpayment, InvalidCustomerPayment
-from .models import CustomerPayment
-from .serializers import CreateCustomerPaymentSerializer, CustomerPaymentSerializer
-from .services import record_customer_payment
+from .exceptions import (
+    CustomerOverpayment,
+    DuplicateCustomer,
+    InvalidCustomer,
+    InvalidCustomerPayment,
+    InvalidPhone,
+)
+from .models import Customer, CustomerPayment
+from .serializers import (
+    CreateCustomerPaymentSerializer,
+    CreateCustomerSerializer,
+    CustomerBookQuerySerializer,
+    CustomerPaymentSerializer,
+    CustomerSerializer,
+)
+from .services import create_customer, record_customer_payment, with_book_summary
+
+
+def _accessible_store_or_error(request, store_id) -> tuple[Store | None, Response | None]:
+    store = Store.objects.filter(pk=store_id).first()
+    if store is None:
+        return None, Response(
+            {"code": "STORE_NOT_FOUND", "message": "Ce magasin n'existe pas."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    if not user_can_access_store(request.user, store):
+        return None, Response(
+            {
+                "code": "STORE_NOT_ALLOWED",
+                "message": "Vous n’êtes pas autorisé à travailler dans cette boutique.",
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return store, None
+
+
+def _customer_data(customer: Customer) -> dict:
+    annotated = with_book_summary(Customer.objects.filter(pk=customer.pk)).get()
+    return CustomerSerializer(annotated).data
+
+
+class CustomerListCreateView(APIView):
+    """Cahier d'un magasin : snapshot complet pour le cache local du POS
+    (comme le catalogue produits), et création rapide depuis la caisse.
+
+    La création est en ligne uniquement : un client créé hors ligne ne
+    pourrait pas être dédoublonné, et une vente à crédit qui le référencerait
+    serait rejetée à la synchronisation — la dette serait perdue.
+    """
+
+    def get(self, request) -> Response:
+        query = CustomerBookQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        store, error = _accessible_store_or_error(request, query.validated_data["store_id"])
+        if error is not None:
+            return error
+        customers = with_book_summary(Customer.objects.filter(store=store)).order_by("name", "id")
+        return Response(CustomerSerializer(customers, many=True).data)
+
+    def post(self, request) -> Response:
+        serializer = CreateCustomerSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        store, error = _accessible_store_or_error(request, data["store_id"])
+        if error is not None:
+            return error
+
+        try:
+            customer = create_customer(
+                store=store, name=data["name"], phone=data["phone"], created_by=request.user
+            )
+        except DuplicateCustomer as exc:
+            return Response(
+                {
+                    "code": "CUSTOMER_DUPLICATE",
+                    "message": str(exc),
+                    "customer": _customer_data(exc.existing),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        except InvalidPhone as exc:
+            return Response(
+                {"code": "INVALID_PHONE", "message": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except InvalidCustomer as exc:
+            return Response(
+                {"code": "INVALID_CUSTOMER", "message": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(_customer_data(customer), status=status.HTTP_201_CREATED)
 
 
 def _payment_response(payment: CustomerPayment, http_status: int) -> Response:
