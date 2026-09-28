@@ -36,7 +36,8 @@ export function getSaleReceipt(id: string, cashSessionId?: string): Promise<Sale
 
 export function createSaleReturn(input: {
   sale_id: string; cash_session_id: string; idempotency_key: string;
-  payment_method: PaymentMethod;
+  /** Null quand tout le retour est déduit du cahier (aucun argent rendu). */
+  payment_method: PaymentMethod | null;
   items: Array<{ sale_item_id: string; quantity: string; restock: boolean }>
 }): Promise<SaleReturn> {
   return apiRequest<SaleReturn>("returns/", { method: "POST", body: input })

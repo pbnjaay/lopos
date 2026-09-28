@@ -170,6 +170,8 @@ export type SaleResponse = {
   }>
   /** Part non encaissée, inscrite au cahier du client ("0.00" sinon). */
   credit_amount?: string
+  /** Ce qu'un retour effacerait encore du cahier avant de rendre de l'argent (détail de vente). */
+  credit_reducible?: string
   customer?: SaleCustomer | null
   items: Array<{
     product_id: string
@@ -228,8 +230,14 @@ export type SaleReturn = {
   id: string
   reference: string
   original_sale_id: string
+  /** Valeur des articles rendus. */
   total_refund: string
-  payment_method: PaymentMethod
+  /** Part effacée du cahier du client, sans argent rendu. */
+  credit_reduction?: string
+  /** Argent réellement rendu : `total_refund − credit_reduction`. */
+  money_refund?: string
+  /** Null quand tout le retour a été déduit du cahier. */
+  payment_method: PaymentMethod | null
   status: "COMPLETED"
   created_at: string
   items: Array<{ id: string; product_name: string; sale_unit: "UNIT" | "KG"; quantity: string; unit_price: string; refund_amount: string; restock: boolean }>
