@@ -25,7 +25,6 @@ from apps.sales.services import (
     cancel_sale,
     complete_offline_sale,
     complete_sale,
-    create_sale_return,
 )
 from apps.stores.models import CashRegister, Store
 from apps.sync.services import SyncEventStatus, process_sale_completed_event
@@ -423,18 +422,3 @@ def test_cancelling_is_refused_once_the_customer_has_repaid(
     assert not CustomerLedgerEntry.objects.filter(entry_type=Type.REVERSAL).exists()
     assert Stock.objects.get(product=product).quantity == 19
     assert customer_balance(customer) == Decimal("3000.00")
-
-
-def test_returns_on_credit_sales_are_blocked_for_now(
-    cash_session, product, customer, cashier
-) -> None:
-    sale = _sell(cash_session, product, customer=customer, credit="5000")
-
-    with pytest.raises(InvalidReturn):
-        create_sale_return(
-            original_sale=sale, cash_session=cash_session, created_by=cashier,
-            payment_method=Payment.Method.CASH, idempotency_key=uuid4(),
-            items=[{"sale_item_id": sale.items.get().id, "quantity": Decimal("1"), "restock": True}],
-        )
-
-    assert customer_balance(customer) == Decimal("5000.00")

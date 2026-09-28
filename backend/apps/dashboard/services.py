@@ -253,10 +253,13 @@ def get_manager_dashboard(
         wave=Sum("amount", filter=Q(method=Payment.Method.WAVE)),
         orange_money=Sum("amount", filter=Q(method=Payment.Method.ORANGE_MONEY)),
     )
+    # Argent réellement rendu : la part d'un retour déduite du cahier n'est
+    # jamais sortie de la caisse.
+    money_refund = F("total_refund") - F("credit_reduction")
     refund_aggregates = returns_qs.aggregate(
-        cash=Sum("total_refund", filter=Q(payment_method=Payment.Method.CASH)),
-        wave=Sum("total_refund", filter=Q(payment_method=Payment.Method.WAVE)),
-        orange_money=Sum("total_refund", filter=Q(payment_method=Payment.Method.ORANGE_MONEY)),
+        cash=Sum(money_refund, filter=Q(payment_method=Payment.Method.CASH)),
+        wave=Sum(money_refund, filter=Q(payment_method=Payment.Method.WAVE)),
+        orange_money=Sum(money_refund, filter=Q(payment_method=Payment.Method.ORANGE_MONEY)),
     )
     payment_totals = {
         "cash": (payment_aggregates["cash"] or ZERO) - (refund_aggregates["cash"] or ZERO),

@@ -200,7 +200,7 @@ class PaymentAdmin(ReadOnlySalesAdmin):
 
 @admin.register(SaleReturn)
 class SaleReturnAdmin(ReadOnlySalesAdmin):
-    list_display = ("reference", "created_at", "original_sale", "cash_session", "created_by", "total_refund", "payment_method")
+    list_display = ("reference", "created_at", "original_sale", "cash_session", "created_by", "total_refund", "credit_reduction", "payment_method")
     list_filter = ("payment_method", "cash_session__cash_register__store")
     search_fields = ("reference", "original_sale__id", "created_by__username")
     inlines = (SaleReturnItemInline,)

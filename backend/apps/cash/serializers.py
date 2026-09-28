@@ -78,6 +78,8 @@ class CashSessionSummarySerializer(serializers.Serializer):
     # Cahier clients : la part des ventes non encaissée (pas de l'argent), et
     # les remboursements reçus (de l'argent, mais pas des ventes).
     credit_sales = serializers.DecimalField(max_digits=14, decimal_places=2)
+    # Part des retours effacée du cahier, sans argent rendu.
+    credit_returns = serializers.DecimalField(max_digits=14, decimal_places=2)
     customer_payments = _PaymentTotalsSerializer()
     opening_balance = serializers.DecimalField(max_digits=14, decimal_places=2)
     expected_cash = serializers.DecimalField(max_digits=14, decimal_places=2)
@@ -119,6 +121,7 @@ def summary_to_payload(summary) -> dict:
             "orange_money": summary.orange_money_refunds,
         },
         "credit_sales": summary.credit_sales,
+        "credit_returns": summary.credit_returns,
         "customer_payments": {
             "cash": summary.cash_customer_payments,
             "wave": summary.wave_customer_payments,

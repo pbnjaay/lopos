@@ -12,7 +12,12 @@ from apps.cash.models import CashSession
 from apps.catalog.models import Product
 from apps.customers.exceptions import NegativeCustomerBalance
 from apps.customers.models import Customer, CustomerLedgerEntry
-from apps.customers.services import record_credit_sale, reverse_ledger_entry
+from apps.customers.services import (
+    record_credit_sale,
+    record_return_credit,
+    reducible_credit,
+    reverse_ledger_entry,
+)
 from apps.inventory.models import InventoryMovement, Stock
 
 from .exceptions import (
@@ -601,6 +606,13 @@ def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
 
     if sale.status != Sale.Status.COMPLETED:
         raise InvalidCancellation("Seule une vente terminée peut être annulée.")
+    # Un retour a déjà remis des articles en stock (et, sur une vente au
+    # cahier, effacé une part de la dette) : annuler rejouerait ces effets
+    # sur la vente entière. Le retour complémentaire est le bon geste.
+    if sale.returns.filter(status=SaleReturn.Status.COMPLETED).exists():
+        raise InvalidCancellation(
+            "Cette vente a déjà fait l'objet d'un retour : faites un retour pour le reste."
+        )
 
     if not cancelled_by.is_staff:
         if sale.cashier_id != cancelled_by.pk:
@@ -685,8 +697,16 @@ def _validated_idempotent_return(
 @transaction.atomic
 def create_sale_return(
     *, original_sale: Sale, cash_session: CashSession, created_by,
-    payment_method: str, items: Sequence[ReturnItemInput], idempotency_key: UUID,
+    items: Sequence[ReturnItemInput], idempotency_key: UUID,
+    payment_method: str | None = None,
 ) -> SaleReturn:
+    """Retour marchandise : stock remis, montant rendu au client.
+
+    Sur une vente mise au cahier, le retour réduit d'abord la dette de cette
+    vente (dans la limite de ce que le client doit encore) ; seul le surplus
+    est rendu en argent, par `payment_method`. Un retour entièrement déduit
+    du cahier ne sort aucun argent et n'a donc pas de moyen de remboursement.
+    """
     existing = _validated_idempotent_return(
         SaleReturn.objects.filter(idempotency_key=idempotency_key).first(),
         original_sale=original_sale,
@@ -713,17 +733,8 @@ def create_sale_return(
     sale = Sale.objects.select_for_update().get(pk=original_sale.pk)
     if sale.status != Sale.Status.COMPLETED:
         raise InvalidReturn("Seule une vente terminée peut être retournée.")
-    # Provisoire : un retour rembourse toujours de l'argent, alors que sur une
-    # vente mise au cahier il doit d'abord réduire la dette. Bloqué tant que
-    # cette règle n'est pas en place, plutôt que de sortir de l'argent à tort.
-    if sale.credit_amount:
-        raise InvalidReturn(
-            "Les retours sur une vente mise au cahier ne sont pas encore disponibles."
-        )
     if sale.cash_session.cash_register.store_id != locked_session.cash_register.store_id:
         raise InvalidReturn("Le retour doit être effectué dans le magasin de la vente.")
-    if payment_method not in Payment.Method.values:
-        raise InvalidReturn("Mode de remboursement invalide.")
 
     requested: dict[UUID, tuple[Decimal, bool]] = {}
     for raw in items:
@@ -761,11 +772,32 @@ def create_sale_return(
         total += refund
         specs.append((item, quantity, restock, refund))
 
+    # La dette d'abord : sur une vente au cahier, le retour efface ce que le
+    # client doit encore sur elle, et seul le surplus sort de la caisse.
+    # Verrou client après la vente et avant le stock (même ordre partout).
+    customer = None
+    credit_reduction = Decimal("0.00")
+    if sale.credit_amount and sale.customer_id is not None:
+        customer = Customer.objects.select_for_update().get(pk=sale.customer_id)
+        credit_reduction = min(total, reducible_credit(sale, customer=customer))
+    money_refund = total - credit_reduction
+    if money_refund > 0:
+        if payment_method not in Payment.Method.values:
+            raise InvalidReturn("Choisissez le mode de remboursement.")
+        refund_method = payment_method
+    else:
+        refund_method = None
+
     sale_return = SaleReturn.objects.create(
         original_sale=sale, cash_session=locked_session, created_by=created_by,
-        total_refund=total, payment_method=payment_method,
-        idempotency_key=idempotency_key,
+        total_refund=total, credit_reduction=credit_reduction,
+        payment_method=refund_method, idempotency_key=idempotency_key,
     )
+    if credit_reduction > 0:
+        record_return_credit(
+            customer=customer, sale=sale, sale_return=sale_return,
+            amount=credit_reduction, created_by=created_by,
+        )
     SaleReturnItem.objects.bulk_create([
         SaleReturnItem(sale_return=sale_return, original_sale_item=item,
                        quantity=quantity, unit_price=item.unit_price,

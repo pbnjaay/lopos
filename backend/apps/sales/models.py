@@ -246,9 +246,32 @@ class SaleReturn(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="sale_returns",
         verbose_name="créé par"
     )
-    total_refund = models.DecimalField("total remboursé", max_digits=14, decimal_places=2)
+    total_refund = models.DecimalField(
+        "valeur retournée",
+        max_digits=14,
+        decimal_places=2,
+        help_text=(
+            "Valeur des articles rendus. Elle réduit le chiffre d'affaires net ; "
+            "l'argent réellement rendu en est la part hors cahier."
+        ),
+    )
+    credit_reduction = models.DecimalField(
+        "déduit du cahier",
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text=(
+            "Part du retour effacée de la dette du client, sur une vente mise au "
+            "cahier. Jamais de l'argent : seul le reste est remboursé."
+        ),
+    )
     payment_method = models.CharField(
-        "mode de remboursement", max_length=16, choices=Payment.Method.choices
+        "mode de remboursement",
+        max_length=16,
+        choices=Payment.Method.choices,
+        blank=True,
+        null=True,
+        help_text="Vide quand tout le retour a été déduit du cahier (aucun argent rendu).",
     )
     status = models.CharField("statut", max_length=10, choices=Status.choices, default=Status.COMPLETED)
     idempotency_key = models.UUIDField("clé d’idempotence", unique=True)
@@ -259,7 +282,19 @@ class SaleReturn(models.Model):
         verbose_name = "retour"
         verbose_name_plural = "retours"
         constraints = [
-            models.CheckConstraint(condition=Q(total_refund__gt=0), name="sales_return_total_positive")
+            models.CheckConstraint(condition=Q(total_refund__gt=0), name="sales_return_total_positive"),
+            models.CheckConstraint(
+                condition=Q(credit_reduction__gte=0) & Q(credit_reduction__lte=F("total_refund")),
+                name="sales_return_credit_reduction_valid",
+            ),
+            # Un moyen de remboursement exactement quand de l'argent est rendu.
+            models.CheckConstraint(
+                condition=(
+                    Q(payment_method__isnull=True, credit_reduction=F("total_refund"))
+                    | (Q(payment_method__isnull=False) & Q(credit_reduction__lt=F("total_refund")))
+                ),
+                name="sales_return_method_iff_money_refund",
+            ),
         ]
 
     def save(self, *args, **kwargs):
@@ -269,6 +304,11 @@ class SaleReturn(models.Model):
 
     def __str__(self) -> str:
         return self.reference
+
+    @property
+    def money_refund(self) -> Decimal:
+        """Argent réellement rendu au client : la valeur retournée hors cahier."""
+        return self.total_refund - self.credit_reduction
 
 
 class SaleReturnItem(models.Model):

@@ -152,6 +152,55 @@ def record_credit_sale(*, customer: Customer, sale, amount: Decimal, created_by)
     )
 
 
+def sale_credit_remaining(sale) -> Decimal:
+    """Crédit de cette vente pas encore effacé par un retour.
+
+    Lu dans le cahier (source de vérité) : la dette inscrite par la vente,
+    moins les RETURN_CREDIT déjà passés sur elle.
+    """
+    if not sale.credit_amount:
+        return ZERO
+    returned = CustomerLedgerEntry.objects.filter(
+        sale_id=sale.pk, entry_type=CustomerLedgerEntry.EntryType.RETURN_CREDIT
+    ).aggregate(total=Sum("amount"))["total"] or ZERO
+    return max(sale.credit_amount + returned, ZERO)
+
+
+def reducible_credit(sale, *, customer: Customer | None = None) -> Decimal:
+    """Part d'un retour sur cette vente qui peut encore réduire le cahier.
+
+    Le crédit restant de la vente, plafonné au solde du client : les
+    remboursements ne sont pas affectés vente par vente, donc un client qui a
+    déjà tout payé ne « doit » plus rien sur cette vente — son retour est
+    alors remboursé en argent. Passer `customer` verrouillé pour un calcul
+    définitif (sous `select_for_update`).
+    """
+    if not sale.credit_amount or sale.customer_id is None:
+        return ZERO
+    customer = customer or sale.customer
+    return max(min(sale_credit_remaining(sale), customer_balance(customer)), ZERO)
+
+
+def record_return_credit(
+    *, customer: Customer, sale, sale_return, amount: Decimal, created_by
+) -> CustomerLedgerEntry:
+    """Efface du cahier la part d'un retour qui porte sur la dette de la vente.
+
+    Appelé uniquement depuis `create_sale_return`, dans sa transaction et
+    après verrouillage du client.
+    """
+    return CustomerLedgerEntry.objects.create(
+        customer=customer,
+        store_id=customer.store_id,
+        entry_type=CustomerLedgerEntry.EntryType.RETURN_CREDIT,
+        amount=-amount,
+        sale=sale,
+        sale_return=sale_return,
+        occurred_at=sale_return.created_at,
+        created_by=created_by,
+    )
+
+
 @transaction.atomic
 def record_opening_balance(
     *,

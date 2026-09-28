@@ -5,7 +5,7 @@ from typing import NamedTuple
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 
 from apps.observability.sentry_context import tag_cash_session_scope
@@ -104,6 +104,7 @@ class CashSessionSummary:
     cash_refunds: Decimal
     wave_refunds: Decimal
     orange_money_refunds: Decimal
+    credit_returns: Decimal
     credit_sales: Decimal
     cash_customer_payments: Decimal
     wave_customer_payments: Decimal
@@ -125,6 +126,7 @@ class _SessionTotals(NamedTuple):
     cash_refunds: Decimal
     wave_refunds: Decimal
     orange_money_refunds: Decimal
+    credit_returns: Decimal
     credit_sales: Decimal
     cash_customer_payments: Decimal
     wave_customer_payments: Decimal
@@ -167,13 +169,17 @@ def _aggregate_totals(cash_session: CashSession) -> _SessionTotals:
         wave=Sum("amount", filter=Q(method="WAVE")),
         orange_money=Sum("amount", filter=Q(method="ORANGE_MONEY")),
     )
+    # Par moyen de paiement, seul l'argent réellement rendu compte : la part
+    # d'un retour déduite du cahier n'est jamais sortie de la caisse.
+    money_refund = F("total_refund") - F("credit_reduction")
     refunds = SaleReturn.objects.filter(
         cash_session=cash_session, status=SaleReturn.Status.COMPLETED
     ).aggregate(
         total=Sum("total_refund"),
-        cash=Sum("total_refund", filter=Q(payment_method="CASH")),
-        wave=Sum("total_refund", filter=Q(payment_method="WAVE")),
-        orange_money=Sum("total_refund", filter=Q(payment_method="ORANGE_MONEY")),
+        credit=Sum("credit_reduction"),
+        cash=Sum(money_refund, filter=Q(payment_method="CASH")),
+        wave=Sum(money_refund, filter=Q(payment_method="WAVE")),
+        orange_money=Sum(money_refund, filter=Q(payment_method="ORANGE_MONEY")),
     )
 
     customer_payments = CustomerPayment.objects.filter(
@@ -194,6 +200,7 @@ def _aggregate_totals(cash_session: CashSession) -> _SessionTotals:
         cash_refunds=refunds["cash"] or ZERO,
         wave_refunds=refunds["wave"] or ZERO,
         orange_money_refunds=refunds["orange_money"] or ZERO,
+        credit_returns=refunds["credit"] or ZERO,
         credit_sales=sale_totals["credit_sales"] or ZERO,
         cash_customer_payments=customer_payments["cash"] or ZERO,
         wave_customer_payments=customer_payments["wave"] or ZERO,
@@ -216,6 +223,7 @@ def get_cash_session_summary(*, cash_session: CashSession) -> CashSessionSummary
         cash_refunds=totals.cash_refunds,
         wave_refunds=totals.wave_refunds,
         orange_money_refunds=totals.orange_money_refunds,
+        credit_returns=totals.credit_returns,
         credit_sales=totals.credit_sales,
         cash_customer_payments=totals.cash_customer_payments,
         wave_customer_payments=totals.wave_customer_payments,
