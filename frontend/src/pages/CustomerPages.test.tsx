@@ -4,7 +4,7 @@ import "fake-indexeddb/auto"
 import "@testing-library/jest-dom/vitest"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -101,7 +101,9 @@ describe("CustomersPage", () => {
     expect(rows[0]).toHaveTextContent("77 123 45 67")
     expect(rows[0]).toHaveTextContent("18 500 FCFA")
     expect(rows[0]).toHaveAttribute("href", "/customers/moussa")
-    expect(screen.getByRole("status", { name: "Encours du cahier" })).toHaveTextContent("21 000 FCFA")
+    const summary = screen.getByRole("status", { name: "Résultat de la recherche" })
+    expect(summary).toHaveTextContent("2 clients trouvés")
+    expect(summary).toHaveTextContent("Total dû21 000 FCFA")
   })
 
   it("lists settled customers but hides deactivated ones who owe nothing", async () => {
@@ -116,6 +118,29 @@ describe("CustomersPage", () => {
     expect(within(list).queryByText("Moussa Fall")).not.toBeInTheDocument()
   })
 
+  it("follows the same structure as the sales list", async () => {
+    await renderBook()
+
+    expect(screen.getByRole("search")).toBeInTheDocument()
+    expect(screen.getByRole("radiogroup", { name: "Solde" })).toBeInTheDocument()
+    expect(screen.getByText("Flèches pour parcourir les clients, Entrée pour ouvrir la fiche visée.")).toBeInTheDocument()
+    expect(screen.getByText("Supérette Test · Caisse 01")).toBeInTheDocument()
+  })
+
+  it("opens the aimed customer with the keyboard", async () => {
+    const user = userEvent.setup()
+    await renderBook()
+    vi.mocked(globalThis.fetch).mockImplementation(async (input) =>
+      String(input).includes("customers/awa/")
+        ? jsonResponse({ ...book[1], entries: [] })
+        : jsonResponse(book),
+    )
+
+    await user.keyboard("{ArrowDown}{Enter}")
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Awa Diop" })).toBeInTheDocument()
+  })
+
   it("searches by any part of the phone number", async () => {
     const user = userEvent.setup()
     await renderBook()
@@ -124,7 +149,7 @@ describe("CustomersPage", () => {
     await user.type(screen.getByLabelText("Téléphone ou nom"), "0011")
 
     const list = screen.getByRole("region", { name: "Clients du cahier" })
-    expect(within(list).getAllByRole("link")).toHaveLength(1)
+    await waitFor(() => expect(within(list).getAllByRole("link")).toHaveLength(1))
     expect(within(list).getByText("Awa Diop")).toBeInTheDocument()
   })
 })

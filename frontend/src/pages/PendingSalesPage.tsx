@@ -96,7 +96,7 @@ export function PendingSalesPage() {
               description="Ces ventes ont été refusées par le serveur et ne seront pas renvoyées automatiquement."
               trailing={<Badge tone="warning">{conflicts.length}</Badge>}
             />
-            <div className="pending-sales-list">
+            <div className="pending-list-rows">
               {conflicts.map((sale) => (
                 <ListRow
                   key={sale.id}
@@ -127,7 +127,7 @@ export function PendingSalesPage() {
               titleId="pending-sync-title"
               trailing={<Badge tone="neutral">{sales.length}</Badge>}
             />
-            <div className="pending-sales-list">
+            <div className="pending-list-rows">
               {sales.map((sale) => (
                 <ListRow
                   key={sale.id}

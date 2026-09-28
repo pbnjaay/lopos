@@ -356,7 +356,7 @@ describe("SalesPage", () => {
     )
 
     vi.mocked(listSales).mockClear()
-    await userEvents.selectOptions(screen.getByLabelText("Paiement"), "WAVE")
+    await userEvents.click(screen.getByRole("radio", { name: "Wave" }))
 
     await waitFor(() =>
       expect(listSales).toHaveBeenCalledWith(

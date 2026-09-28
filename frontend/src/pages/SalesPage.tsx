@@ -1,9 +1,16 @@
-import { useEffect, useState, type KeyboardEvent } from "react"
+import { useState } from "react"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 
 import { listSales } from "../api/sales"
 import { PageHeader } from "../components/layout/PageHeader"
+import {
+  ListFilterField,
+  ListFilters,
+  ListHint,
+  ListSearchField,
+  ListSummary,
+} from "../components/list/ListPage"
 import { Badge } from "../components/ui/Badge"
 import { EmptyState } from "../components/ui/EmptyState"
 import { ErrorState } from "../components/ui/ErrorState"
@@ -12,6 +19,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "../components/ui/Icons"
 import { InlineAlert } from "../components/ui/InlineAlert"
 import { ListRow } from "../components/ui/ListRow"
 import { Money } from "../components/ui/Money"
+import { SegmentedControl } from "../components/ui/SegmentedControl"
 import { SkeletonRows } from "../components/ui/Skeleton"
 import { listRecentLocalSales } from "../db/sales"
 import type { LocalSale } from "../db/types"
@@ -19,6 +27,7 @@ import { useCurrentUser } from "../features/auth/queries"
 import { usePosSession } from "../features/cash-session/queries"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { useDebouncedValue } from "../hooks/useDebouncedValue"
+import { useListNavigation } from "../hooks/useListNavigation"
 import type { PaymentMethod } from "../types/api"
 import { formatDate, formatTime } from "../utils/date"
 import { formatBackendMoney } from "../utils/money"
@@ -32,6 +41,13 @@ type Filters = {
 }
 
 const emptyFilters: Filters = { search: "", paymentMethod: "" }
+
+const PAYMENT_FILTER_OPTIONS: ReadonlyArray<{ value: PaymentMethod | ""; label: string }> = [
+  { value: "", label: "Tous" },
+  { value: "CASH", label: "Espèces" },
+  { value: "WAVE", label: "Wave" },
+  { value: "ORANGE_MONEY", label: "Orange Money" },
+]
 const SALES_PAGE_SIZE = 20
 
 type PaginationItem = number | "ellipsis-start" | "ellipsis-end"
@@ -90,18 +106,17 @@ function OfflineSalesList({ cashSessionId }: { cashSessionId: string }) {
         />
       ) : (
         <>
-          <div className="sales-summary" role="status" aria-label="Ventes de cet appareil">
-            <span>
-              <strong>{sales.length}</strong> vente{sales.length > 1 ? "s" : ""} sur cet appareil
-            </span>
-            <span className="sales-summary-total">
-              <span>Total</span>
-              <strong>
-                <Money value={total} />
-              </strong>
-            </span>
-          </div>
-          <section className="sales-list" aria-label="Ventes de cet appareil">
+          <ListSummary
+            label="Ventes de cet appareil"
+            count={
+              <>
+                <strong>{sales.length}</strong> vente{sales.length > 1 ? "s" : ""} sur cet appareil
+              </>
+            }
+            totalLabel="Total"
+            total={total}
+          />
+          <section className="list-rows" aria-label="Ventes de cet appareil">
             {sales.map((sale) => {
               const day = formatDate(sale.createdAt)
               const badge = localStatusBadges[sale.status]
@@ -147,7 +162,6 @@ export function SalesPage() {
   const navigate = useNavigate()
   const [draft, setDraft] = useState<Filters>(emptyFilters)
   const [page, setPage] = useState(1)
-  const [highlightedIndex, setHighlightedIndex] = useState(0)
 
   // Recherche instantanée, comme le catalogue du POS : le même verbe ne peut
   // pas demander un clic ici et rien là-bas.
@@ -196,29 +210,12 @@ export function SalesPage() {
   // Ouvrir la ligne visée à cet instant ouvrirait une vente que le caissier
   // n'a plus demandée — et un retour sur le mauvais ticket.
   const areResultsStale = draft.search.trim() !== debouncedSearch || salesQuery.isFetching
-  const aimedSale = sales[highlightedIndex] ?? null
-
-  useEffect(() => {
-    setHighlightedIndex(0)
-  }, [salesQuery.data])
-
-  // Mêmes touches que le catalogue : flèches pour viser, Entrée pour ouvrir.
-  // Le caissier garde la main sur le champ de recherche du début à la fin.
-  function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (sales.length === 0) return
-
-    if (event.key === "ArrowDown") {
-      event.preventDefault()
-      setHighlightedIndex((index) => Math.min(index + 1, sales.length - 1))
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault()
-      setHighlightedIndex((index) => Math.max(index - 1, 0))
-    } else if (event.key === "Enter") {
-      event.preventDefault()
-      if (areResultsStale || !aimedSale) return
-      navigate(`/sales/${aimedSale.id}`)
-    }
-  }
+  const { highlightedIndex, setHighlightedIndex, aimedItem: aimedSale, handleKeyDown } =
+    useListNavigation(sales, {
+      onOpen: (sale) => navigate(`/sales/${sale.id}`),
+      isStale: areResultsStale,
+      resetKey: salesQuery.data,
+    })
 
   return (
     <main className="operational-page">
@@ -234,43 +231,35 @@ export function SalesPage() {
         ownSession ? <OfflineSalesList cashSessionId={ownSession.id} /> : null
       ) : (
         <>
-          <form className="sales-filters" role="search" onSubmit={(event) => event.preventDefault()}>
-            <div className="field sales-search-field">
-              <label htmlFor="sales-search">Numéro du ticket</label>
-              <input
-                id="sales-search"
-                autoFocus
-                autoComplete="off"
-                value={draft.search}
-                onChange={(event) => updateFilter({ search: event.target.value })}
-                onKeyDown={handleSearchKeyDown}
-                placeholder="Ex. A12F…"
+          <ListFilters>
+            <ListSearchField
+              id="sales-search"
+              label="Numéro du ticket"
+              placeholder="Ex. A12F…"
+              value={draft.search}
+              onChange={(search) => updateFilter({ search })}
+              onKeyDown={handleKeyDown}
+            />
+            <ListFilterField label="Paiement">
+              <SegmentedControl
+                label="Paiement"
+                options={PAYMENT_FILTER_OPTIONS}
+                value={draft.paymentMethod}
+                onChange={(paymentMethod) => updateFilter({ paymentMethod })}
               />
-            </div>
-            <div className="field">
-              <label htmlFor="sales-payment">Paiement</label>
-              <select id="sales-payment" value={draft.paymentMethod} onChange={(event) => updateFilter({ paymentMethod: event.target.value as PaymentMethod | "" })}>
-                <option value="">Tous</option>
-                <option value="CASH">Espèces</option>
-                <option value="WAVE">Wave</option>
-                <option value="ORANGE_MONEY">Orange Money</option>
-              </select>
-            </div>
-          </form>
+            </ListFilterField>
+          </ListFilters>
 
-          <p className="search-hint">
-            {areResultsStale
-              ? "Recherche en cours…"
-              : "Flèches pour parcourir les ventes, Entrée pour ouvrir la vente visée."}
-          </p>
-
-          {/* Le focus reste dans le champ de recherche : sans cette annonce,
-              le changement de ligne visée n'atteindrait aucun lecteur d'écran. */}
-          <p className="visually-hidden" role="status">
-            {aimedSale && !areResultsStale
-              ? `Vente visée : ticket ${aimedSale.id.slice(0, 8).toUpperCase()}, ${describeSettlement(aimedSale.payments, Math.round(Number(aimedSale.credit_amount ?? 0)))}, ${formatBackendMoney(aimedSale.net_total ?? aimedSale.total)}`
-              : ""}
-          </p>
+          <ListHint
+            itemsLabel="les ventes"
+            openLabel="la vente"
+            isStale={areResultsStale}
+            announcement={
+              aimedSale
+                ? `Vente visée : ticket ${aimedSale.id.slice(0, 8).toUpperCase()}, ${describeSettlement(aimedSale.payments, Math.round(Number(aimedSale.credit_amount ?? 0)))}, ${formatBackendMoney(aimedSale.net_total ?? aimedSale.total)}`
+                : ""
+            }
+          />
 
           {/* La structure de la page reste en place pendant le chargement :
               les filtres ne disparaissent jamais sous le caissier. */}
@@ -299,21 +288,20 @@ export function SalesPage() {
               {/* Le total est celui de la page affichée : la liste paginée ne
                   connaît pas la somme de l'ensemble, et l'inventer serait pire
                   que de ne rien montrer. Le libellé le dit. */}
-              <div className="sales-summary" role="status" aria-label="Résultat de la recherche">
-                <span>
-                  <strong>{count}</strong> vente{count > 1 ? "s" : ""}
-                  {hasFilters ? ` trouvée${count > 1 ? "s" : ""}` : ""}
-                </span>
-                <span className="sales-summary-total">
-                  <span>{totalPages > 1 ? "Total de la page" : "Total"}</span>
-                  <strong>
-                    <Money value={pageTotal} />
-                  </strong>
-                </span>
-              </div>
+              <ListSummary
+                label="Résultat de la recherche"
+                count={
+                  <>
+                    <strong>{count}</strong> vente{count > 1 ? "s" : ""}
+                    {hasFilters ? ` trouvée${count > 1 ? "s" : ""}` : ""}
+                  </>
+                }
+                totalLabel={totalPages > 1 ? "Total de la page" : "Total"}
+                total={pageTotal}
+              />
 
               <section
-                className={isRefreshing ? "sales-list sales-list-refreshing" : "sales-list"}
+                className={isRefreshing ? "list-rows list-rows-refreshing" : "list-rows"}
                 aria-label="Ventes de la boutique"
                 aria-busy={isRefreshing || undefined}
               >
@@ -370,7 +358,7 @@ export function SalesPage() {
           ) : null}
 
           {salesQuery.data && totalPages > 1 ? (
-            <nav className="sales-pagination" aria-label="Pagination des ventes">
+            <nav className="list-pagination" aria-label="Pagination des ventes">
               <IconButton
                 label="Page précédente"
                 icon={<ChevronLeftIcon />}
@@ -378,11 +366,11 @@ export function SalesPage() {
                 disabled={page === 1}
                 onClick={() => setPage((value) => Math.max(1, value - 1))}
               />
-              <div className="sales-pagination-pages">
+              <div className="list-pagination-pages">
                 {paginationItems.map((item) => typeof item === "number" ? (
                   <button
                     key={item}
-                    className={`sales-pagination-button${item === page ? " sales-pagination-button-active" : ""}`}
+                    className={`list-pagination-button${item === page ? " list-pagination-button-active" : ""}`}
                     type="button"
                     aria-label={`Page ${item}`}
                     aria-current={item === page ? "page" : undefined}
@@ -391,7 +379,7 @@ export function SalesPage() {
                     {item}
                   </button>
                 ) : (
-                  <span className="sales-pagination-ellipsis" aria-hidden="true" key={item}>…</span>
+                  <span className="list-pagination-ellipsis" aria-hidden="true" key={item}>…</span>
                 ))}
               </div>
               <IconButton

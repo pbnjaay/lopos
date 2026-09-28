@@ -1783,9 +1783,11 @@ a.list-row:active {
   margin-top: var(--space-6);
 }
 
-.sales-filters {
+/* Barre de filtres commune aux pages de liste (ventes, clients) : la
+   recherche prend la place, le filtre à choix garde sa largeur naturelle. */
+.list-filters {
   display: grid;
-  grid-template-columns: minmax(13rem, 2fr) minmax(9rem, 1fr);
+  grid-template-columns: minmax(13rem, 1fr) auto;
   align-items: end;
   gap: var(--space-3);
   padding: var(--space-5);
@@ -1795,18 +1797,18 @@ a.list-row:active {
   box-shadow: var(--shadow-card);
 }
 
-.sales-filters input,
-.sales-filters select {
+.list-filters input,
+.list-filters select {
   border-color: var(--color-border);
   background: var(--color-surface);
 }
 
-.sales-filters input:hover,
-.sales-filters select:hover {
+.list-filters input:hover,
+.list-filters select:hover {
   border-color: var(--color-border-strong);
 }
 
-.sales-summary {
+.list-summary {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -1818,28 +1820,28 @@ a.list-row:active {
   font-size: var(--text-secondary);
 }
 
-.sales-summary strong {
+.list-summary strong {
   color: var(--color-text);
   font-variant-numeric: tabular-nums;
 }
 
-.sales-summary-total {
+.list-summary-total {
   display: inline-flex;
   align-items: baseline;
   gap: var(--space-2);
 }
 
-.sales-summary-total strong {
+.list-summary-total strong {
   font-size: var(--text-card-title);
 }
 
-.sales-list {
+.list-rows {
   display: grid;
   gap: var(--space-2);
   margin-top: var(--space-2);
 }
 
-.sales-list .list-row-trailing {
+.list-rows .list-row-trailing {
   margin-left: auto;
 }
 
@@ -1865,12 +1867,12 @@ a.list-row:active {
 
 /* Rafraichissement en arriere-plan : le contenu reste lisible et
    interactif, il s'attenue simplement le temps de la mise a jour. */
-.sales-list-refreshing {
+.list-rows-refreshing {
   opacity: 0.6;
   transition: opacity 120ms ease;
 }
 
-.pending-sales-list {
+.pending-list-rows {
   display: grid;
   gap: var(--space-2);
 }
@@ -1926,7 +1928,7 @@ a.list-row:active {
   margin-top: var(--space-3);
 }
 
-.sales-pagination {
+.list-pagination {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1934,13 +1936,13 @@ a.list-row:active {
   margin-top: var(--space-5);
 }
 
-.sales-pagination-pages {
+.list-pagination-pages {
   display: flex;
   align-items: center;
   gap: 0.35rem;
 }
 
-.sales-pagination-button {
+.list-pagination-button {
   width: var(--control-md);
   height: var(--control-md);
   display: inline-grid;
@@ -1957,31 +1959,31 @@ a.list-row:active {
   font-weight: 750;
 }
 
-.sales-pagination-button:hover:not(:disabled) {
+.list-pagination-button:hover:not(:disabled) {
   border-color: var(--color-border);
   background: var(--color-surface);
   color: var(--color-primary);
 }
 
-.sales-pagination-button:focus-visible {
+.list-pagination-button:focus-visible {
   outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
-.sales-pagination-button-active,
-.sales-pagination-button-active:hover:not(:disabled) {
+.list-pagination-button-active,
+.list-pagination-button-active:hover:not(:disabled) {
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: #fff;
   box-shadow: 0 0.15rem 0.4rem rgb(23 107 77 / 14%);
 }
 
-.sales-pagination-button:disabled {
+.list-pagination-button:disabled {
   cursor: not-allowed;
   opacity: 0.35;
 }
 
-.sales-pagination-ellipsis {
+.list-pagination-ellipsis {
   width: 1.5rem;
   color: var(--color-text-muted);
   text-align: center;
@@ -2279,11 +2281,11 @@ a.list-row:active {
 }
 
 @media (max-width: 960px) {
-  .sales-filters {
+  .list-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .sales-search-field {
+  .list-search-field {
     grid-column: 1 / -1;
   }
 
@@ -2302,11 +2304,11 @@ a.list-row:active {
     padding: var(--space-4);
   }
 
-  .sales-filters {
+  .list-filters {
     grid-template-columns: 1fr;
   }
 
-  .sales-search-field {
+  .list-search-field {
     grid-column: 1;
   }
 
@@ -2858,7 +2860,7 @@ a.list-row:active {
 }
 
 /* Aide sous un champ de recherche - reste utilisee par la page Ventes. */
-.search-hint {
+.list-hint {
   margin: 0.6rem 0 0;
   color: var(--color-text-muted);
   font-size: var(--text-secondary);
@@ -4361,20 +4363,20 @@ a.list-row:active {
     display: none;
   }
 
-  .sales-pagination {
+  .list-pagination {
     gap: var(--space-1);
   }
 
-  .sales-pagination-pages {
+  .list-pagination-pages {
     gap: 0.15rem;
   }
 
-  .sales-pagination-pages
-    .sales-pagination-button:not(.sales-pagination-button-active) {
+  .list-pagination-pages
+    .list-pagination-button:not(.list-pagination-button-active) {
     display: none;
   }
 
-  .sales-pagination-ellipsis {
+  .list-pagination-ellipsis {
     display: none;
   }
 
@@ -4488,11 +4490,12 @@ a.list-row:active {
   outline-offset: 1px;
 }
 
-/* ── Cahier clients ─────────────────────────────────────────────── */
-.customers-filters {
-  grid-template-columns: minmax(13rem, 2fr) auto;
+/* Le filtre à choix d'une liste se lit comme un champ : libellé, puis options. */
+.list-filter-field .segmented-control {
+  min-height: 2.75rem;
 }
 
+/* ── Cahier clients ─────────────────────────────────────────────── */
 .customer-balance-card {
   gap: var(--space-1);
 }
@@ -4558,12 +4561,9 @@ a.list-row:active {
   color: var(--color-text-muted);
 }
 
-@media (max-width: 40rem) {
-  .customers-filters {
-    grid-template-columns: 1fr;
-  }
-
+@media (max-width: 600px) {
   .segmented-control {
     display: flex;
+    flex-wrap: wrap;
   }
 }
