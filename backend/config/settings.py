@@ -82,6 +82,7 @@ INSTALLED_APPS = [
     "apps.inventory",
     "apps.cash",
     "apps.sales",
+    "apps.customers",
     "apps.accounts",
     "apps.sync",
     "apps.dashboard",
@@ -227,6 +228,24 @@ UNFOLD = {
                         "title": _("Retours"),
                         "icon": "keyboard_return",
                         "link": reverse_lazy("admin:sales_salereturn_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": _("Cahier clients"),
+                "separator": True,
+                "items": [
+                    {
+                        "title": _("Clients"),
+                        "icon": "contacts",
+                        "link": reverse_lazy("admin:customers_customer_changelist"),
+                    },
+                    {
+                        "title": _("Écritures du cahier"),
+                        "icon": "menu_book",
+                        "link": reverse_lazy(
+                            "admin:customers_customerledgerentry_changelist"
+                        ),
                     },
                 ],
             },

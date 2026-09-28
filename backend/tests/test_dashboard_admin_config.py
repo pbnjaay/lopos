@@ -15,7 +15,14 @@ def test_sidebar_navigation_groups_models_by_business_task() -> None:
     navigation = settings.UNFOLD["SIDEBAR"]["navigation"]
     titles = [str(group["title"]) for group in navigation if group["title"]]
 
-    assert titles == ["Catalogue", "Stock", "Caisses", "Ventes", "Configuration"]
+    assert titles == [
+        "Catalogue",
+        "Stock",
+        "Caisses",
+        "Ventes",
+        "Cahier clients",
+        "Configuration",
+    ]
     assert settings.UNFOLD["SIDEBAR"]["show_all_applications"] is False
 
 
