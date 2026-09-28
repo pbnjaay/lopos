@@ -111,6 +111,7 @@ export function CashPaymentModal({
       backLabel="Changer de moyen de paiement"
       backDisabled={isSubmitting}
       dismissible={!isSubmitting}
+      className="cash-payment-dialog"
     >
       <form className="dialog-body cash-payment-form" onSubmit={handleSubmit}>
         <div className="payment-total">

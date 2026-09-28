@@ -3968,6 +3968,47 @@ a.list-row:active {
   color: #45534c;
 }
 
+/* Écran de caisse : deux colonnes. Le montant et ce qu'il implique à
+   gauche, le pavé à droite sur toute la hauteur — des touches larges et
+   hautes, frappées au doigt, sans rallonger la fenêtre. En dessous de cette
+   largeur (téléphone), tout reste empilé. */
+@media (min-width: 760px) {
+  .cash-payment-dialog {
+    width: min(100%, 48rem);
+  }
+
+  .cash-payment-form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    column-gap: var(--space-5);
+    align-items: start;
+  }
+
+  .cash-payment-form > * {
+    grid-column: 1 / -1;
+  }
+
+  .cash-payment-form > .payment-total,
+  .cash-payment-form > .field,
+  .cash-payment-form > .quick-amounts,
+  .cash-payment-form > .change-preview {
+    grid-column: 1;
+  }
+
+  .cash-payment-form > .numeric-keypad {
+    grid-column: 2;
+    grid-row: 1 / span 4;
+    align-self: stretch;
+    grid-auto-rows: 1fr;
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+
+  .cash-payment-form .numeric-keypad-key {
+    min-height: 3.75rem;
+    font-size: var(--text-amount);
+  }
+}
+
 .quick-amounts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
