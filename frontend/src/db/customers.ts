@@ -144,3 +144,35 @@ export async function searchLocalCustomers(
 
   return customers.slice(0, limit)
 }
+
+/** Tout le cahier du magasin, pour l'écran de liste (filtré et trié par l'appelant). */
+export async function listLocalCustomers(
+  storeId: string,
+  database: PosDatabase = db,
+): Promise<LocalCustomer[]> {
+  return database.customers.where("storeId").equals(storeId).sortBy("name")
+}
+
+export async function getLocalCustomer(
+  storeId: string,
+  customerId: string,
+  database: PosDatabase = db,
+): Promise<LocalCustomer | null> {
+  return (await database.customers.get([storeId, customerId])) ?? null
+}
+
+/**
+ * Reporte un remboursement confirmé par le serveur dans le cache : le solde
+ * connu devient celui qu'il a calculé, sans attendre le prochain snapshot.
+ */
+export async function applyLocalCustomerPayment(
+  storeId: string,
+  customerId: string,
+  payment: { balanceAfter: number; paidAt: string },
+  database: PosDatabase = db,
+): Promise<void> {
+  await database.customers.update([storeId, customerId], {
+    serverBalance: payment.balanceAfter,
+    lastActivityAt: payment.paidAt,
+  })
+}

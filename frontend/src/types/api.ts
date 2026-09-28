@@ -99,6 +99,52 @@ export type Customer = {
 
 export type PaymentMethod = "CASH" | "WAVE" | "ORANGE_MONEY"
 
+export type LedgerEntryType =
+  | "CREDIT_SALE"
+  | "PAYMENT"
+  | "RETURN_CREDIT"
+  | "ADJUSTMENT"
+  | "OPENING_BALANCE"
+  | "REVERSAL"
+
+/** Ligne du cahier. `amount` > 0 : le client doit plus ; < 0 : il doit moins. */
+export type LedgerEntry = {
+  id: string
+  entry_type: LedgerEntryType
+  label: string
+  amount: string
+  /** Solde juste après cette ligne. */
+  running_balance: string
+  occurred_at: string
+  sale_id: string | null
+  sale_return_id: string | null
+  customer_payment: { id: string; reference: string; method: PaymentMethod } | null
+  reference: string
+  reason: string
+  created_by: string | null
+}
+
+/** Fiche client : le client, son solde et tout son cahier, du plus récent au plus ancien. */
+export type CustomerDetail = Customer & { entries: LedgerEntry[] }
+
+/** Remboursement d'un client, avec l'instantané du solde pour le reçu. */
+export type CustomerPayment = {
+  id: string
+  reference: string
+  customer: SaleCustomer
+  store: { id: string; name: string }
+  cash_register: { id: string; name: string }
+  cash_session_id: string
+  method: PaymentMethod
+  amount: string
+  received_amount: string | null
+  change_amount: string | null
+  balance_before: string
+  balance_after: string
+  created_by: string
+  created_at: string
+}
+
 /** Client d'une vente mise au cahier, tel que la vente le référence. */
 export type SaleCustomer = {
   id: string

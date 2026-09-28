@@ -1,14 +1,18 @@
 import { ApiError, isApiUnavailable } from "../../api/client"
-import { createCustomer, getCustomerBook } from "../../api/customers"
+import { createCustomer, createCustomerPayment, getCustomerBook } from "../../api/customers"
 import {
+  applyLocalCustomerPayment,
+  getLocalCustomer,
   hasLocalCustomerBook,
+  listLocalCustomers,
   saveCustomerBook,
   searchLocalCustomers,
   upsertLocalCustomer,
 } from "../../db/customers"
 import { pendingCreditByCustomer } from "../../db/sales"
 import type { LocalCustomer } from "../../db/types"
-import type { Customer } from "../../types/api"
+import type { Customer, CustomerPayment, PaymentMethod } from "../../types/api"
+import { toBackendMoney } from "../../utils/money"
 
 /** Client tel que l'écran le manipule : solde en FCFA entiers. */
 export type CustomerSummary = {
@@ -18,6 +22,7 @@ export type CustomerSummary = {
   /** Solde dû connu (dernier snapshot serveur). */
   balance: number
   isActive: boolean
+  lastActivityAt: string | null
 }
 
 export class LocalCustomerBookUnavailableError extends Error {
@@ -46,7 +51,73 @@ export function fromLocalCustomer(customer: LocalCustomer, pendingCredit = 0): C
     phone: customer.phone,
     balance: customer.serverBalance + pendingCredit,
     isActive: customer.isActive,
+    lastActivityAt: customer.lastActivityAt,
   }
+}
+
+async function ensureLocalCustomerBook(storeId: string): Promise<void> {
+  if (await hasLocalCustomerBook(storeId)) return
+  try {
+    await saveCustomerBook(storeId, await getCustomerBook(storeId))
+  } catch (error) {
+    if (!isApiUnavailable(error)) throw error
+    throw new LocalCustomerBookUnavailableError()
+  }
+}
+
+/**
+ * Tout le cahier, pour l'écran de liste — lu localement, donc consultable
+ * hors ligne. Un client désactivé reste visible tant qu'il doit encore.
+ */
+export async function listCustomerBook(storeId: string): Promise<CustomerSummary[]> {
+  await ensureLocalCustomerBook(storeId)
+  const [customers, pending] = await Promise.all([
+    listLocalCustomers(storeId),
+    pendingCreditByCustomer(storeId),
+  ])
+  return customers
+    .map((customer) => fromLocalCustomer(customer, pending.get(customer.id) ?? 0))
+    .filter((customer) => customer.isActive || customer.balance > 0)
+}
+
+/** Client tel que le cache local le connaît — ce que la fiche montre hors ligne. */
+export async function getCachedCustomer(
+  storeId: string,
+  customerId: string,
+): Promise<CustomerSummary | null> {
+  const [customer, pending] = await Promise.all([
+    getLocalCustomer(storeId, customerId),
+    pendingCreditByCustomer(storeId),
+  ])
+  return customer ? fromLocalCustomer(customer, pending.get(customer.id) ?? 0) : null
+}
+
+/**
+ * Remboursement client, en ligne uniquement. Le solde confirmé par le
+ * serveur est aussitôt reporté dans le cache local.
+ */
+export async function recordCustomerPayment(input: {
+  storeId: string
+  idempotencyKey: string
+  customerId: string
+  cashSessionId: string
+  method: PaymentMethod
+  amount: number
+  receivedAmount: number | null
+}): Promise<CustomerPayment> {
+  const payment = await createCustomerPayment({
+    idempotencyKey: input.idempotencyKey,
+    customerId: input.customerId,
+    cashSessionId: input.cashSessionId,
+    method: input.method,
+    amount: toBackendMoney(input.amount),
+    receivedAmount: input.receivedAmount === null ? null : toBackendMoney(input.receivedAmount),
+  })
+  await applyLocalCustomerPayment(input.storeId, input.customerId, {
+    balanceAfter: Math.round(Number(payment.balance_after)),
+    paidAt: payment.created_at,
+  })
+  return payment
 }
 
 /**
@@ -55,14 +126,7 @@ export function fromLocalCustomer(customer: LocalCustomer, pendingCredit = 0): C
  * téléchargé le récupère d'abord (et le garde pour la suite).
  */
 export async function searchCustomers(storeId: string, query: string): Promise<CustomerSummary[]> {
-  if (!(await hasLocalCustomerBook(storeId))) {
-    try {
-      await saveCustomerBook(storeId, await getCustomerBook(storeId))
-    } catch (error) {
-      if (!isApiUnavailable(error)) throw error
-      throw new LocalCustomerBookUnavailableError()
-    }
-  }
+  await ensureLocalCustomerBook(storeId)
   const [customers, pending] = await Promise.all([
     searchLocalCustomers(storeId, query),
     pendingCreditByCustomer(storeId),

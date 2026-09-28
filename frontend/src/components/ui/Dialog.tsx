@@ -48,9 +48,15 @@ export function Dialog({
   const dialogRef = useRef<HTMLElement>(null)
   useDialogFocusTrap(dialogRef)
 
+  // Focus initial à l'ouverture seulement. Lié aux dépendances du clavier
+  // ci-dessous, il se rejouait dès qu'un parent passait un `onClose` recréé
+  // à chaque rendu — et ramenait le curseur au premier champ en pleine saisie.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     initialFocusRef?.current?.focus()
+  }, [])
 
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       // Une touche Echap maintenue ne doit pas empiler les fermetures.
       if (event.repeat || event.key !== "Escape" || !dismissible) return
