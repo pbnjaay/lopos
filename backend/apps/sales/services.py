@@ -10,9 +10,13 @@ from apps.cash.exceptions import CashSessionClosed
 from apps.observability.sentry_context import tag_sale_scope
 from apps.cash.models import CashSession
 from apps.catalog.models import Product
+from apps.customers.exceptions import NegativeCustomerBalance
+from apps.customers.models import Customer, CustomerLedgerEntry
+from apps.customers.services import record_credit_sale, reverse_ledger_entry
 from apps.inventory.models import InventoryMovement, Stock
 
 from .exceptions import (
+    CustomerNotFound,
     InsufficientStock,
     InvalidCancellation,
     InvalidPayment,
@@ -187,10 +191,33 @@ class _ValidatedPaymentLeg(NamedTuple):
     change_amount: Decimal | None
 
 
+def _normalize_credit_amount(value) -> Decimal:
+    if isinstance(value, bool):
+        raise InvalidPayment("Le montant mis au cahier doit être un montant valide.")
+    try:
+        credit_amount = _money(Decimal(value))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise InvalidPayment("Le montant mis au cahier doit être un montant valide.") from exc
+    if credit_amount < 0:
+        raise InvalidPayment("Le montant mis au cahier ne peut pas être négatif.")
+    return credit_amount
+
+
 def _validate_payments(
-    *, total: Decimal, payments: Sequence[PaymentLegInput]
+    *,
+    total: Decimal,
+    payments: Sequence[PaymentLegInput],
+    credit_amount: Decimal = Decimal("0.00"),
 ) -> list[_ValidatedPaymentLeg]:
-    if not payments:
+    """Valide l'encaissement : `sum(paiements) + credit_amount == total`.
+
+    Le crédit n'est pas un paiement : c'est la part non encaissée, inscrite
+    au cahier du client. Une vente entièrement à crédit n'a donc aucun
+    paiement ; sans crédit, au moins un paiement reste obligatoire.
+    """
+    if credit_amount > total:
+        raise InvalidPayment("Le montant mis au cahier dépasse le total de la vente.")
+    if not payments and credit_amount == 0:
         raise InvalidPayment("Au moins un paiement est requis.")
 
     validated: list[_ValidatedPaymentLeg] = []
@@ -212,11 +239,53 @@ def _validate_payments(
     # Tolérance nulle : les montants sont déjà arrondis au centime, un écart
     # ne peut venir que d'une erreur de saisie ou d'un client hors-ligne
     # corrompu — jamais d'un arrondi légitime à absorber silencieusement.
-    if covered != total:
+    if covered + credit_amount != total:
+        if credit_amount:
+            raise InvalidPayment(
+                "La somme des paiements et du montant mis au cahier ne correspond "
+                "pas au total de la vente."
+            )
         raise InvalidPayment(
             "La somme des paiements ne correspond pas au total de la vente."
         )
+    # Le crédit est le reste exact après les paiements immédiats : rendre de
+    # la monnaie tout en inscrivant une dette n'a pas de sens (le client
+    # devrait plutôt garder moins au cahier).
+    if credit_amount and any(leg.change_amount for leg in validated):
+        raise InvalidPayment(
+            "Impossible de rendre de la monnaie sur une vente mise au cahier."
+        )
     return validated
+
+
+def _resolve_credit_customer(
+    *,
+    customer_id: UUID | None,
+    store_id: UUID,
+    credit_amount: Decimal,
+    accept_inactive: bool,
+) -> Customer | None:
+    """Verrouille le client de la vente, obligatoire dès qu'il y a du crédit.
+
+    Le client doit appartenir au magasin de la session. Un client désactivé
+    reste accepté pour une vente hors ligne : elle a déjà eu lieu, la
+    marchandise est partie, la dette doit être inscrite.
+    """
+    if customer_id is None:
+        if credit_amount > 0:
+            raise InvalidPayment("Un client est obligatoire pour une vente mise au cahier.")
+        return None
+
+    customer = (
+        Customer.objects.select_for_update()
+        .filter(pk=customer_id, store_id=store_id)
+        .first()
+    )
+    if customer is None:
+        raise CustomerNotFound(customer_id)
+    if not customer.is_active and not accept_inactive:
+        raise InvalidPayment(f"Le client {customer.name} est désactivé.")
+    return customer
 
 
 def _execute_sale(
@@ -225,10 +294,13 @@ def _execute_sale(
     locked_session: CashSession,
     line_specs: Sequence[_LineSpec],
     payments: Sequence[PaymentLegInput],
+    customer_id: UUID | None,
+    credit_amount,
     occurred_at: datetime | None,
     allow_negative_stock: bool,
 ) -> tuple[Sale, bool]:
-    """Crée une vente complète (Sale/SaleItem/Payment/InventoryMovement).
+    """Crée une vente complète (Sale/SaleItem/Payment/InventoryMovement, et
+    l'écriture CREDIT_SALE du cahier si une part est mise au cahier).
 
     Partagé par le chemin online (`complete_sale`) et le chemin de
     synchronisation offline (`complete_offline_sale`). `allow_negative_stock`
@@ -238,15 +310,27 @@ def _execute_sale(
     acceptée même si le stock serveur ne peut plus la couvrir — dans ce cas
     le stock devient négatif et l'appelant en est informé (booléen retourné)
     afin de tracer la divergence.
+
+    Ordre des verrous, identique partout : session → client → stock.
     """
+    normalized_credit = _normalize_credit_amount(credit_amount)
+    methods = {leg["method"] for leg in payments}
+    if normalized_credit:
+        methods.add("CREDIT")
     tag_sale_scope(
         sale_id=sale_id,
         cash_session_id=locked_session.id,
-        payment_method="+".join(sorted({leg["method"] for leg in payments})),
+        payment_method="+".join(sorted(methods)),
         offline=allow_negative_stock,
     )
 
     store_id = locked_session.cash_register.store_id
+    customer = _resolve_credit_customer(
+        customer_id=customer_id,
+        store_id=store_id,
+        credit_amount=normalized_credit,
+        accept_inactive=allow_negative_stock,
+    )
     product_ids = sorted({spec.product.id for spec in line_specs})
 
     stocks_by_product = {
@@ -286,7 +370,9 @@ def _execute_sale(
     discount = Decimal("0.00")
     total = subtotal
 
-    validated_payments = _validate_payments(total=total, payments=payments)
+    validated_payments = _validate_payments(
+        total=total, payments=payments, credit_amount=normalized_credit
+    )
 
     sale_kwargs = dict(
         id=sale_id,
@@ -295,6 +381,8 @@ def _execute_sale(
         subtotal=subtotal,
         discount=discount,
         total=total,
+        customer=customer,
+        credit_amount=normalized_credit,
         status=Sale.Status.COMPLETED,
     )
     if occurred_at is not None:
@@ -330,6 +418,14 @@ def _execute_sale(
         ]
     )
 
+    if normalized_credit:
+        record_credit_sale(
+            customer=customer,
+            sale=sale,
+            amount=normalized_credit,
+            created_by=locked_session.cashier,
+        )
+
     for spec in line_specs:
         stock = stocks_by_product[spec.product.id]
         stock.quantity -= spec.quantity
@@ -357,6 +453,8 @@ def complete_sale(
     cash_session: CashSession,
     items: Sequence[SaleItemInput],
     payments: Sequence[PaymentLegInput],
+    customer_id: UUID | None = None,
+    credit_amount: Decimal | int = Decimal("0.00"),
 ) -> Sale:
     quantities = _aggregate_items(items)
     product_ids = sorted(quantities)
@@ -397,6 +495,8 @@ def complete_sale(
         locked_session=locked_session,
         line_specs=line_specs,
         payments=payments,
+        customer_id=customer_id,
+        credit_amount=credit_amount,
         occurred_at=None,
         allow_negative_stock=False,
     )
@@ -411,6 +511,8 @@ def complete_offline_sale(
     items: Sequence[OfflineSaleItemInput],
     payments: Sequence[PaymentLegInput],
     occurred_at: datetime,
+    customer_id: UUID | None = None,
+    credit_amount: Decimal | int = Decimal("0.00"),
 ) -> tuple[Sale, bool]:
     """Rejoue une vente réalisée hors-ligne, telle que capturée par le POS.
 
@@ -426,7 +528,9 @@ def complete_offline_sale(
     - le stock peut devenir négatif (`allow_negative_stock=True`) : la vente
       a déjà eu lieu physiquement, la refuser des heures plus tard serait
       pire qu'une divergence de stock. Le booléen retourné indique si une
-      divergence a été introduite, pour audit.
+      divergence a été introduite, pour audit ;
+    - un client désactivé depuis reste accepté pour la part mise au cahier :
+      la dette existe, la refuser la ferait disparaître.
     """
     aggregated = _aggregate_offline_items(items)
     product_ids = sorted(aggregated)
@@ -468,6 +572,8 @@ def complete_offline_sale(
         locked_session=locked_session,
         line_specs=line_specs,
         payments=payments,
+        customer_id=customer_id,
+        credit_amount=credit_amount,
         occurred_at=occurred_at,
         allow_negative_stock=True,
     )
@@ -503,6 +609,24 @@ def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
             raise InvalidCancellation(
                 "La session de caisse de cette vente est fermée."
             )
+
+    if sale.credit_amount:
+        # La dette née de cette vente disparaît avec elle, par une écriture
+        # d'annulation (jamais en modifiant l'écriture d'origine). Si le
+        # client a déjà remboursé entre-temps, annuler rendrait son solde
+        # négatif : c'est alors un retour qu'il faut faire.
+        credit_entry = CustomerLedgerEntry.objects.get(
+            sale=sale, entry_type=CustomerLedgerEntry.EntryType.CREDIT_SALE
+        )
+        try:
+            reverse_ledger_entry(
+                entry=credit_entry, reason="Vente annulée", created_by=cancelled_by
+            )
+        except NegativeCustomerBalance as exc:
+            raise InvalidCancellation(
+                "Le client a déjà remboursé une partie de ce crédit : "
+                "l'annulation n'est plus possible, utilisez un retour."
+            ) from exc
 
     store_id = sale.cash_session.cash_register.store_id
     items = list(sale.items.select_related("product").order_by("product_id"))
@@ -589,6 +713,13 @@ def create_sale_return(
     sale = Sale.objects.select_for_update().get(pk=original_sale.pk)
     if sale.status != Sale.Status.COMPLETED:
         raise InvalidReturn("Seule une vente terminée peut être retournée.")
+    # Provisoire : un retour rembourse toujours de l'argent, alors que sur une
+    # vente mise au cahier il doit d'abord réduire la dette. Bloqué tant que
+    # cette règle n'est pas en place, plutôt que de sortir de l'argent à tort.
+    if sale.credit_amount:
+        raise InvalidReturn(
+            "Les retours sur une vente mise au cahier ne sont pas encore disponibles."
+        )
     if sale.cash_session.cash_register.store_id != locked_session.cash_register.store_id:
         raise InvalidReturn("Le retour doit être effectué dans le magasin de la vente.")
     if payment_method not in Payment.Method.values:

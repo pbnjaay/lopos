@@ -104,6 +104,8 @@ class SaleAdmin(ReadOnlySalesAdmin):
         "subtotal",
         "discount",
         "total",
+        "customer",
+        "credit_amount",
         "status",
         "occurred_at",
         "created_at",
@@ -122,6 +124,8 @@ class SaleAdmin(ReadOnlySalesAdmin):
                     "subtotal",
                     "discount",
                     "total",
+                    "customer",
+                    "credit_amount",
                     "returned_total_display",
                     "net_total_display",
                     "status",
@@ -138,7 +142,7 @@ class SaleAdmin(ReadOnlySalesAdmin):
         return (
             super()
             .get_queryset(request)
-            .select_related("cash_session__cash_register", "cashier")
+            .select_related("cash_session__cash_register", "cashier", "customer")
             .prefetch_related("returns", "payments")
             # `payments__method` dans list_filter joint la table des
             # paiements : sans distinct(), une vente à paiement mixte
@@ -153,6 +157,8 @@ class SaleAdmin(ReadOnlySalesAdmin):
     @admin.display(description=_("paiement"))
     def payment_method(self, obj: Sale) -> str:
         methods = [payment.get_method_display() for payment in obj.payments.all()]
+        if obj.credit_amount:
+            methods.append("Cahier")
         return " + ".join(methods) if methods else "—"
 
     @admin.display(description=_("ticket"))

@@ -17,6 +17,12 @@ class ProductInactive(Exception):
         super().__init__(f"Le produit {product_name} est inactif.")
 
 
+class CustomerNotFound(Exception):
+    def __init__(self, customer_id: UUID) -> None:
+        self.customer_id = customer_id
+        super().__init__(f"Le client {customer_id} n'existe pas dans ce magasin.")
+
+
 class InsufficientStock(Exception):
     def __init__(
         self,

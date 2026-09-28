@@ -34,6 +34,24 @@ class Sale(models.Model):
         "remise", max_digits=14, decimal_places=2, default=Decimal("0")
     )
     total = models.DecimalField("total", max_digits=14, decimal_places=2)
+    customer = models.ForeignKey(
+        "customers.Customer",
+        on_delete=models.PROTECT,
+        related_name="sales",
+        verbose_name="client",
+        blank=True,
+        null=True,
+    )
+    credit_amount = models.DecimalField(
+        "mis au cahier",
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text=(
+            "Part du total non encaissée, inscrite au cahier du client. Ce n'est "
+            "pas un paiement : sum(paiements) + mis au cahier = total."
+        ),
+    )
     status = models.CharField("statut", max_length=10, choices=Status.choices)
     created_at = models.DateTimeField("créée le", auto_now_add=True)
     occurred_at = models.DateTimeField(
@@ -67,6 +85,15 @@ class Sale(models.Model):
                 condition=Q(total__gte=Decimal("0"))
                 & Q(total=F("subtotal") - F("discount")),
                 name="sales_sale_total_consistent",
+            ),
+            models.CheckConstraint(
+                condition=Q(credit_amount__gte=Decimal("0"))
+                & Q(credit_amount__lte=F("total")),
+                name="sales_sale_credit_amount_valid",
+            ),
+            models.CheckConstraint(
+                condition=Q(credit_amount=Decimal("0")) | Q(customer__isnull=False),
+                name="sales_sale_credit_requires_customer",
             ),
         ]
 

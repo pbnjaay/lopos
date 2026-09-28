@@ -38,7 +38,20 @@ class CompleteSaleSerializer(serializers.Serializer):
         queryset=CashSession.objects.all(),
     )
     items = SaleItemInputSerializer(many=True, allow_empty=False)
-    payments = PaymentInputSerializer(many=True, allow_empty=False)
+    # Vide pour une vente entièrement mise au cahier ; le service exige au
+    # moins un paiement dès qu'il n'y a pas de crédit.
+    payments = PaymentInputSerializer(many=True, allow_empty=True)
+    customer_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    credit_amount = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0"),
+        required=False, default=Decimal("0.00"),
+    )
+
+
+class SaleCustomerSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    phone = serializers.CharField(allow_null=True)
 
 
 class SaleListQuerySerializer(serializers.Serializer):
@@ -81,6 +94,7 @@ class PaymentSerializer(serializers.ModelSerializer):
 class SaleSerializer(serializers.ModelSerializer):
     items = SaleItemSerializer(many=True, read_only=True)
     payments = PaymentSerializer(many=True, read_only=True)
+    customer = SaleCustomerSerializer(read_only=True, allow_null=True)
     store = serializers.SerializerMethodField()
     cash_register = serializers.SerializerMethodField()
     cashier = serializers.SerializerMethodField()
@@ -102,6 +116,8 @@ class SaleSerializer(serializers.ModelSerializer):
             "returned_total",
             "net_total",
             "payments",
+            "credit_amount",
+            "customer",
             "items",
         )
 
@@ -138,6 +154,8 @@ class SaleSummarySerializer(SaleSerializer):
             "returned_total",
             "net_total",
             "payments",
+            "credit_amount",
+            "customer",
         )
 
 

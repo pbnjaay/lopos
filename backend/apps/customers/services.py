@@ -115,6 +115,25 @@ def create_customer(
         raise
 
 
+def record_credit_sale(*, customer: Customer, sale, amount: Decimal, created_by) -> CustomerLedgerEntry:
+    """Inscrit au cahier la part non encaissée d'une vente.
+
+    Appelé uniquement depuis la création de la vente, dans sa transaction et
+    après verrouillage du client : jamais de vente à crédit sans son
+    écriture, ni l'inverse. Datée comme la vente (`occurred_at`), pour qu'une
+    vente hors ligne synchronisée plus tard apparaisse au bon jour.
+    """
+    return CustomerLedgerEntry.objects.create(
+        customer=customer,
+        store_id=customer.store_id,
+        entry_type=CustomerLedgerEntry.EntryType.CREDIT_SALE,
+        amount=amount,
+        sale=sale,
+        occurred_at=sale.occurred_at,
+        created_by=created_by,
+    )
+
+
 @transaction.atomic
 def record_opening_balance(
     *,
