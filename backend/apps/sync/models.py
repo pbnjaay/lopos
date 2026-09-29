@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -27,6 +28,19 @@ class ProcessedSyncEvent(models.Model):
         "type d'événement", max_length=32, choices=EventType.choices
     )
     entity_id = models.UUIDField("identifiant de l'entité (ex. sale_id)")
+    pushed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="pushed_sync_events",
+        verbose_name="transmis par",
+        blank=True,
+        null=True,
+        help_text=(
+            "Utilisateur connecté sur la caisse quand l'événement a été envoyé. "
+            "Peut différer du caissier de la vente : sur une caisse partagée, un "
+            "collègue transmet les ventes restées en attente."
+        ),
+    )
     stock_discrepancy = models.BooleanField(
         "divergence de stock",
         default=False,

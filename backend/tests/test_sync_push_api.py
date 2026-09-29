@@ -180,7 +180,7 @@ def test_push_rejects_terminal_injecting_into_another_cashiers_session(
     assert response.status_code == status.HTTP_200_OK
     result = response.json()["results"][0]
     assert result["status"] == "REJECTED"
-    assert result["code"] == "CASH_SESSION_NOT_OWNED"
+    assert result["code"] == "STORE_NOT_ALLOWED"
     assert Sale.objects.count() == 0
 
 

@@ -12,6 +12,7 @@ class ProcessedSyncEventAdmin(ModelAdmin):
         "terminal_id",
         "event_type",
         "entity_id",
+        "pushed_by",
         "stock_discrepancy",
     )
     list_filter = ("event_type", "stock_discrepancy", "terminal_id")
