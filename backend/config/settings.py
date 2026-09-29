@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     "apps.cash",
     "apps.sales",
     "apps.customers",
+    "apps.expenses",
     "apps.accounts",
     "apps.sync",
     "apps.dashboard",
@@ -251,6 +252,22 @@ UNFOLD = {
                         "link": reverse_lazy(
                             "admin:customers_customerledgerentry_changelist"
                         ),
+                    },
+                ],
+            },
+            {
+                "title": _("Dépenses"),
+                "separator": True,
+                "items": [
+                    {
+                        "title": _("Dépenses"),
+                        "icon": "receipt_long",
+                        "link": reverse_lazy("admin:expenses_expense_changelist"),
+                    },
+                    {
+                        "title": _("Catégories de dépenses"),
+                        "icon": "category",
+                        "link": reverse_lazy("admin:expenses_expensecategory_changelist"),
                     },
                 ],
             },

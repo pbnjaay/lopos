@@ -25,6 +25,7 @@ def test_sidebar_navigation_groups_models_by_business_task() -> None:
         "Caisses",
         "Ventes",
         "Cahier clients",
+        "Dépenses",
         "Configuration",
     ]
     assert settings.UNFOLD["SIDEBAR"]["show_all_applications"] is False

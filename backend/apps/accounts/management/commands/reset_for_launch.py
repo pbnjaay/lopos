@@ -2,6 +2,8 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
+from apps.expenses.services import ensure_default_categories
+
 
 class Command(BaseCommand):
     help = (
@@ -46,6 +48,10 @@ class Command(BaseCommand):
 
         self.stdout.write("Resynchronisation des groupes Gérant/Caissier…")
         call_command("create_default_groups")
+
+        # `flush` efface aussi les catégories créées par migration.
+        self.stdout.write("Recréation des catégories de dépenses par défaut…")
+        ensure_default_categories()
 
         self.stdout.write(
             self.style.SUCCESS(

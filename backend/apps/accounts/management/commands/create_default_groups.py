@@ -28,6 +28,11 @@ MANAGER_PERMISSIONS = [
     # "change"/"delete", une écriture du cahier est immuable.
     ("customers", "customerledgerentry", ("add", "view")),
     ("customers", "customerpayment", ("view",)),
+    # Pas de "add"/"change"/"delete" : une dépense se saisit en caisse et
+    # ne se corrige que par annulation (motif obligatoire).
+    ("expenses", "expense", ("view", "cancel")),
+    # Pas de "delete" : une catégorie se désactive (dépenses rattachées).
+    ("expenses", "expensecategory", ("add", "change", "view")),
     ("sync", "processedsyncevent", ("view",)),
 ]
 
