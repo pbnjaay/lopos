@@ -4598,6 +4598,10 @@ a.list-row:active {
   }
 }
 
+.closing-expenses-hint {
+  margin: var(--space-3) 0 0;
+}
+
 /* ── Rapport Z en sections ──────────────────────────────────────── */
 .report-section + .report-section {
   margin-top: var(--space-5);

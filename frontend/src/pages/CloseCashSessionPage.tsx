@@ -1,6 +1,6 @@
 import { type FormEvent, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 
 import { closeCashSession, getCashSessionSummary } from "../api/cashSessions"
 import { trackCashSessionClosed } from "../analytics/events"
@@ -281,7 +281,18 @@ export function CloseCashSessionPage() {
               <dt>Nombre de ventes</dt>
               <dd>{summary.sales_count}</dd>
             </div>
+            <div className="closing-summary-kpi">
+              <dt>Dépenses saisies</dt>
+              <dd>{summary.expenses_count ?? 0}</dd>
+            </div>
           </dl>
+          {/* Une dépense payée en espèces mais pas saisie ressortirait en
+              manque de caisse : on le rappelle avant le comptage, sans
+              dévoiler le cash attendu. */}
+          <p className="field-help closing-expenses-hint">
+            Une dépense payée depuis la caisse n’est pas encore saisie ?{" "}
+            <Link to="/expenses">Saisissez-la avant de compter</Link>.
+          </p>
         </div>
 
         <section className="closing-count-section" aria-labelledby="closing-count-title">

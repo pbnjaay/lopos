@@ -75,6 +75,14 @@ export type CashSessionSummary = {
     wave: string
     orange_money: string
   }
+  /** Dépenses enregistrées de la session (hors annulées). */
+  expenses_count?: number
+  /** Dépenses par moyen : seules les espèces sortent du tiroir. */
+  expenses?: {
+    cash: string
+    wave: string
+    orange_money: string
+  }
   opening_balance: string
   expected_cash: string
   counted_cash: string | null

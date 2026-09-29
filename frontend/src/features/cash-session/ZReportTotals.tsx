@@ -44,6 +44,9 @@ function Row({
  * Corps du rapport Z, en sections : ce qui a été vendu, comment c'est entré,
  * ce qui est ressorti, ce que le cahier a bougé, puis le tiroir-caisse.
  *
+ * Les dépenses ne sont jamais des ventes : elles ont leur section, et seule
+ * leur part en espèces sort du tiroir.
+ *
  * Le cahier sépare trois choses que le Z ne doit jamais mélanger : une vente
  * mise au cahier n'est pas de l'argent reçu, un paiement de client n'est pas
  * une vente, un retour déduit du cahier n'est pas de l'argent rendu. Les
@@ -60,6 +63,11 @@ export function ZReportTotals({ summary }: { summary: CashSessionSummary }) {
   const hasCredit = isNonZero(summary.credit_sales) || isNonZero(summary.credit_returns)
   const hasBook = hasCredit || hasCustomerPayments
   const cashRefunds = summary.refunds?.cash ?? ZERO
+  const expenses = summary.expenses
+  const hasExpenses =
+    expenses !== undefined &&
+    (isNonZero(expenses.cash) || isNonZero(expenses.wave) || isNonZero(expenses.orange_money))
+  const cashExpenses = expenses?.cash ?? ZERO
 
   return (
     <>
@@ -109,11 +117,19 @@ export function ZReportTotals({ summary }: { summary: CashSessionSummary }) {
         </ReportSection>
       ) : null}
 
+      {hasExpenses ? (
+        <ReportSection title="Dépenses">
+          <Row label="Espèces" value={expenses!.cash} sign="minus" />
+          <Row label="Wave" value={expenses!.wave} sign="minus" />
+          <Row label="Orange Money" value={expenses!.orange_money} sign="minus" />
+        </ReportSection>
+      ) : null}
+
       <ReportSection title="Espèces en caisse">
         <Row label="Fond initial" value={summary.opening_balance} className="closing-summary-opening" />
         {/* Le détail n'apparaît que lorsqu'il ajoute quelque chose : sans
             cahier ni retour, « attendu » est simplement fond + ventes. */}
-        {hasCustomerPayments || isNonZero(cashRefunds) ? (
+        {hasCustomerPayments || isNonZero(cashRefunds) || isNonZero(cashExpenses) ? (
           <>
             <Row label="+ Ventes en espèces" value={summary.payments.cash} />
             {hasCustomerPayments && isNonZero(customerPayments?.cash) ? (
@@ -121,6 +137,9 @@ export function ZReportTotals({ summary }: { summary: CashSessionSummary }) {
             ) : null}
             {isNonZero(cashRefunds) ? (
               <Row label="− Remboursements en espèces" value={cashRefunds} />
+            ) : null}
+            {isNonZero(cashExpenses) ? (
+              <Row label="− Dépenses en espèces" value={cashExpenses} />
             ) : null}
           </>
         ) : null}
