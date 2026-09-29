@@ -18,6 +18,7 @@ import {
   InvalidLocalPaymentError,
   LocalSaleProductNotFoundError,
   createLocalSale,
+  getLocalSaleById,
   listRecentLocalSales,
 } from "../db/sales"
 import {
@@ -37,7 +38,7 @@ import {
   type ResumeStrategy,
 } from "../features/cart/HeldCartsPanel"
 import { HeldCartsSection } from "../features/cart/HeldCartsSection"
-import { usePosSession } from "../features/cash-session/queries"
+import { invalidateLocalCashSessionQueries, usePosSession } from "../features/cash-session/queries"
 import { CashPaymentModal } from "../features/checkout/CashPaymentModal"
 import { MobileMoneyConfirmation } from "../features/checkout/MobileMoneyConfirmation"
 import { PaymentMethodModal } from "../features/checkout/PaymentMethodModal"
@@ -102,7 +103,7 @@ export function PosPage() {
   const user = useCurrentUser().data!
   const { ownSession, selectedRegister, localSession } = usePosSession(user)
   const isOnline = useNetworkStatus()
-  const { triggerSync } = useSyncStatus()
+  const { triggerSync, pendingCount } = useSyncStatus()
   const queryClient = useQueryClient()
   const toast = useToast()
   const cart = useCart(ownSession?.id ?? null, selectedRegister?.store_id ?? null)
@@ -117,6 +118,22 @@ export function PosPage() {
   const remainingAmount = Math.max(cart.total - paidSoFar, 0)
   const isSplitPayment = paymentLegs.length > 0
   const [completedSale, setCompletedSale] = useState<ReceiptView | null>(null)
+  // L'écran de succès part d'un instantané pris à l'enregistrement local —
+  // toujours « en attente », même en ligne. La synchronisation qui suit
+  // (quel qu'en soit le déclencheur) rafraîchit le compteur de ventes en
+  // attente : on relit alors l'état réel de la vente affichée.
+  const completedSaleStatusQuery = useQuery({
+    queryKey: ["local-sale-sync-status", completedSale?.id, pendingCount],
+    queryFn: async () => (await getLocalSaleById(completedSale!.id))?.status ?? null,
+    enabled: Boolean(completedSale?.isPendingSync),
+    // Le compteur fait 0 → 1 → 0 autour d'une vente : revenir à une clé déjà
+    // vue ne doit jamais resservir l'ancien « en attente » depuis le cache.
+    staleTime: 0,
+  })
+  const shownCompletedSale =
+    completedSale?.isPendingSync && completedSaleStatusQuery.data === "SYNCED"
+      ? { ...completedSale, isPendingSync: false }
+      : completedSale
   const [weighedProduct, setWeighedProduct] = useState<CatalogProduct | null>(null)
   const [isCartDialogOpen, setIsCartDialogOpen] = useState(false)
   const [isHeldCartsOpen, setIsHeldCartsOpen] = useState(false)
@@ -152,7 +169,7 @@ export function PosPage() {
     void updateLocalCashSessionStoreName(ownSession.id, storeQuery.data.name)
       // L'en-tête global lit ce nom depuis Dexie : sans invalidation il
       // resterait sur « Caisse 01 » seul jusqu'au prochain rechargement.
-      .then(() => queryClient.invalidateQueries({ queryKey: ["local-cash-session"] }))
+      .then(() => invalidateLocalCashSessionQueries(queryClient))
       .catch(() => undefined)
   }, [ownSession, queryClient, storeQuery.data])
 
@@ -733,7 +750,7 @@ export function PosPage() {
       ) : null}
       {completedSale ? (
         <SaleSuccessModal
-          sale={completedSale}
+          sale={shownCompletedSale!}
           cashSessionId={ownSession?.id}
           onPrintTicket={() => {
             setCompletedSale(null)

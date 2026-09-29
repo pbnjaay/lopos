@@ -70,6 +70,7 @@ export function useSessionStats() {
   }, [sessionId])
 
   return {
+    session,
     duration: session ? formatSessionDuration(session.openedAt, now) : null,
     summary: session ? summaryQuery.data ?? null : null,
   }
