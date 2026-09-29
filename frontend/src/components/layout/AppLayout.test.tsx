@@ -42,6 +42,7 @@ describe("AppLayout", () => {
     expect(within(navigation).getByRole("link", { name: "Caisse" })).toHaveAttribute("aria-current", "page")
     expect(within(navigation).getByRole("link", { name: "Ventes" })).toHaveAttribute("href", "/sales")
     expect(within(navigation).getByRole("link", { name: "Clients" })).toHaveAttribute("href", "/customers")
+    expect(within(navigation).getByRole("link", { name: "Dépenses" })).toHaveAttribute("href", "/expenses")
     expect(within(navigation).getByRole("link", { name: "Clôturer" })).toHaveAttribute("href", "/cash/close")
   })
 

@@ -8,14 +8,13 @@ import {
   ListFilterField,
   ListFilters,
   ListHint,
+  ListPagination,
   ListSearchField,
   ListSummary,
 } from "../components/list/ListPage"
 import { Badge } from "../components/ui/Badge"
 import { EmptyState } from "../components/ui/EmptyState"
 import { ErrorState } from "../components/ui/ErrorState"
-import { IconButton } from "../components/ui/IconButton"
-import { ChevronLeftIcon, ChevronRightIcon } from "../components/ui/Icons"
 import { InlineAlert } from "../components/ui/InlineAlert"
 import { ListRow } from "../components/ui/ListRow"
 import { Money } from "../components/ui/Money"
@@ -49,24 +48,6 @@ const PAYMENT_FILTER_OPTIONS: ReadonlyArray<{ value: PaymentMethod | ""; label: 
   { value: "ORANGE_MONEY", label: "Orange Money" },
 ]
 const SALES_PAGE_SIZE = 20
-
-type PaginationItem = number | "ellipsis-start" | "ellipsis-end"
-
-function getPaginationItems(currentPage: number, totalPages: number): PaginationItem[] {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1)
-  }
-
-  if (currentPage <= 4) {
-    return [1, 2, 3, 4, 5, "ellipsis-end", totalPages]
-  }
-
-  if (currentPage >= totalPages - 3) {
-    return [1, "ellipsis-start", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
-  }
-
-  return [1, "ellipsis-start", currentPage - 1, currentPage, currentPage + 1, "ellipsis-end", totalPages]
-}
 
 const localStatusBadges: Partial<Record<LocalSale["status"], { tone: "warning" | "neutral"; label: string }>> = {
   PENDING_SYNC: { tone: "neutral", label: "En attente d’envoi" },
@@ -194,7 +175,6 @@ export function SalesPage() {
   const storeName = localSession?.storeName || "Boutique actuelle"
   const count = salesQuery.data?.count ?? 0
   const totalPages = salesQuery.data ? Math.ceil(count / SALES_PAGE_SIZE) : 0
-  const paginationItems = getPaginationItems(page, totalPages)
   const sales = salesQuery.data?.results ?? []
   // Une liste déjà affichée ne disparaît pas pendant qu'une nouvelle page
   // arrive : elle se marque simplement comme en cours de rafraîchissement.
@@ -357,39 +337,13 @@ export function SalesPage() {
             </>
           ) : null}
 
-          {salesQuery.data && totalPages > 1 ? (
-            <nav className="list-pagination" aria-label="Pagination des ventes">
-              <IconButton
-                label="Page précédente"
-                icon={<ChevronLeftIcon />}
-                surface
-                disabled={page === 1}
-                onClick={() => setPage((value) => Math.max(1, value - 1))}
-              />
-              <div className="list-pagination-pages">
-                {paginationItems.map((item) => typeof item === "number" ? (
-                  <button
-                    key={item}
-                    className={`list-pagination-button${item === page ? " list-pagination-button-active" : ""}`}
-                    type="button"
-                    aria-label={`Page ${item}`}
-                    aria-current={item === page ? "page" : undefined}
-                    onClick={() => setPage(item)}
-                  >
-                    {item}
-                  </button>
-                ) : (
-                  <span className="list-pagination-ellipsis" aria-hidden="true" key={item}>…</span>
-                ))}
-              </div>
-              <IconButton
-                label="Page suivante"
-                icon={<ChevronRightIcon />}
-                surface
-                disabled={page === totalPages}
-                onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
-              />
-            </nav>
+          {salesQuery.data ? (
+            <ListPagination
+              label="Pagination des ventes"
+              page={page}
+              totalPages={totalPages}
+              onChange={setPage}
+            />
           ) : null}
         </>
       )}

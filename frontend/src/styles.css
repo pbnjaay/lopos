@@ -4558,6 +4558,46 @@ a.list-row:active {
   }
 }
 
+/* ── Dépenses ───────────────────────────────────────────────────── */
+/* Les catégories en grille : toutes visibles d'un coup d'œil, au doigt. */
+.expense-category-field .segmented-control {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.expense-category-field .segmented-control-option {
+  min-height: 2.75rem;
+  padding: 0 var(--space-2);
+  white-space: normal;
+}
+
+.expense-amount-cancelled {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+@media (max-width: 600px) {
+  .expense-category-field .segmented-control {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Barre basse à quatre destinations sur téléphone : l'icône passe au-dessus
+   du libellé, sinon « Dépenses » ne tient plus à côté de son icône. */
+@media (max-width: 520px) {
+  .app-navigation {
+    gap: var(--space-1);
+  }
+
+  .app-navigation-link {
+    flex: 1 1 0;
+    width: auto;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.35rem 0.25rem;
+  }
+}
+
 /* ── Rapport Z en sections ──────────────────────────────────────── */
 .report-section + .report-section {
   margin-top: var(--space-5);

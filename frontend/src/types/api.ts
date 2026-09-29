@@ -253,3 +253,50 @@ export type SaleReturn = {
   created_at: string
   items: Array<{ id: string; product_name: string; sale_unit: "UNIT" | "KG"; quantity: string; unit_price: string; refund_amount: string; restock: boolean }>
 }
+
+export type ExpenseCategory = {
+  id: string
+  name: string
+  /** La catégorie seule ne dit pas ce qui a été payé (« Autre »…). */
+  requires_description: boolean
+}
+
+export type ExpenseStatus = "POSTED" | "CANCELLED"
+
+export type Expense = {
+  id: string
+  reference: string
+  category: ExpenseCategory
+  amount: string
+  payment_method: PaymentMethod
+  description: string
+  document_reference: string
+  status: ExpenseStatus
+  store: { id: string; name: string }
+  cash_register: { id: string; name: string } | null
+  cash_session_id: string | null
+  occurred_at: string
+  created_by: string
+  cancelled_at: string | null
+  cancelled_by: string | null
+  cancellation_reason: string
+  /** Même règle que le serveur : l'annulation réussira si on la tente. */
+  can_cancel: boolean
+}
+
+/** Totaux du filtre courant, dépenses annulées exclues. */
+export type ExpenseTotals = {
+  count: number
+  total: string
+  cash: string
+  wave: string
+  orange_money: string
+}
+
+export type PaginatedExpenses = {
+  count: number
+  next: string | null
+  previous: string | null
+  results: Expense[]
+  totals: ExpenseTotals
+}
