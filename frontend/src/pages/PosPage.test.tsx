@@ -940,3 +940,83 @@ describe("POS credit sale (cahier client)", () => {
     expect(createLocalSale).not.toHaveBeenCalled()
   })
 })
+
+describe("POS sale success — synchronisation status", () => {
+  it("keeps the pending-sync note while the server cannot be reached", async () => {
+    const userEvents = userEvent.setup()
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.mocked(createLocalSale).mockImplementation(async (input) => {
+      const sale = buildLocalSaleResult(input)
+      await db.localSales.put(sale)
+      return sale
+    })
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      // Réseau coupé : la synchronisation échoue, la vente reste en attente.
+      throw new TypeError("Failed to fetch")
+    })
+
+    renderPos()
+    await scanCoca(userEvents)
+    await openCashPayment(userEvents)
+    await userEvents.type(screen.getByLabelText("Montant reçu"), "500")
+    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+    await screen.findByRole("heading", { name: "Vente validée" })
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/sync/push/"))).toBe(true),
+    )
+
+    expect(screen.getByText(/synchronisation automatique/)).toBeInTheDocument()
+    expect((await db.localSales.toArray()).map((sale) => sale.status)).toEqual(["PENDING_SYNC"])
+  })
+
+  it("drops the pending-sync note as soon as the sale reaches the server", async () => {
+    const userEvents = userEvent.setup()
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.mocked(createLocalSale).mockImplementation(async (input) => {
+      // Comme la vraie transaction : la vente est dans Dexie, en attente.
+      const sale = buildLocalSaleResult(input)
+      await db.localSales.put(sale)
+      return sale
+    })
+    let releasePush: () => void = () => undefined
+    const pushGate = new Promise<void>((resolve) => {
+      releasePush = resolve
+    })
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([coca])
+      if (url.includes("/sync/push/")) {
+        // Le serveur ne répond qu'une fois l'écran de succès affiché.
+        await pushGate
+        return jsonResponse({
+          results: [
+            {
+              event_id: "b1e0aa10-0000-4000-8000-000000000001",
+              status: "SYNCED",
+              entity_id: "0f9e8d7c-1234-4a5b-9c6d-abcdef012345",
+            },
+          ],
+        })
+      }
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderPos()
+    await scanCoca(userEvents)
+    await openCashPayment(userEvents)
+    await userEvents.type(screen.getByLabelText("Montant reçu"), "500")
+    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+
+    expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
+    expect(screen.getByText(/synchronisation automatique/)).toBeInTheDocument()
+
+    releasePush()
+
+    await waitFor(() =>
+      expect(screen.queryByText(/synchronisation automatique/)).not.toBeInTheDocument(),
+    )
+    expect(screen.getByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
+  })
+})

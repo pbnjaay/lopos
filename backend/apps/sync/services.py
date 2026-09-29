@@ -20,6 +20,7 @@ from apps.sales.exceptions import (
 )
 from apps.sales.models import Sale
 from apps.sales.services import complete_offline_sale
+from apps.stores.access import user_can_access_store
 
 from .models import ProcessedSyncEvent
 
@@ -53,6 +54,10 @@ def process_sale_completed_event(
 ) -> EventOutcome:
     """Traite un événement `SALE_COMPLETED` de manière idempotente.
 
+    `cashier` est l'utilisateur connecté qui transmet l'événement — pas
+    forcément le caissier de la vente (caisse partagée) : il doit seulement
+    avoir accès à la boutique de la session.
+
     Invariant central : soit la `Sale` ET son `ProcessedSyncEvent` sont
     committés ensemble (même transaction), soit rien ne l'est. Un retry sur
     le même `event_id` — qu'il arrive avant que le premier essai n'ait
@@ -80,7 +85,7 @@ def process_sale_completed_event(
         )
 
     try:
-        cash_session = CashSession.objects.select_related("cash_register").get(
+        cash_session = CashSession.objects.select_related("cash_register__store").get(
             pk=payload["cash_session_id"]
         )
     except CashSession.DoesNotExist:
@@ -94,15 +99,30 @@ def process_sale_completed_event(
             message="La session de caisse indiquée n'existe pas.",
         )
 
-    if cash_session.cashier_id != cashier.pk:
+    # Sur une caisse partagée, les ventes d'un caissier peuvent rester en
+    # attente après sa déconnexion et partir avec la connexion du collègue
+    # suivant. On accepte donc tout utilisateur ayant accès à la boutique de
+    # la session — et toujours le caissier de la session lui-même, même
+    # retiré de la boutique depuis : ses ventes ont bien eu lieu. La vente
+    # reste celle de la session (son caissier, son rapport Z), et
+    # `pushed_by` garde la trace de qui l'a transmise.
+    is_session_cashier = cash_session.cashier_id == cashier.pk
+    if not is_session_cashier and not user_can_access_store(
+        cashier, cash_session.cash_register.store
+    ):
         logger.warning(
-            "sync_event_rejected", extra={**log_context, "code": "CASH_SESSION_NOT_OWNED"}
+            "sync_event_rejected", extra={**log_context, "code": "STORE_NOT_ALLOWED"}
         )
         return EventOutcome(
             event_id=event_id,
             status=SyncEventStatus.REJECTED,
-            code="CASH_SESSION_NOT_OWNED",
-            message="Cette session appartient à un autre caissier.",
+            code="STORE_NOT_ALLOWED",
+            message="Vous n’avez pas accès à la boutique de cette vente.",
+        )
+    if not is_session_cashier:
+        logger.info(
+            "sync_event_pushed_by_colleague",
+            extra={**log_context, "session_cashier_id": cash_session.cashier_id},
         )
 
     try:
@@ -121,6 +141,7 @@ def process_sale_completed_event(
                 terminal_id=terminal_id,
                 event_type=ProcessedSyncEvent.EventType.SALE_COMPLETED,
                 entity_id=sale.id,
+                pushed_by=cashier,
                 stock_discrepancy=stock_discrepancy,
             )
     except IntegrityError:
