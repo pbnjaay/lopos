@@ -321,3 +321,43 @@ describe("sync payload of a credit sale", () => {
     expect(events[0]!.payload).not.toHaveProperty("credit_amount")
   })
 })
+
+describe("sales blocked before the shared-register rule", () => {
+  it("sends again a sale rejected as belonging to another cashier", async () => {
+    await db.localSales.add({
+      ...buildPendingSale("sale-colleague", "event-colleague"),
+      status: "CONFLICT",
+      conflictCode: "CASH_SESSION_NOT_OWNED",
+      conflictMessage: "Cette session appartient à un autre caissier.",
+    })
+    vi.mocked(pushSyncEvents).mockResolvedValue({
+      results: [{ event_id: "event-colleague", status: "SYNCED", entity_id: "sale-colleague" }],
+    })
+
+    const outcome = await syncPendingSales()
+
+    expect(outcome.synced).toBe(1)
+    expect(await db.localSales.get("sale-colleague")).toMatchObject({
+      status: "SYNCED",
+      conflictCode: null,
+    })
+  })
+
+  it("leaves other conflicts for the cashier to review", async () => {
+    await db.localSales.add({
+      ...buildPendingSale("sale-closed", "event-closed"),
+      status: "CONFLICT",
+      conflictCode: "CASH_SESSION_CLOSED",
+      conflictMessage: "La session de caisse a été clôturée avant cette vente.",
+    })
+
+    const outcome = await syncPendingSales()
+
+    expect(outcome.attempted).toBe(0)
+    expect(pushSyncEvents).not.toHaveBeenCalled()
+    expect(await db.localSales.get("sale-closed")).toMatchObject({
+      status: "CONFLICT",
+      conflictCode: "CASH_SESSION_CLOSED",
+    })
+  })
+})

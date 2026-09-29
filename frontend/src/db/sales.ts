@@ -415,3 +415,20 @@ export async function pendingCreditByCustomer(
   }
   return pending
 }
+
+/**
+ * Refus que le serveur ne prononce plus : avant la règle de caisse partagée,
+ * une vente transmise par un collègue était rejetée « Cette session
+ * appartient à un autre caissier » et restait bloquée en conflit. Ces ventes
+ * repartent en attente ; les autres conflits (session clôturée, produit
+ * supprimé…) demandent toujours une vérification et ne bougent pas.
+ */
+export const RETRYABLE_CONFLICT_CODES: readonly string[] = ["CASH_SESSION_NOT_OWNED"]
+
+export async function requeueRetryableConflicts(database: PosDatabase = db): Promise<number> {
+  return database.localSales
+    .where("status")
+    .equals("CONFLICT")
+    .filter((sale) => sale.conflictCode !== null && RETRYABLE_CONFLICT_CODES.includes(sale.conflictCode))
+    .modify({ status: "PENDING_SYNC", conflictCode: null, conflictMessage: null })
+}
