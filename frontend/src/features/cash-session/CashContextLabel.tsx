@@ -1,19 +1,30 @@
+import { useQuery } from "@tanstack/react-query"
+
+import { getLocalCashSessionForRegister } from "../../db/sessions"
 import { useSessionStats } from "./SessionStatsLabel"
+import { getStoredCashRegisterId } from "./storage"
 
 /**
  * Boutique et caisse dans l'en-tête global — l'identité du point de vente
  * est vraie toute la journée, elle appartient au chrome de l'application et
  * non au corps du POS, où elle prenait un titre de page entier.
  *
- * Même source que le menu de session : la session ouverte lue dans Dexie,
- * sans passer par la caisse mémorisée. Celle-ci peut manquer alors qu'une
- * session est bien ouverte — navigateur neuf, boutique à caisse unique :
- * l'app choisit la caisse d'elle-même et va au POS sans la mémoriser.
- * Lecture locale uniquement : l'affichage reste correct hors ligne.
+ * Lecture Dexie uniquement, sur la clé de requête déjà utilisée par
+ * `usePosSession` : aucun appel réseau supplémentaire, et l'affichage reste
+ * correct hors ligne.
  */
 export function CashContextLabel() {
-  const { session, duration } = useSessionStats()
+  const cashRegisterId = getStoredCashRegisterId()
+  const sessionQuery = useQuery({
+    queryKey: ["local-cash-session", cashRegisterId],
+    queryFn: () => getLocalCashSessionForRegister(cashRegisterId!),
+    enabled: cashRegisterId !== null,
+    staleTime: Infinity,
+  })
 
+  const { duration } = useSessionStats()
+
+  const session = sessionQuery.data
   if (!session) return null
   if (!session.storeName && !session.cashRegisterName) return null
 

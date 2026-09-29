@@ -17,7 +17,7 @@ import { countPendingLocalSalesForSession } from "../db/sales"
 import { markLocalCashSessionClosed } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
 import { CashClosingResult } from "../features/cash-session/CashClosingResult"
-import { invalidateLocalCashSessionQueries, usePosSession } from "../features/cash-session/queries"
+import { usePosSession } from "../features/cash-session/queries"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
 import { describeSyncNotice } from "../features/sync/syncCopy"
@@ -65,7 +65,7 @@ export function CloseCashSessionPage() {
       } catch {
         // The server session is already closed; do not invite a duplicate request.
       }
-      void invalidateLocalCashSessionQueries(queryClient)
+      void queryClient.invalidateQueries({ queryKey: ["local-cash-session"] })
       setIsConfirming(false)
       queryClient.setQueryData(
         ["cash-sessions", closedSummary.id, "summary"],

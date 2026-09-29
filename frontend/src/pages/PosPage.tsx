@@ -38,7 +38,7 @@ import {
   type ResumeStrategy,
 } from "../features/cart/HeldCartsPanel"
 import { HeldCartsSection } from "../features/cart/HeldCartsSection"
-import { invalidateLocalCashSessionQueries, usePosSession } from "../features/cash-session/queries"
+import { usePosSession } from "../features/cash-session/queries"
 import { CashPaymentModal } from "../features/checkout/CashPaymentModal"
 import { MobileMoneyConfirmation } from "../features/checkout/MobileMoneyConfirmation"
 import { PaymentMethodModal } from "../features/checkout/PaymentMethodModal"
@@ -169,7 +169,7 @@ export function PosPage() {
     void updateLocalCashSessionStoreName(ownSession.id, storeQuery.data.name)
       // L'en-tête global lit ce nom depuis Dexie : sans invalidation il
       // resterait sur « Caisse 01 » seul jusqu'au prochain rechargement.
-      .then(() => invalidateLocalCashSessionQueries(queryClient))
+      .then(() => queryClient.invalidateQueries({ queryKey: ["local-cash-session"] }))
       .catch(() => undefined)
   }, [ownSession, queryClient, storeQuery.data])
 

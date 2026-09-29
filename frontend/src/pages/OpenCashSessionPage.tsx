@@ -11,11 +11,7 @@ import { InlineAlert } from "../components/ui/InlineAlert"
 import { Skeleton } from "../components/ui/Skeleton"
 import { saveLocalCashSession } from "../db/sessions"
 import { useCurrentUser } from "../features/auth/queries"
-import {
-  invalidateLocalCashSessionQueries,
-  storeCashRegisterId,
-  usePosSession,
-} from "../features/cash-session/queries"
+import { storeCashRegisterId, usePosSession } from "../features/cash-session/queries"
 import { describeErrorShort } from "../utils/errorCopy"
 import { formatMoney, formatMoneyInput, parseMoneyInput, toBackendMoney } from "../utils/money"
 
@@ -68,7 +64,7 @@ export function OpenCashSessionPage() {
       // La lecture Dexie de la session locale est cachée avec staleTime
       // Infinity : sans invalidation, elle resterait figée sur l'état
       // d'avant l'ouverture pour toute la vie du SPA.
-      void invalidateLocalCashSessionQueries(queryClient)
+      void queryClient.invalidateQueries({ queryKey: ["local-cash-session"] })
       trackCashSessionOpened({
         cash_session_id: session.id,
         store_id: openedRegister?.store_id ?? null,
