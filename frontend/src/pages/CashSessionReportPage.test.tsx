@@ -3,12 +3,13 @@
 import "@testing-library/jest-dom/vitest"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import type { CashRegister, CashSessionSummary, Store } from "../types/api"
+import { ZReportTotals } from "../features/cash-session/ZReportTotals"
 import { CashSessionReportPage } from "./CashSessionReportPage"
 
 const summary: CashSessionSummary = {
@@ -121,5 +122,44 @@ describe("CashSessionReportPage", () => {
     await user.click(screen.getByRole("button", { name: "Imprimer le rapport" }))
 
     expect(printMock).toHaveBeenCalledOnce()
+  })
+})
+
+describe("ZReportTotals — cahier clients", () => {
+  it("separates credit, customer payments and deducted returns from money", () => {
+    render(
+      <ZReportTotals
+        summary={{
+          ...summary,
+          returns_total: "10000.00",
+          net_sales: "33000.00",
+          refunds: { cash: "4000.00", wave: "0.00", orange_money: "0.00" },
+          credit_sales: "12000.00",
+          credit_returns: "6000.00",
+          customer_payments: { cash: "3000.00", wave: "2000.00", orange_money: "0.00" },
+          expected_cash: "29000.00",
+        }}
+      />,
+    )
+
+    const sales = screen.getByRole("region", { name: "Encaissements des ventes" })
+    expect(within(sales).getByText("Mis au cahier").nextSibling).toHaveTextContent("12 000 FCFA")
+    const refunds = screen.getByRole("region", { name: "Remboursements des retours" })
+    expect(within(refunds).getByText("Déduits du cahier").nextSibling).toHaveTextContent("− 6 000 FCFA")
+    const book = screen.getByRole("region", { name: "Cahier clients" })
+    expect(within(book).getByText("Nouveau crédit").nextSibling).toHaveTextContent("12 000 FCFA")
+    expect(within(book).getByText("Paiements clients Wave").nextSibling).toHaveTextContent("2 000 FCFA")
+    const drawer = screen.getByRole("region", { name: "Espèces en caisse" })
+    expect(within(drawer).getByText("+ Paiements clients en espèces").nextSibling).toHaveTextContent("3 000 FCFA")
+    expect(within(drawer).getByText("− Remboursements en espèces").nextSibling).toHaveTextContent("4 000 FCFA")
+    expect(within(drawer).getByText("Cash attendu").nextSibling).toHaveTextContent("29 000 FCFA")
+  })
+
+  it("stays as before for a shop that does not use the book", () => {
+    render(<ZReportTotals summary={{ ...summary, credit_sales: "0.00", credit_returns: "0.00" }} />)
+
+    expect(screen.queryByRole("region", { name: "Cahier clients" })).not.toBeInTheDocument()
+    expect(screen.queryByText("Mis au cahier")).not.toBeInTheDocument()
+    expect(screen.queryByText("+ Ventes en espèces")).not.toBeInTheDocument()
   })
 })

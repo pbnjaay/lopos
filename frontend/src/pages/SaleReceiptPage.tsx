@@ -10,16 +10,16 @@ import { RouteError, RouteLoading } from "../components/ui/RouteState"
 import { getLocalSaleById } from "../db/sales"
 import { useNetworkStatus } from "../features/offline/useNetworkStatus"
 import { readSaleOrigin, saleOriginBack } from "../features/sales/origin"
-import { receiptViewFromApiReceipt, receiptViewFromLocalSale } from "../features/sales/receiptView"
+import { PAYMENT_LABELS } from "../features/sales/paymentLabels"
+import {
+  paidNowAmount,
+  receiptViewFromApiReceipt,
+  receiptViewFromLocalSale,
+} from "../features/sales/receiptView"
 import { formatDateTime } from "../utils/date"
 import { formatMoney } from "../utils/money"
+import { maskPhone } from "../utils/phone"
 import { formatQuantity, lineTotal } from "../utils/quantity"
-
-const paymentLabels = {
-  CASH: "Espèces",
-  WAVE: "Wave",
-  ORANGE_MONEY: "Orange Money",
-} as const
 
 export function SaleReceiptPage() {
   const { saleId } = useParams<{ saleId: string }>()
@@ -52,6 +52,7 @@ export function SaleReceiptPage() {
   const receipt = receiptQuery.data
   if (!receipt) return <RouteLoading message="Chargement du ticket…" />
   const isSplitPayment = receipt.payments.length > 1
+  const hasCredit = receipt.creditAmount > 0
   const hasReturns = receipt.returnedTotal > 0
   const isFullyReturned = hasReturns && receipt.returnedTotal >= receipt.total
   // Une vente pas encore synchronisée n'a pas de page de détail côté
@@ -147,7 +148,7 @@ export function SaleReceiptPage() {
           {hasReturns ? (
             <>
               <div className="receipt-returned-total">
-                <dt>Remboursements</dt>
+                <dt>Retours</dt>
                 <dd><Money value={receipt.returnedTotal} sign="minus" /></dd>
               </div>
               <div className="receipt-net-total">
@@ -160,8 +161,8 @@ export function SaleReceiptPage() {
             <div key={`method-${payment.method}-${index}`}>
               <dt>{isSplitPayment ? `Paiement ${index + 1}` : "Paiement"}</dt>
               <dd>
-                {paymentLabels[payment.method]}
-                {isSplitPayment ? (
+                {PAYMENT_LABELS[payment.method]}
+                {isSplitPayment || hasCredit ? (
                   <>
                     {" — "}
                     <Money value={payment.amount} />
@@ -186,6 +187,25 @@ export function SaleReceiptPage() {
               </div>
             ) : null,
           )}
+          {hasCredit ? (
+            <>
+              <div className="receipt-paid-now">
+                <dt>Payé</dt>
+                <dd><Money value={paidNowAmount(receipt)} /></dd>
+              </div>
+              <div className="receipt-credit">
+                <dt>À crédit</dt>
+                <dd><Money value={receipt.creditAmount} /></dd>
+              </div>
+              <div className="receipt-customer">
+                <dt>Client</dt>
+                <dd>
+                  {receipt.customer?.name ?? "—"}
+                  {receipt.customer?.phone ? ` · ${maskPhone(receipt.customer.phone)}` : ""}
+                </dd>
+              </div>
+            </>
+          ) : null}
         </dl>
 
         <footer className="receipt-footer">

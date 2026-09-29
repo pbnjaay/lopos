@@ -41,7 +41,13 @@ class SyncPaymentSerializer(serializers.Serializer):
 class SyncSalePayloadSerializer(serializers.Serializer):
     cash_session_id = serializers.UUIDField()
     items = SyncOfflineItemSerializer(many=True, allow_empty=False)
-    payments = SyncPaymentSerializer(many=True, allow_empty=False)
+    # Vide pour une vente entièrement mise au cahier (voir _validate_payments).
+    payments = SyncPaymentSerializer(many=True, allow_empty=True)
+    customer_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    credit_amount = serializers.DecimalField(
+        max_digits=14, decimal_places=2, min_value=Decimal("0"),
+        required=False, default=Decimal("0.00"),
+    )
 
 
 class SyncEventSerializer(serializers.Serializer):

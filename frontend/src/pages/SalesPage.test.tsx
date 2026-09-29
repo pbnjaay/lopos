@@ -200,7 +200,7 @@ describe("SalesPage", () => {
     )
     expect(screen.getByText("Boutique A · Caisse A")).toBeInTheDocument()
     expect(screen.getByText("Retour partiel")).toBeInTheDocument()
-    expect(screen.getByText("−500 FCFA remboursés")).toBeInTheDocument()
+    expect(screen.getByText("−500 FCFA retournés")).toBeInTheDocument()
     await waitFor(() => expect(listSales).toHaveBeenCalledWith(expect.objectContaining({ cashSessionId: "session-a" })))
   })
 
@@ -356,7 +356,7 @@ describe("SalesPage", () => {
     )
 
     vi.mocked(listSales).mockClear()
-    await userEvents.selectOptions(screen.getByLabelText("Paiement"), "WAVE")
+    await userEvents.click(screen.getByRole("radio", { name: "Wave" }))
 
     await waitFor(() =>
       expect(listSales).toHaveBeenCalledWith(
@@ -405,7 +405,7 @@ describe("SalesPage", () => {
     const row = await screen.findByRole("link", { name: /Ticket A12F0000/ })
     expect(row).toHaveTextContent("Retour total")
     expect(row).toHaveTextContent("0 FCFA")
-    expect(row).toHaveTextContent("−2 000 FCFA remboursés")
+    expect(row).toHaveTextContent("−2 000 FCFA retournés")
   })
 
   it("drops the date from a row when the sale is from today", async () => {

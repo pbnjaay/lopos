@@ -14,6 +14,7 @@ export type ErrorContext =
   | "rapport"
   | "ticket"
   | "session"
+  | "client"
   | "generique"
 
 export type ErrorCopy = {
@@ -32,6 +33,8 @@ const offlineDescription: Record<ErrorContext, string> = {
   rapport: "Le rapport redeviendra consultable dès le retour de la connexion.",
   ticket: "Le ticket redeviendra consultable dès le retour de la connexion.",
   session: "Reconnectez-vous pour vérifier votre session de caisse.",
+  client:
+    "La création d'un client nécessite une connexion. Vous pouvez choisir un client déjà enregistré.",
   generique: "Réessayez dans un instant.",
 }
 
@@ -44,6 +47,7 @@ const notFoundTitle: Record<ErrorContext, string> = {
   rapport: "Rapport introuvable",
   ticket: "Ticket introuvable",
   session: "Session introuvable",
+  client: "Client introuvable",
   generique: "Élément introuvable",
 }
 

@@ -26,12 +26,7 @@ import { formatDateTime } from "../utils/date";
 import { describeErrorShort } from "../utils/errorCopy";
 import { formatBackendMoney } from "../utils/money";
 import { backendQuantityToMilli, formatQuantity } from "../utils/quantity";
-
-const paymentLabels = {
-  CASH: "Espèces",
-  WAVE: "Wave",
-  ORANGE_MONEY: "Orange Money",
-} as const;
+import { describeSettlement } from "../features/sales/paymentLabels";
 
 export function SaleDetailPage() {
   const { saleId } = useParams<{ saleId: string }>();
@@ -149,7 +144,7 @@ export function SaleDetailPage() {
             { label: "Caissier", value: sale.cashier.username },
             {
               label: "Mode de paiement",
-              value: sale.payments.map((payment) => paymentLabels[payment.method]).join(" + "),
+              value: describeSettlement(sale.payments, Math.round(Number(sale.credit_amount ?? 0))),
             },
             ...(sale.status === "CANCELLED"
               ? [{ label: "Statut", value: "Annulée" }]
@@ -243,7 +238,7 @@ export function SaleDetailPage() {
           <DialogBody>
             <p>
               Le stock sera remis à jour. Mode de paiement :{" "}
-              {sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}
+              {describeSettlement(sale.payments, Math.round(Number(sale.credit_amount ?? 0)))}
               {" "}— cette action ne touche pas le paiement, c'est à vous de
               rembourser le client si besoin.
             </p>

@@ -212,3 +212,40 @@ describe("SaleSuccessModal", () => {
     })
   })
 })
+
+describe("SaleSuccessModal — vente mise au cahier", () => {
+  const creditSale: ReceiptView = {
+    ...sale,
+    total: 10_000,
+    netTotal: 10_000,
+    payments: [{ method: "CASH", amount: 4_000, receivedAmount: 4_000, changeAmount: 0 }],
+    creditAmount: 6_000,
+    customer: { id: "moussa", name: "Moussa Fall", phone: "+221771234567" },
+  }
+
+  it("shows what was paid, what went on the book and for whom", () => {
+    render(<SaleSuccessModal sale={creditSale} onNewSale={vi.fn()} onCancelSale={vi.fn()} />)
+
+    expect(screen.getByText("Paiement").nextSibling).toHaveTextContent("Espèces — 4 000 FCFA")
+    expect(screen.getByText("Mis au cahier").nextSibling).toHaveTextContent("6 000 FCFA")
+    expect(screen.getByText("Client").nextSibling).toHaveTextContent("Moussa Fall")
+  })
+
+  it("warns that cancelling removes the debt from the book", async () => {
+    const user = userEvent.setup()
+    render(
+      <SaleSuccessModal
+        sale={{ ...creditSale, payments: [], creditAmount: 10_000 }}
+        onNewSale={vi.fn()}
+        onCancelSale={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole("button", { name: "Erreur ? Annuler cette vente" }))
+
+    expect(
+      screen.getByText(/La somme mise au cahier de Moussa Fall sera retirée de son solde/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Si le client a déjà payé/)).not.toBeInTheDocument()
+  })
+})

@@ -84,6 +84,20 @@ export function CashClosingResult({ summary, onFinish }: CashClosingResultProps)
               <dt>Orange Money</dt>
               <dd><Money backend={summary.payments.orange_money} /></dd>
             </div>
+            {/* Cahier : ni l'un ni l'autre n'est une vente encaissée, mais
+                le second explique une partie du cash attendu. */}
+            {Number(summary.credit_sales ?? 0) > 0 ? (
+              <div>
+                <dt>Mis au cahier</dt>
+                <dd><Money backend={summary.credit_sales!} /></dd>
+              </div>
+            ) : null}
+            {Number(summary.customer_payments?.cash ?? 0) > 0 ? (
+              <div>
+                <dt>Paiements clients en espèces</dt>
+                <dd><Money backend={summary.customer_payments!.cash} /></dd>
+              </div>
+            ) : null}
             <div className="closing-summary-opening">
               <dt>Fond initial</dt>
               <dd><Money backend={summary.opening_balance} /></dd>

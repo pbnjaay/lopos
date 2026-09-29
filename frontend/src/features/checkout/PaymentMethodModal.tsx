@@ -12,6 +12,11 @@ type PaymentMethodModalProps = {
   lastUsedMethod?: PaymentMethod | null
   onClose: () => void
   onSelect: (method: PaymentMethod) => void
+  /**
+   * Met le reste dû au cahier d'un client (F4). Pas un moyen de paiement :
+   * c'est la part non encaissée, toujours la dernière de l'encaissement.
+   */
+  onCredit?: () => void
 }
 
 const methods: Array<{
@@ -55,6 +60,7 @@ export function PaymentMethodModal({
   lastUsedMethod = null,
   onClose,
   onSelect,
+  onCredit,
 }: PaymentMethodModalProps) {
   const lastUsedButtonRef = useRef<HTMLButtonElement>(null)
 
@@ -65,6 +71,11 @@ export function PaymentMethodModal({
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.repeat) return
+      if (event.key === "F4" && onCredit) {
+        event.preventDefault()
+        onCredit()
+        return
+      }
       const method = shortcutToMethod[event.key]
       if (!method) return
       // Suppress the browser's own F1 (help) / F3 (find) behaviour.
@@ -73,7 +84,7 @@ export function PaymentMethodModal({
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [onSelect])
+  }, [onSelect, onCredit])
 
   return (
     <Dialog eyebrow="Encaissement" title="Mode de paiement" onClose={onClose}>
@@ -112,6 +123,26 @@ export function PaymentMethodModal({
               </span>
             </button>
           ))}
+          {onCredit ? (
+            <button
+              className="payment-method-card payment-method-card-credit"
+              type="button"
+              onClick={onCredit}
+            >
+              <span className="payment-method-shortcut" aria-hidden="true">
+                F4
+              </span>
+              <span className="payment-method-copy">
+                <strong>Cahier client</strong>
+                <small>
+                  {isPartial ? "Mettre le reste au cahier du client" : "Mettre la vente au cahier du client"}
+                </small>
+              </span>
+              <span className="payment-method-arrow" aria-hidden="true">
+                →
+              </span>
+            </button>
+          ) : null}
         </div>
       </div>
     </Dialog>

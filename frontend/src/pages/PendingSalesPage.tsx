@@ -17,12 +17,7 @@ import { describeSyncNotice } from "../features/sync/syncCopy"
 import { describeErrorShort } from "../utils/errorCopy"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
 import { formatDate, formatTime } from "../utils/date"
-
-const paymentLabels = {
-  CASH: "Espèces",
-  WAVE: "Wave",
-  ORANGE_MONEY: "Orange Money",
-} as const
+import { describeSettlement } from "../features/sales/paymentLabels"
 
 const pendingSalesQueryKey = ["pending-local-sales"] as const
 const conflictSalesQueryKey = ["conflict-local-sales"] as const
@@ -101,7 +96,7 @@ export function PendingSalesPage() {
               description="Ces ventes ont été refusées par le serveur et ne seront pas renvoyées automatiquement."
               trailing={<Badge tone="warning">{conflicts.length}</Badge>}
             />
-            <div className="pending-sales-list">
+            <div className="pending-list-rows">
               {conflicts.map((sale) => (
                 <ListRow
                   key={sale.id}
@@ -132,7 +127,7 @@ export function PendingSalesPage() {
               titleId="pending-sync-title"
               trailing={<Badge tone="neutral">{sales.length}</Badge>}
             />
-            <div className="pending-sales-list">
+            <div className="pending-list-rows">
               {sales.map((sale) => (
                 <ListRow
                   key={sale.id}
@@ -142,7 +137,7 @@ export function PendingSalesPage() {
                   meta={
                     <>
                       <span>
-                        {sale.payments.map((payment) => paymentLabels[payment.method]).join(" + ")}
+                        {describeSettlement(sale.payments, sale.creditAmount ?? 0)}
                       </span>
                       <span aria-hidden="true">·</span>
                       <span>{formatDate(sale.createdAt)}</span>

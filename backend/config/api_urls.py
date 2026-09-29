@@ -8,6 +8,12 @@ from apps.cash.views import (
     OpenCashSessionView,
 )
 from apps.catalog.views import ProductViewSet
+from apps.customers.views import (
+    CustomerDetailView,
+    CustomerListCreateView,
+    CustomerPaymentCreateView,
+    CustomerPaymentDetailView,
+)
 from apps.inventory.views import StockInView
 from apps.sales.views import (
     CancelSaleView,
@@ -52,6 +58,18 @@ urlpatterns = [
     path("sales/<uuid:pk>/cancel/", CancelSaleView.as_view(), name="sale-cancel"),
     path("returns/", SaleReturnListCreateView.as_view(), name="sale-return-list"),
     path("returns/<uuid:pk>/", SaleReturnDetailView.as_view(), name="sale-return-detail"),
+    path("customers/", CustomerListCreateView.as_view(), name="customer-list"),
+    path("customers/<uuid:pk>/", CustomerDetailView.as_view(), name="customer-detail"),
+    path(
+        "customer-payments/",
+        CustomerPaymentCreateView.as_view(),
+        name="customer-payment-create",
+    ),
+    path(
+        "customer-payments/<uuid:pk>/",
+        CustomerPaymentDetailView.as_view(),
+        name="customer-payment-detail",
+    ),
     path("sync/push/", SyncPushView.as_view(), name="sync-push"),
     path("sync/pull/", SyncPullView.as_view(), name="sync-pull"),
 ]

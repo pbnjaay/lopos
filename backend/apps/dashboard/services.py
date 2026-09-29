@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.cash.models import CashSession
+from apps.customers.models import CustomerLedgerEntry, CustomerPayment
 from apps.inventory.models import Stock
 from apps.sales.models import Payment, Sale, SaleItem, SaleReturn
 from apps.stores.models import Store
@@ -42,6 +43,18 @@ class Alert:
 
 
 @dataclass(frozen=True, slots=True)
+class BookSummary:
+    """Cahier clients vu par le gérant : ce qui a bougé sur la période, et ce
+    qui reste dû aujourd'hui (l'encours ne dépend pas de la période)."""
+
+    is_used: bool
+    credit_granted: Decimal
+    payments_received: Decimal
+    outstanding: Decimal
+    customers_url: str
+
+
+@dataclass(frozen=True, slots=True)
 class ManagerDashboard:
     period: str
     store_id: str | None
@@ -52,6 +65,11 @@ class ManagerDashboard:
     average_basket: Decimal
     payment_totals: dict[str, Decimal]
     payment_percentages: dict[str, int]
+    # Part du CA net restée au cahier (mis au cahier − déduit par les retours) :
+    # avec les trois moyens de paiement, elle complète le CA net.
+    credit_total: Decimal
+    credit_percentage: int
+    book: "BookSummary"
     open_sessions: list[CashSession]
     low_stock_threshold: int
     out_of_stock_count: int
@@ -229,6 +247,25 @@ def _build_alerts(
     return ordered
 
 
+def _book_summary(*, start, end, store_id: str | None, credit_granted: Decimal) -> BookSummary:
+    ledger = CustomerLedgerEntry.objects.all()
+    payments = CustomerPayment.objects.filter(created_at__gte=start, created_at__lt=end)
+    if store_id:
+        ledger = ledger.filter(store_id=store_id)
+        payments = payments.filter(store_id=store_id)
+    ledger_totals = ledger.aggregate(outstanding=Sum("amount"), entries=Count("id"))
+    url = f"{reverse('admin:customers_customer_changelist')}?balance=due"
+    if store_id:
+        url += f"&store__id__exact={store_id}"
+    return BookSummary(
+        is_used=bool(ledger_totals["entries"]),
+        credit_granted=credit_granted,
+        payments_received=payments.aggregate(total=Sum("amount"))["total"] or ZERO,
+        outstanding=ledger_totals["outstanding"] or ZERO,
+        customers_url=url,
+    )
+
+
 def get_manager_dashboard(
     *, period: str = DEFAULT_PERIOD, store_id: str | None = None
 ) -> ManagerDashboard:
@@ -237,13 +274,16 @@ def get_manager_dashboard(
 
     sales = _completed_sales(period, store_id)
 
-    totals = sales.aggregate(gross_sales=Sum("total"), sales_count=Count("id"))
+    totals = sales.aggregate(
+        gross_sales=Sum("total"), sales_count=Count("id"), credit_granted=Sum("credit_amount")
+    )
     gross_sales = totals["gross_sales"] or ZERO
     start, end = resolve_period_range(period)
     returns_qs = SaleReturn.objects.filter(status=SaleReturn.Status.COMPLETED, created_at__gte=start, created_at__lt=end)
     if store_id:
         returns_qs = returns_qs.filter(cash_session__cash_register__store_id=store_id)
-    returns_total = returns_qs.aggregate(total=Sum("total_refund"))["total"] or ZERO
+    return_totals = returns_qs.aggregate(total=Sum("total_refund"), credit=Sum("credit_reduction"))
+    returns_total = return_totals["total"] or ZERO
     net_sales = gross_sales - returns_total
     sales_count = totals["sales_count"] or 0
     average_basket = (net_sales / sales_count) if sales_count else ZERO
@@ -253,10 +293,13 @@ def get_manager_dashboard(
         wave=Sum("amount", filter=Q(method=Payment.Method.WAVE)),
         orange_money=Sum("amount", filter=Q(method=Payment.Method.ORANGE_MONEY)),
     )
+    # Argent réellement rendu : la part d'un retour déduite du cahier n'est
+    # jamais sortie de la caisse.
+    money_refund = F("total_refund") - F("credit_reduction")
     refund_aggregates = returns_qs.aggregate(
-        cash=Sum("total_refund", filter=Q(payment_method=Payment.Method.CASH)),
-        wave=Sum("total_refund", filter=Q(payment_method=Payment.Method.WAVE)),
-        orange_money=Sum("total_refund", filter=Q(payment_method=Payment.Method.ORANGE_MONEY)),
+        cash=Sum(money_refund, filter=Q(payment_method=Payment.Method.CASH)),
+        wave=Sum(money_refund, filter=Q(payment_method=Payment.Method.WAVE)),
+        orange_money=Sum(money_refund, filter=Q(payment_method=Payment.Method.ORANGE_MONEY)),
     )
     payment_totals = {
         "cash": (payment_aggregates["cash"] or ZERO) - (refund_aggregates["cash"] or ZERO),
@@ -267,6 +310,10 @@ def get_manager_dashboard(
         method: round(total / net_sales * 100) if net_sales else 0
         for method, total in payment_totals.items()
     }
+    credit_granted = totals["credit_granted"] or ZERO
+    credit_total = credit_granted - (return_totals["credit"] or ZERO)
+    credit_percentage = round(credit_total / net_sales * 100) if net_sales else 0
+    book = _book_summary(start=start, end=end, store_id=store_id, credit_granted=credit_granted)
 
     open_sessions_qs = CashSession.objects.filter(status=CashSession.Status.OPEN).select_related(
         "cash_register", "cash_register__store", "cashier"
@@ -326,6 +373,9 @@ def get_manager_dashboard(
         average_basket=average_basket,
         payment_totals=payment_totals,
         payment_percentages=payment_percentages,
+        credit_total=credit_total,
+        credit_percentage=credit_percentage,
+        book=book,
         open_sessions=open_sessions,
         low_stock_threshold=threshold,
         out_of_stock_count=out_of_stock_count,

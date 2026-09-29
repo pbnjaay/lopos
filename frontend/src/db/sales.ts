@@ -5,6 +5,7 @@ import type {
   LocalPayment,
   LocalProduct,
   LocalSale,
+  LocalSaleCustomer,
   LocalSaleItem,
 } from "./types"
 import { lineTotal } from "../utils/quantity"
@@ -50,19 +51,47 @@ export type CreateLocalSaleInput = {
     amount: number
     receivedAmount?: number | null
   }>
+  /**
+   * Reste non encaissé, mis au cahier du client. Ce n'est pas un paiement :
+   * `sum(payments) + credit.amount === total`, et une vente entièrement à
+   * crédit n'a aucun paiement.
+   */
+  credit?: {
+    customer: LocalSaleCustomer
+    amount: number
+  } | null
 }
 
 function buildLocalPayments(
   payments: CreateLocalSaleInput["payments"],
   total: number,
+  creditAmount: number,
 ): LocalPayment[] {
-  if (payments.length === 0) {
+  // Mêmes règles que le serveur (`_validate_payments`) : une vente refusée à
+  // la synchronisation serait une dette perdue, mieux vaut la refuser ici.
+  if (!Number.isSafeInteger(creditAmount) || creditAmount < 0) {
+    throw new InvalidLocalPaymentError("Le montant mis au cahier est invalide.")
+  }
+  if (creditAmount > total) {
+    throw new InvalidLocalPaymentError("Le montant mis au cahier dépasse le total de la vente.")
+  }
+  if (payments.length === 0 && creditAmount === 0) {
     throw new InvalidLocalPaymentError("Au moins un paiement est requis.")
   }
   const covered = payments.reduce((sum, payment) => sum + payment.amount, 0)
-  if (covered !== total) {
+  if (covered + creditAmount !== total) {
     throw new InvalidLocalPaymentError(
-      "La somme des paiements ne correspond pas au total de la vente.",
+      creditAmount > 0
+        ? "La somme des paiements et du montant mis au cahier ne correspond pas au total de la vente."
+        : "La somme des paiements ne correspond pas au total de la vente.",
+    )
+  }
+  if (
+    creditAmount > 0 &&
+    payments.some((payment) => payment.method === "CASH" && (payment.receivedAmount ?? 0) > payment.amount)
+  ) {
+    throw new InvalidLocalPaymentError(
+      "Impossible de rendre de la monnaie sur une vente mise au cahier.",
     )
   }
 
@@ -96,6 +125,11 @@ export async function createLocalSale(
 ): Promise<LocalSale> {
   const { session, items, payments } = input
   if (items.length === 0) throw new Error("Le panier est vide.")
+  const creditAmount = input.credit?.amount ?? 0
+  const customer = input.credit?.customer ?? null
+  if (creditAmount > 0 && customer === null) {
+    throw new InvalidLocalPaymentError("Un client est obligatoire pour une vente mise au cahier.")
+  }
 
   return database.transaction("rw", [database.products, database.localSales], async () => {
     const saleItems: LocalSaleItem[] = []
@@ -160,7 +194,9 @@ export async function createLocalSale(
       conflictCode: null,
       conflictMessage: null,
       items: saleItems,
-      payments: buildLocalPayments(payments, total),
+      payments: buildLocalPayments(payments, total, creditAmount),
+      creditAmount,
+      customer: creditAmount > 0 ? customer : null,
       subtotal: total,
       discount: 0,
       total,
@@ -248,9 +284,21 @@ export async function markLocalSaleSynced(
   serverId: string,
   database: PosDatabase = db,
 ): Promise<void> {
-  await database.transaction("rw", [database.products, database.localSales], async () => {
+  await database.transaction("rw", [database.products, database.localSales, database.customers], async () => {
     const sale = await database.localSales.get(id)
     if (!sale || sale.status === "SYNCED") return
+
+    // La dette est désormais comptée par le serveur : elle passe du « en
+    // attente » au solde connu, sans attendre le prochain snapshot du cahier
+    // (sinon le solde affiché baisserait le temps d'une resynchronisation).
+    if (sale.customer && (sale.creditAmount ?? 0) > 0) {
+      const customer = await database.customers.get([sale.storeId, sale.customer.id])
+      if (customer) {
+        await database.customers.update([sale.storeId, sale.customer.id], {
+          serverBalance: customer.serverBalance + (sale.creditAmount ?? 0),
+        })
+      }
+    }
 
     const soldByProduct = new Map<string, number>()
     for (const item of sale.items) {
@@ -345,4 +393,25 @@ export async function markLocalSaleConflict(
     conflictCode: reason.code,
     conflictMessage: reason.message,
   })
+}
+
+/**
+ * Dette des ventes à crédit que le serveur ne connaît pas encore (en attente
+ * ou en conflit), par client. S'ajoute au solde connu pour afficher ce que
+ * le client doit réellement — même principe que le stock engagé par les
+ * ventes non synchronisées.
+ */
+export async function pendingCreditByCustomer(
+  storeId: string,
+  database: PosDatabase = db,
+): Promise<Map<string, number>> {
+  const pending = new Map<string, number>()
+  const sales = await database.localSales
+    .filter((sale) => sale.storeId === storeId && sale.status !== "SYNCED" && (sale.creditAmount ?? 0) > 0)
+    .toArray()
+  for (const sale of sales) {
+    if (!sale.customer) continue
+    pending.set(sale.customer.id, (pending.get(sale.customer.id) ?? 0) + (sale.creditAmount ?? 0))
+  }
+  return pending
 }

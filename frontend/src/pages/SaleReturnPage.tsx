@@ -20,6 +20,7 @@ import {
   saleReturnReceiptQueryKey,
 } from "../features/sales/queries";
 import { readSaleOrigin, withSaleOrigin } from "../features/sales/origin";
+import { describeSettlement } from "../features/sales/paymentLabels";
 import type { PaymentMethod, SaleReceipt, SaleReturn } from "../types/api";
 import { describeErrorShort } from "../utils/errorCopy";
 import { formatBackendMoney } from "../utils/money";
@@ -85,6 +86,13 @@ export function SaleReturnPage() {
       ];
     }) ?? [];
   const total = selected.reduce((sum, row) => sum + row.amount, 0);
+  // Vente au cahier : le retour efface d'abord la dette de la vente (dans la
+  // limite de ce que le client doit encore), seul le surplus est rendu en
+  // argent. Le serveur refait ce calcul sous verrou ; ici, c'est l'annonce.
+  const creditAmount = Math.round(Number(sale?.credit_amount ?? 0));
+  const creditPart = Math.min(total, Math.round(Number(sale?.credit_reducible ?? 0)));
+  const moneyPart = total - creditPart;
+  const settlement = sale ? describeSettlement(sale.payments, creditAmount) : "";
   const hasInvalidQuantity = selected.some(
     ({ item, milli }) =>
       milli >
@@ -162,7 +170,7 @@ export function SaleReturnPage() {
         sale_id: sale.id,
         cash_session_id: ownSession.id,
         idempotency_key: idempotencyKeyRef.current,
-        payment_method: method,
+        payment_method: moneyPart > 0 ? method : null,
         items: selected.map(({ item, milli }) => ({
           sale_item_id: item.id,
           quantity: milliToBackendQuantity(milli),
@@ -184,6 +192,12 @@ export function SaleReturnPage() {
       if (selected.some(({ item }) => restocks[item.id] ?? true)) {
         void queryClient.invalidateQueries({ queryKey: ["products"] });
       }
+      if (Number(result.credit_reduction ?? 0) > 0) {
+        // Le solde du client a baissé côté serveur : le cahier local se
+        // resynchronise, et la fiche du client se recharge.
+        void queryClient.invalidateQueries({ queryKey: ["customer-book"] });
+        void queryClient.invalidateQueries({ queryKey: ["customers"] });
+      }
     } catch (caught) {
       setError(describeErrorShort(caught, "retour"));
     } finally {
@@ -194,9 +208,9 @@ export function SaleReturnPage() {
 
   function requestSubmit() {
     if (!sale) return;
-    // Avertir seulement si le moyen choisi n'a jamais été utilisé pour
+    // Avertir seulement si de l'argent sort par un moyen jamais utilisé pour
     // payer cette vente — normal pour un des moyens d'un paiement mixte.
-    if (!sale.payments.some((payment) => payment.method === method)) {
+    if (moneyPart > 0 && !sale.payments.some((payment) => payment.method === method)) {
       setIsConfirming(true);
       return;
     }
@@ -222,22 +236,34 @@ export function SaleReturnPage() {
           </div>
           <p className="eyebrow">Retour enregistré</p>
           <h2 id="return-success-title" ref={successHeadingRef} tabIndex={-1}>
-            Remboursement effectué
+            {completedReturn.payment_method ? "Remboursement effectué" : "Retour déduit du cahier"}
           </h2>
           <p className="return-success-copy">
             Le stock et les montants de la vente ont été mis à jour.
           </p>
           <dl className="sale-amounts return-success-amounts">
-            <div>
-              <dt>Remboursement</dt>
-              <dd>{refundLabels[completedReturn.payment_method]}</dd>
-            </div>
-            <div className="sale-change">
-              <dt>Total remboursé</dt>
-              <dd>
-                <Money backend={completedReturn.total_refund} />
-              </dd>
-            </div>
+            {Number(completedReturn.credit_reduction ?? 0) > 0 ? (
+              <div className="sale-credit-amount">
+                <dt>Déduit du cahier{sale.customer ? ` de ${sale.customer.name}` : ""}</dt>
+                <dd>
+                  <Money backend={completedReturn.credit_reduction!} />
+                </dd>
+              </div>
+            ) : null}
+            {completedReturn.payment_method ? (
+              <>
+                <div>
+                  <dt>Remboursement</dt>
+                  <dd>{refundLabels[completedReturn.payment_method]}</dd>
+                </div>
+                <div className="sale-change">
+                  <dt>Total remboursé</dt>
+                  <dd>
+                    <Money backend={completedReturn.money_refund ?? completedReturn.total_refund} />
+                  </dd>
+                </div>
+              </>
+            ) : null}
             <div>
               <dt>Articles concernés</dt>
               <dd>{completedReturn.items.length}</dd>
@@ -279,7 +305,6 @@ export function SaleReturnPage() {
       />
     );
   }
-
   return (
     <main className="operational-page">
       <PageHeader
@@ -401,6 +426,15 @@ export function SaleReturnPage() {
                 <span>Articles sélectionnés</span>
                 <strong>{selected.length}</strong>
               </div>
+              {creditPart > 0 ? (
+                <div className="return-selection-count sale-credit-amount">
+                  <span>Déduit du cahier{sale.customer ? ` de ${sale.customer.name}` : ""}</span>
+                  <strong>
+                    <Money value={creditPart} />
+                  </strong>
+                </div>
+              ) : null}
+              {moneyPart > 0 || creditPart === 0 ? (
               <div className="field">
                 <label htmlFor="return-payment-method">
                   Mode de remboursement
@@ -418,15 +452,15 @@ export function SaleReturnPage() {
                 </select>
                 {!sale.payments.some((payment) => payment.method === method) ? (
                   <small className="return-payment-warning">
-                    Paiement initial :{" "}
-                    {sale.payments.map((payment) => refundLabels[payment.method]).join(" + ")}.
+                    Paiement initial : {settlement}.
                   </small>
                 ) : null}
               </div>
+              ) : null}
               <div className="return-total">
                 <span>Montant à rembourser</span>
                 <strong>
-                  <Money value={total} />
+                  <Money value={moneyPart} />
                 </strong>
               </div>
               <Button
@@ -440,8 +474,9 @@ export function SaleReturnPage() {
                 }
                 onClick={requestSubmit}
               >
-                Rembourser {formatBackendMoney(`${total}.00`)} par{" "}
-                {refundLabels[method]}
+                {creditPart > 0 && moneyPart === 0
+                  ? `Déduire ${formatBackendMoney(`${creditPart}.00`)} du cahier`
+                  : `Rembourser ${formatBackendMoney(`${moneyPart}.00`)} par ${refundLabels[method]}`}
               </Button>
               {error && !isConfirming ? (
                 <InlineAlert tone="error">{error}</InlineAlert>
@@ -463,14 +498,12 @@ export function SaleReturnPage() {
           <DialogBody>
             <p>
               La vente a été payée par{" "}
-              <strong>
-                {sale.payments.map((payment) => refundLabels[payment.method]).join(" + ")}
-              </strong>
+              <strong>{settlement}</strong>
               , mais le remboursement sera effectué par{" "}
               <strong>{refundLabels[method]}</strong>.
             </p>
             <p className="dialog-hint">
-              Montant à rembourser : {formatBackendMoney(`${total}.00`)}.
+              Montant à rembourser : {formatBackendMoney(`${moneyPart}.00`)}.
             </p>
             {error ? <InlineAlert tone="error">{error}</InlineAlert> : null}
             <DialogFooter>

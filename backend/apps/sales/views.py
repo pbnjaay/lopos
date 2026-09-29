@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from apps.cash.exceptions import CashSessionClosed
 
 from .exceptions import (
+    CustomerNotFound,
     InsufficientStock,
     InvalidCancellation,
     InvalidPayment,
@@ -63,7 +64,7 @@ class CompleteSaleView(APIView):
 
         queryset = (
             sales_for_pos_session(cash_session=cash_session)
-            .select_related("cashier", "cash_session__cash_register__store")
+            .select_related("cashier", "customer", "cash_session__cash_register__store")
             .prefetch_related("returns", "payments")
             .order_by("-occurred_at", "-created_at")
         )
@@ -123,6 +124,11 @@ class CompleteSaleView(APIView):
                 {"code": "PRODUCT_NOT_FOUND", "message": str(exc)},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        except CustomerNotFound as exc:
+            return Response(
+                {"code": "CUSTOMER_NOT_FOUND", "message": str(exc)},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         except (InvalidPayment, InvalidSaleItems) as exc:
             return Response(
                 {"code": "INVALID_SALE", "message": str(exc)},
@@ -131,7 +137,7 @@ class CompleteSaleView(APIView):
 
         sale = (
             Sale.objects.select_related(
-                "cashier", "cash_session__cash_register__store"
+                "cashier", "customer", "cash_session__cash_register__store"
             )
             .prefetch_related("items__return_items__sale_return", "returns", "payments")
             .get(pk=sale.pk)
@@ -150,7 +156,7 @@ class SaleDetailView(APIView):
             return error
         sale = get_object_or_404(
             sales_for_pos_session(cash_session=cash_session)
-            .select_related("cashier", "cash_session__cash_register__store")
+            .select_related("cashier", "customer", "cash_session__cash_register__store")
             .prefetch_related("items__return_items__sale_return", "returns", "payments"),
             pk=pk,
         )
@@ -174,7 +180,7 @@ class CancelSaleView(APIView):
 
         sale = (
             Sale.objects.select_related(
-                "cashier", "cash_session__cash_register__store"
+                "cashier", "customer", "cash_session__cash_register__store"
             )
             .prefetch_related("items__return_items__sale_return", "returns", "payments")
             .get(pk=sale.pk)

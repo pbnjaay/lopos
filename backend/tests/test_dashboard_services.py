@@ -1,4 +1,5 @@
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -6,6 +7,7 @@ from django.utils import timezone
 
 from apps.cash.models import CashSession
 from apps.catalog.models import Product
+from apps.customers.services import create_customer, record_customer_payment
 from apps.dashboard.formatting import (
     classify_cash_difference,
     format_cash_difference,
@@ -17,6 +19,7 @@ from apps.dashboard.formatting import (
 from apps.dashboard.services import get_manager_dashboard
 from apps.inventory.models import Stock
 from apps.sales.models import Payment, Sale, SaleItem
+from apps.sales.services import complete_sale
 from apps.stores.models import CashRegister, Store
 from apps.sync.models import ProcessedSyncEvent
 
@@ -493,3 +496,45 @@ def test_dashboard_query_count_stays_bounded(
 
     with django_assert_max_num_queries(15):
         get_manager_dashboard()
+
+
+# --- Cahier clients ----------------------------------------------------
+
+
+def test_credit_share_completes_the_payment_breakdown(cash_session: CashSession, cashier) -> None:
+    product = Product.objects.create(name="Riz", selling_price=Decimal("5000.00"))
+    Stock.objects.create(store=cash_session.cash_register.store, product=product, quantity=10)
+    customer = create_customer(store=cash_session.cash_register.store, name="Moussa", phone="771234567")
+    complete_sale(
+        cash_session=cash_session,
+        items=[{"product_id": product.id, "quantity": 2}],
+        payments=[{"method": "CASH", "amount": Decimal("4000"), "received_amount": Decimal("4000")}],
+        customer_id=customer.pk,
+        credit_amount=Decimal("6000"),
+    )
+    record_customer_payment(
+        customer=customer, cash_session=cash_session, created_by=cashier, method="WAVE",
+        amount=Decimal("1000"), idempotency_key=uuid4(),
+    )
+
+    dashboard = get_manager_dashboard()
+
+    assert dashboard.net_sales == Decimal("10000.00")
+    assert dashboard.payment_totals["cash"] == Decimal("4000.00")
+    assert dashboard.credit_total == Decimal("6000.00")
+    assert dashboard.payment_percentages["cash"] + dashboard.credit_percentage == 100
+    assert dashboard.book.is_used is True
+    assert dashboard.book.credit_granted == Decimal("6000.00")
+    # Un paiement client n'est pas une vente : il n'entre pas dans le CA.
+    assert dashboard.book.payments_received == Decimal("1000.00")
+    assert dashboard.book.outstanding == Decimal("5000.00")
+    assert "balance=due" in dashboard.book.customers_url
+
+
+def test_book_card_is_hidden_for_a_shop_without_credit(cash_session: CashSession, cashier) -> None:
+    make_sale(cash_session=cash_session, cashier=cashier, total=Decimal("1000.00"), method=Payment.Method.CASH)
+
+    dashboard = get_manager_dashboard()
+
+    assert dashboard.book.is_used is False
+    assert dashboard.credit_total == Decimal("0.00")

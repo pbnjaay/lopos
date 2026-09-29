@@ -57,6 +57,12 @@ function toSyncEvent(sale: LocalSale): SyncEvent {
             }
           : { method: payment.method, amount: toBackendMoney(payment.amount) },
       ),
+      ...(sale.customer && (sale.creditAmount ?? 0) > 0
+        ? {
+            customer_id: sale.customer.id,
+            credit_amount: toBackendMoney(sale.creditAmount ?? 0),
+          }
+        : {}),
     },
   }
 }
