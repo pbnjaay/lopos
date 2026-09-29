@@ -125,7 +125,7 @@ def test_cancellation_is_the_only_allowed_change(cash_session, cashier, category
         created_by=cashier,
         category=category,
         amount=Decimal("5000"),
-        payment_method="CASH",
+        payment_method="WAVE",
         idempotency_key=uuid4(),
     )
 

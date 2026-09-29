@@ -43,7 +43,7 @@ def store() -> Store:
 def cash_session(store: Store, cashier) -> CashSession:
     register = CashRegister.objects.create(store=store, name="Caisse 01")
     return CashSession.objects.create(
-        cash_register=register, cashier=cashier, opening_balance=Decimal("20000.00")
+        cash_register=register, cashier=cashier, opening_balance=Decimal("50000.00")
     )
 
 
@@ -121,7 +121,7 @@ def test_unknown_payment_method_is_rejected(cash_session, cashier, electricity) 
 
 
 def test_closed_session_is_rejected(cash_session, cashier, electricity) -> None:
-    close_cash_session(cash_session=cash_session, counted_cash=Decimal("20000"))
+    close_cash_session(cash_session=cash_session, counted_cash=Decimal("50000"))
 
     with pytest.raises(CashSessionClosed):
         _create(cash_session, cashier, electricity)
@@ -193,7 +193,7 @@ def test_retry_after_the_session_closed_still_returns_the_expense(
     rejeu ne doit ni échouer ni créer une seconde dépense."""
     key = uuid4()
     first = _create(cash_session, cashier, electricity, payment_method="WAVE", idempotency_key=key)
-    close_cash_session(cash_session=cash_session, counted_cash=Decimal("20000"))
+    close_cash_session(cash_session=cash_session, counted_cash=Decimal("50000"))
 
     replay = _create(cash_session, cashier, electricity, payment_method="WAVE", idempotency_key=key)
 
@@ -257,7 +257,7 @@ def test_no_cancellation_once_the_session_is_closed(cash_session, cashier, elect
     """Le rapport Z d'une session clôturée ne change jamais après coup,
     même pour le staff."""
     expense = _create(cash_session, cashier, electricity, payment_method="WAVE")
-    close_cash_session(cash_session=cash_session, counted_cash=Decimal("20000"))
+    close_cash_session(cash_session=cash_session, counted_cash=Decimal("50000"))
     manager = User.objects.create_user(username="gerant", is_staff=True)
 
     with pytest.raises(ExpenseNotCancellable):

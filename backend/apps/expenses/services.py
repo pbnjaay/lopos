@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from apps.cash.exceptions import CashSessionClosed
 from apps.cash.models import CashSession
+from apps.cash.services import expected_cash_for
 from apps.sales.models import Payment
 
 from .defaults import DEFAULT_CATEGORIES
@@ -14,6 +15,7 @@ from .exceptions import (
     ExpenseCancellationNotAllowed,
     ExpenseNotCancellable,
     ExpenseSessionNotOwned,
+    InsufficientCash,
     InvalidExpense,
 )
 from .models import Expense, ExpenseCategory
@@ -92,6 +94,7 @@ def create_expense(
 
     - Quel que soit le moyen de paiement, la dépense appartient à la session
       (et donc à la caisse et à la boutique) de celui qui la saisit.
+    - En espèces, jamais plus que les espèces attendues dans le tiroir.
     - Idempotent : rejouer la même `idempotency_key` renvoie la dépense déjà
       enregistrée, sans en créer une seconde.
 
@@ -143,6 +146,15 @@ def create_expense(
         raise InvalidExpense(
             f"La référence ne peut pas dépasser {DOCUMENT_REFERENCE_MAX_LENGTH} caractères."
         )
+
+    # On ne sort pas du tiroir plus que ce qu'il contient : sous le verrou de
+    # la session, aucune vente ni autre dépense ne peut changer ce montant
+    # pendant le contrôle. Sans ce garde-fou, la clôture échouerait sur la
+    # contrainte « solde attendu positif ou nul ».
+    if payment_method == Payment.Method.CASH:
+        available = expected_cash_for(locked_session)
+        if normalized > available:
+            raise InsufficientCash(available)
 
     now = timezone.now()
     return Expense.objects.create(

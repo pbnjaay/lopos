@@ -81,6 +81,9 @@ class CashSessionSummarySerializer(serializers.Serializer):
     # Part des retours effacée du cahier, sans argent rendu.
     credit_returns = serializers.DecimalField(max_digits=14, decimal_places=2)
     customer_payments = _PaymentTotalsSerializer()
+    # Dépenses de fonctionnement : de l'argent sorti, jamais des ventes.
+    expenses_count = serializers.IntegerField()
+    expenses = _PaymentTotalsSerializer()
     opening_balance = serializers.DecimalField(max_digits=14, decimal_places=2)
     expected_cash = serializers.DecimalField(max_digits=14, decimal_places=2)
     counted_cash = serializers.DecimalField(
@@ -126,6 +129,12 @@ def summary_to_payload(summary) -> dict:
             "cash": summary.cash_customer_payments,
             "wave": summary.wave_customer_payments,
             "orange_money": summary.orange_money_customer_payments,
+        },
+        "expenses_count": summary.expenses_count,
+        "expenses": {
+            "cash": summary.cash_expenses,
+            "wave": summary.wave_expenses,
+            "orange_money": summary.orange_money_expenses,
         },
         "opening_balance": summary.opening_balance,
         "expected_cash": summary.expected_cash,
