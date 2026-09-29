@@ -1,4 +1,4 @@
-import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 
 import { isApiUnavailable } from "../../api/client"
 import { getCashRegisters, getCurrentCashSession } from "../../api/cashRegisters"
@@ -30,23 +30,9 @@ export function resolveCashRegister(
   return activeRegisters.length === 1 ? (activeRegisters[0] ?? null) : null
 }
 
-/**
- * Deux lectures Dexie montrent la session locale : celle du POS (par caisse
- * mémorisée) et celle de l'en-tête (la session ouverte, quelle que soit la
- * caisse). Toute écriture de la session locale doit rafraîchir les deux,
- * sinon l'en-tête reste muet ou périmé jusqu'à sa relecture périodique.
- */
-export function invalidateLocalCashSessionQueries(queryClient: QueryClient): Promise<void> {
-  return Promise.all([
-    queryClient.invalidateQueries({ queryKey: ["local-cash-session"] }),
-    queryClient.invalidateQueries({ queryKey: ["open-local-cash-session"] }),
-  ]).then(() => undefined)
-}
-
 export function usePosSession(
   cashier: Pick<CurrentUser, "id" | "username" | "first_name">,
 ) {
-  const queryClient = useQueryClient()
   const preferredRegisterId = getStoredCashRegisterId()
   const localSessionQuery = useQuery({
     queryKey: ["local-cash-session", preferredRegisterId],
@@ -76,14 +62,12 @@ export function usePosSession(
         if (session) {
           try {
             await saveLocalCashSession(session, selectedRegister!, cashier)
-            void invalidateLocalCashSessionQueries(queryClient)
           } catch {
             // A cache failure must not hide a session confirmed by Django.
           }
         } else {
           try {
             await markLocalCashSessionClosed(selectedRegister!.id)
-            void invalidateLocalCashSessionQueries(queryClient)
           } catch {
             // A cache failure must not hide the authoritative server state.
           }
