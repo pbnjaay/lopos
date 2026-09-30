@@ -8,6 +8,7 @@ from apps.cash.exceptions import CashSessionClosed
 
 from .exceptions import (
     CustomerNotFound,
+    InsufficientCashForRefund,
     InsufficientStock,
     InvalidCancellation,
     InvalidPayment,
@@ -196,6 +197,11 @@ class SaleReturnListCreateView(APIView):
             sale_return = create_sale_return(**serializer.validated_data, created_by=request.user)
         except CashSessionClosed as exc:
             return Response({"code": "CASH_SESSION_CLOSED", "message": str(exc)}, status=status.HTTP_409_CONFLICT)
+        except InsufficientCashForRefund as exc:
+            return Response(
+                {"code": "INSUFFICIENT_CASH", "message": str(exc), "available": f"{exc.available:.2f}"},
+                status=status.HTTP_409_CONFLICT,
+            )
         except InvalidReturn as exc:
             return Response({"code": "INVALID_RETURN", "message": str(exc)}, status=status.HTTP_409_CONFLICT)
         sale_return = SaleReturn.objects.select_related("created_by").prefetch_related(

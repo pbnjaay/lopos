@@ -82,6 +82,11 @@ export function useSessionStats() {
 export function SessionMenuStats() {
   const { duration, summary } = useSessionStats()
   if (duration === null && summary === null) return null
+  const expensesTotal = summary?.expenses
+    ? Math.round(
+        Number(summary.expenses.cash) + Number(summary.expenses.wave) + Number(summary.expenses.orange_money),
+      )
+    : 0
 
   return (
     <dl className="session-menu-stats" aria-label="Session en cours">
@@ -101,6 +106,12 @@ export function SessionMenuStats() {
             <dt>Encaissé</dt>
             <dd><Money backend={summary.gross_sales} /></dd>
           </div>
+          {expensesTotal > 0 ? (
+            <div>
+              <dt>Dépenses</dt>
+              <dd><Money value={expensesTotal} /></dd>
+            </div>
+          ) : null}
         </>
       ) : null}
     </dl>

@@ -122,6 +122,15 @@ class CashSessionAdmin(ModelAdmin):
                     + summary.orange_money_customer_payments
                 ),
             ),
+            (
+                _("Dépenses"),
+                format_fcfa(
+                    summary.cash_expenses
+                    + summary.wave_expenses
+                    + summary.orange_money_expenses
+                ),
+            ),
+            (_("Dont dépenses en espèces"), format_fcfa(summary.cash_expenses)),
         )
         return format_html(
             "<table class='min-w-full text-sm'>{}</table>",

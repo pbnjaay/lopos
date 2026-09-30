@@ -135,6 +135,14 @@ describe("CloseCashSessionPage", () => {
     expect(screen.queryByText(/Cash attendu/i)).not.toBeInTheDocument()
   })
 
+  it("reminds to record cash expenses before counting, without revealing any amount", () => {
+    renderPage()
+
+    expect(screen.getByLabelText("Résumé de la session")).toHaveTextContent("Dépenses saisies")
+    expect(screen.getByRole("link", { name: "Saisissez-la avant de compter" })).toHaveAttribute("href", "/expenses")
+    expect(screen.queryByText(/\d[\d ]* FCFA/)).not.toBeInTheDocument()
+  })
+
   it("formats a valid counted amount and rejects a negative value", async () => {
     const user = userEvent.setup()
     renderPage()

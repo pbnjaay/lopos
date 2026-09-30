@@ -32,3 +32,12 @@ export function formatDate(value: string): string {
 export function formatTime(value: string): string {
   return timeFormatter.format(new Date(value))
 }
+
+/** `2026-09-29` au fuseau de l'appareil, `days` jours avant aujourd'hui —
+ *  format des filtres `date_from` / `date_to` de l'API. */
+export function localIsoDate(daysAgo = 0, now: Date = new Date()): string {
+  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo)
+  const month = String(day.getMonth() + 1).padStart(2, "0")
+  const date = String(day.getDate()).padStart(2, "0")
+  return `${day.getFullYear()}-${month}-${date}`
+}

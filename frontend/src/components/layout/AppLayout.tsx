@@ -6,7 +6,7 @@ import { logout } from "../../api/auth"
 import { API_BASE_URL } from "../../api/client"
 import { resetAnalytics } from "../../analytics/posthog"
 import { clearSentryUser } from "../../analytics/sentry"
-import { CashRegisterIcon, ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, SettingsIcon, UsersIcon } from "../ui/Icons"
+import { CashRegisterIcon, ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, SettingsIcon, UsersIcon, WalletIcon } from "../ui/Icons"
 import { LogoMark } from "../ui/Logo"
 import { ToastProvider, useToast } from "../ui/Toast"
 import { CashContextLabel } from "../../features/cash-session/CashContextLabel"
@@ -51,7 +51,8 @@ function AppShell({ user }: AppLayoutProps) {
     location.pathname === "/cash/close" ||
     location.pathname.startsWith("/sales") ||
     location.pathname.startsWith("/returns") ||
-    location.pathname.startsWith("/customers")
+    location.pathname.startsWith("/customers") ||
+    location.pathname.startsWith("/expenses")
   const isCashRoute =
     location.pathname === "/pos" ||
     location.pathname.startsWith("/cash")
@@ -61,6 +62,7 @@ function AppShell({ user }: AppLayoutProps) {
   const isCustomersRoute =
     location.pathname.startsWith("/customers") ||
     location.pathname.startsWith("/customer-payments")
+  const isExpensesRoute = location.pathname.startsWith("/expenses")
   const logoutMutation = useMutation({
     mutationFn: logout,
     onError: (error) => {
@@ -208,6 +210,15 @@ function AppShell({ user }: AppLayoutProps) {
           >
             <UsersIcon />
             <span>Clients</span>
+          </Link>
+          <Link
+            className={`app-navigation-link${isExpensesRoute ? " app-navigation-link-active" : ""}`}
+            to="/expenses"
+            title="Dépenses"
+            aria-current={isExpensesRoute ? "page" : undefined}
+          >
+            <WalletIcon />
+            <span>Dépenses</span>
           </Link>
           {showCashSessionActions ? (
             <Link

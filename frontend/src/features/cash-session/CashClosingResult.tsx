@@ -98,6 +98,12 @@ export function CashClosingResult({ summary, onFinish }: CashClosingResultProps)
                 <dd><Money backend={summary.customer_payments!.cash} /></dd>
               </div>
             ) : null}
+            {Number(summary.expenses?.cash ?? 0) > 0 ? (
+              <div>
+                <dt>Dépenses en espèces</dt>
+                <dd><Money backend={summary.expenses!.cash} sign="minus" /></dd>
+              </div>
+            ) : null}
             <div className="closing-summary-opening">
               <dt>Fond initial</dt>
               <dd><Money backend={summary.opening_balance} /></dd>

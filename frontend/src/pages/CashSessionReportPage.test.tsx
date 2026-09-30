@@ -163,3 +163,53 @@ describe("ZReportTotals — cahier clients", () => {
     expect(screen.queryByText("+ Ventes en espèces")).not.toBeInTheDocument()
   })
 })
+
+describe("ZReportTotals — dépenses", () => {
+  it("lists expenses by method and takes only cash ones out of the drawer", () => {
+    // Fond 15 000 + ventes espèces 15 000 − dépenses espèces 5 000 = 25 000.
+    render(
+      <ZReportTotals
+        summary={{
+          ...summary,
+          expenses_count: 3,
+          expenses: { cash: "5000.00", wave: "7000.00", orange_money: "1000.00" },
+          expected_cash: "25000.00",
+        }}
+      />,
+    )
+
+    const expenses = screen.getByRole("region", { name: "Dépenses" })
+    expect(within(expenses).getByText("Espèces").nextSibling).toHaveTextContent("− 5 000 FCFA")
+    expect(within(expenses).getByText("Wave").nextSibling).toHaveTextContent("− 7 000 FCFA")
+    expect(within(expenses).getByText("Orange Money").nextSibling).toHaveTextContent("− 1 000 FCFA")
+    const drawer = screen.getByRole("region", { name: "Espèces en caisse" })
+    expect(within(drawer).getByText("+ Ventes en espèces").nextSibling).toHaveTextContent("15 000 FCFA")
+    expect(within(drawer).getByText("− Dépenses en espèces").nextSibling).toHaveTextContent("5 000 FCFA")
+    expect(within(drawer).getByText("Cash attendu").nextSibling).toHaveTextContent("25 000 FCFA")
+    // Une dépense n'est jamais une vente.
+    const sales = screen.getByRole("region", { name: "Ventes" })
+    expect(within(sales).getByText("Ventes brutes").nextSibling).toHaveTextContent("43 000 FCFA")
+  })
+
+  it("shows no expense section when the session had none", () => {
+    render(
+      <ZReportTotals
+        summary={{ ...summary, expenses_count: 0, expenses: { cash: "0.00", wave: "0.00", orange_money: "0.00" } }}
+      />,
+    )
+
+    expect(screen.queryByRole("region", { name: "Dépenses" })).not.toBeInTheDocument()
+    expect(screen.queryByText("− Dépenses en espèces")).not.toBeInTheDocument()
+  })
+
+  it("keeps the drawer detail for mobile-money-only expenses without a cash line", () => {
+    render(
+      <ZReportTotals
+        summary={{ ...summary, expenses: { cash: "0.00", wave: "7000.00", orange_money: "0.00" } }}
+      />,
+    )
+
+    expect(screen.getByRole("region", { name: "Dépenses" })).toBeInTheDocument()
+    expect(screen.queryByText("− Dépenses en espèces")).not.toBeInTheDocument()
+  })
+})

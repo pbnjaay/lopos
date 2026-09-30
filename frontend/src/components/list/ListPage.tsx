@@ -1,5 +1,7 @@
 import type { KeyboardEvent, ReactNode } from "react"
 
+import { IconButton } from "../ui/IconButton"
+import { ChevronLeftIcon, ChevronRightIcon } from "../ui/Icons"
 import { Money } from "../ui/Money"
 
 /**
@@ -109,5 +111,70 @@ export function ListSummary({ label, count, totalLabel, total }: ListSummaryProp
         </strong>
       </span>
     </div>
+  )
+}
+
+type PaginationItem = number | "ellipsis-start" | "ellipsis-end"
+
+function getPaginationItems(currentPage: number, totalPages: number): PaginationItem[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1)
+  }
+
+  if (currentPage <= 4) {
+    return [1, 2, 3, 4, 5, "ellipsis-end", totalPages]
+  }
+
+  if (currentPage >= totalPages - 3) {
+    return [1, "ellipsis-start", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+  }
+
+  return [1, "ellipsis-start", currentPage - 1, currentPage, currentPage + 1, "ellipsis-end", totalPages]
+}
+
+type ListPaginationProps = {
+  /** Nom accessible (« Pagination des ventes »). */
+  label: string
+  page: number
+  totalPages: number
+  onChange: (page: number) => void
+}
+
+/** Pages d'une liste paginée côté serveur ; rien sous deux pages. */
+export function ListPagination({ label, page, totalPages, onChange }: ListPaginationProps) {
+  if (totalPages <= 1) return null
+  return (
+    <nav className="list-pagination" aria-label={label}>
+      <IconButton
+        label="Page précédente"
+        icon={<ChevronLeftIcon />}
+        surface
+        disabled={page === 1}
+        onClick={() => onChange(Math.max(1, page - 1))}
+      />
+      <div className="list-pagination-pages">
+        {getPaginationItems(page, totalPages).map((item) => typeof item === "number" ? (
+          <button
+            key={item}
+            className={`list-pagination-button${item === page ? " list-pagination-button-active" : ""}`}
+            type="button"
+            aria-label={`Page ${item}`}
+            aria-current={item === page ? "page" : undefined}
+            onClick={() => onChange(item)}
+          >
+            {item}
+          </button>
+        ) : (
+          <span className="list-pagination-ellipsis" aria-hidden="true" key={item}>…</span>
+        ))}
+      </div>
+      <IconButton
+        label="Page suivante"
+        icon={<ChevronRightIcon />}
+        surface
+        disabled={page === totalPages}
+        onClick={() => onChange(Math.min(totalPages, page + 1))}
+      />
+    </nav>
   )
 }

@@ -34,6 +34,10 @@ export function SegmentedControl<T extends string>({
     buttonRefs.current[next]?.focus()
   }
 
+  // Sans choix fait (catégorie pas encore choisie), la première option
+  // reste atteignable au clavier : sinon le groupe entier serait sauté.
+  const hasSelection = options.some((option) => option.value === value)
+
   return (
     <div className="segmented-control" role="radiogroup" aria-label={label}>
       {options.map((option, index) => {
@@ -47,7 +51,7 @@ export function SegmentedControl<T extends string>({
             type="button"
             role="radio"
             aria-checked={isSelected}
-            tabIndex={isSelected ? 0 : -1}
+            tabIndex={isSelected || (!hasSelection && index === 0) ? 0 : -1}
             className={`segmented-control-option${isSelected ? " segmented-control-option-selected" : ""}`}
             disabled={disabled}
             onClick={() => onChange(option.value)}

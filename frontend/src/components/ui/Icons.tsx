@@ -108,3 +108,7 @@ export function PlayIcon(props: IconProps) {
 export function UsersIcon(props: IconProps) {
   return <Icon {...props}><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7" /><path d="M18 14.5a6.5 6.5 0 0 1 3.5 5.5" /></Icon>
 }
+
+export function WalletIcon(props: IconProps) {
+  return <Icon {...props}><path d="M19 7V5.5A1.5 1.5 0 0 0 17.5 4h-12A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15" /><path d="M20 8h-5a3.5 3.5 0 0 0 0 7h5a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1Z" /><circle cx="15.5" cy="11.5" r=".5" /></Icon>
+}

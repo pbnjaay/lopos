@@ -8,6 +8,7 @@ from django.core.management import CommandError, call_command
 from django.db import connection
 
 from apps.catalog.models import Product
+from apps.expenses.models import ExpenseCategory
 from apps.stores.models import Store
 
 
@@ -51,6 +52,17 @@ def test_flush_recreates_the_manager_and_cashier_groups(some_data) -> None:
 
     assert set(Group.objects.values_list("name", flat=True)) == {"Gérant", "Caissier"}
 
+
+
+def test_flush_recreates_the_default_expense_categories(some_data) -> None:
+    ExpenseCategory.objects.create(name="Catégorie de démo")
+
+    with patch("builtins.input", return_value=_db_name()):
+        call_command("reset_for_launch")
+
+    names = set(ExpenseCategory.objects.values_list("name", flat=True))
+    assert "Catégorie de démo" not in names
+    assert {"Électricité", "Eau", "Autre"} <= names
 
 def test_yes_flag_skips_the_interactive_prompt(some_data) -> None:
     with patch("builtins.input") as mocked_input:
