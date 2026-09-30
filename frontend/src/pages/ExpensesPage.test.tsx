@@ -152,6 +152,7 @@ describe("ExpensesPage", () => {
     expect(within(list).getByText("Électricité")).toBeInTheDocument()
     expect(within(list).getByText("Facture août")).toBeInTheDocument()
     expect(within(list).getByText("Annulée")).toBeInTheDocument()
+    expect(within(list).getAllByRole("link")[0]).toHaveAttribute("href", "/expenses/expense-id")
     const summary = screen.getByRole("status", { name: "Dépenses de la période" })
     expect(summary).toHaveTextContent("1 dépense · 1 annulée")
     expect(summary).toHaveTextContent("25 000 FCFA")

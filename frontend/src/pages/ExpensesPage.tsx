@@ -56,6 +56,7 @@ function ExpenseRow({ expense, today }: { expense: Expense; today: string }) {
   const day = formatDate(expense.occurred_at)
   return (
     <ListRow
+      to={`/expenses/${encodeURIComponent(expense.id)}`}
       leading={formatTime(expense.occurred_at)}
       title={expense.category.name}
       meta={
@@ -90,7 +91,8 @@ function ExpenseRow({ expense, today }: { expense: Expense; today: string }) {
 }
 
 /**
- * Dépenses de la boutique : l'argent sorti pour la faire tourner. Même
+ * Dépenses de la boutique : l'argent sorti pour la faire tourner.
+ * Une ligne ouvre la fiche, d'où l'on annule. Même
  * structure que les ventes et le cahier ; « Nouvelle dépense » est l'action
  * de la page, jamais un bouton sur l'écran de vente.
  */
