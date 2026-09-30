@@ -81,3 +81,12 @@ def test_manager_group_can_value_stock_and_set_costs_but_never_rewrite_the_cost_
     assert {"view_stockvaluation", "set_cost_stockvaluation", "view_stockcostchange"} <= codenames
     assert "change_stockcostchange" not in codenames
     assert "delete_stockcostchange" not in codenames
+
+
+def test_manager_group_can_see_profitability() -> None:
+    call_command("create_default_groups")
+    manager_group = Group.objects.get(name="Gérant")
+
+    assert manager_group.permissions.filter(
+        content_type__app_label="sales", codename="view_profitability"
+    ).exists()

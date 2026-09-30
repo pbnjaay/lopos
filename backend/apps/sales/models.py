@@ -68,6 +68,8 @@ class Sale(models.Model):
         ordering = ("-created_at",)
         verbose_name = "vente"
         verbose_name_plural = "ventes"
+        # Coûts d'achat, marges et résultat estimé : pas pour tout le monde.
+        permissions = (("view_profitability", "Peut voir la rentabilité"),)
         constraints = [
             models.CheckConstraint(
                 condition=Q(status__in=("COMPLETED", "CANCELLED")),
