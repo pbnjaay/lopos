@@ -95,7 +95,6 @@ export type Product = {
   name: string
   barcode: string | null
   selling_price: string
-  purchase_price: string | null
   is_active: boolean
   sale_unit?: "UNIT" | "KG"
   stock: string | number
