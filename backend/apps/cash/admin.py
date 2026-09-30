@@ -1,6 +1,4 @@
-from django.conf import settings
 from django.contrib import admin
-from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
 from unfold.decorators import display
@@ -8,8 +6,8 @@ from unfold.decorators import display
 from apps.dashboard.admin_columns import money_column, status_badge
 from apps.dashboard.formatting import format_fcfa
 
+from .admin_summary import build_session_z
 from .models import CashSession
-from .services import get_cash_session_summary
 
 
 @admin.register(CashSession)
@@ -42,43 +40,24 @@ class CashSessionAdmin(ModelAdmin):
         "expected_balance_display",
         "difference_label",
         "closed_at",
-        "sales_summary",
-        "report_link",
     )
+    # Fiche lue comme le rapport Z (voir admin_summary) ; le reste est replié.
+    change_form_outer_before_template = "admin/cash/cashsession_summary.html"
     fieldsets = (
         (
-            None,
+            _("Détails"),
             {
-                "fields": (
-                    "id",
-                    "cash_register",
-                    "cashier",
-                    "status_display",
-                    "opened_at",
-                    "closed_at",
-                )
+                "fields": ("cash_register", "cashier", "opened_at", "closed_at"),
+                "classes": ("collapse",),
             },
-        ),
-        (
-            _("Ventes de la session"),
-            {"fields": ("sales_summary",)},
-        ),
-        (
-            _("Caisse"),
-            {
-                "fields": (
-                    "opening_balance_display",
-                    "expected_balance_display",
-                    "closing_balance_display",
-                    "difference_label",
-                )
-            },
-        ),
-        (
-            _("Rapport Z"),
-            {"fields": ("report_link",)},
         ),
     )
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        session = self.get_object(request, object_id)
+        if session is not None:
+            extra_context = {**(extra_context or {}), "z": build_session_z(session)}
+        return super().change_view(request, object_id, form_url, extra_context)
 
     def get_queryset(self, request):
         return (
@@ -113,58 +92,6 @@ class CashSessionAdmin(ModelAdmin):
             return "surplus", f"{_('Surplus')} — {format_fcfa(obj.difference)}"
         # « Manque » dit déjà le signe : pas de « Manque — -1 500 FCFA ».
         return "shortage", f"{_('Manque')} — {format_fcfa(abs(obj.difference))}"
-
-    @admin.display(description=_("détail des ventes"))
-    def sales_summary(self, obj: CashSession) -> str:
-        if not obj.pk:
-            return "—"
-        summary = get_cash_session_summary(cash_session=obj)
-        rows = (
-            (_("Nombre de ventes"), summary.sales_count),
-            (_("CA total"), format_fcfa(summary.gross_sales)),
-            (_("Espèces"), format_fcfa(summary.cash_sales)),
-            (_("Wave"), format_fcfa(summary.wave_sales)),
-            (_("Orange Money"), format_fcfa(summary.orange_money_sales)),
-            (_("Mis au cahier"), format_fcfa(summary.credit_sales)),
-            (
-                _("Remboursements cahier"),
-                format_fcfa(
-                    summary.cash_customer_payments
-                    + summary.wave_customer_payments
-                    + summary.orange_money_customer_payments
-                ),
-            ),
-            (
-                _("Dépenses"),
-                format_fcfa(
-                    summary.cash_expenses
-                    + summary.wave_expenses
-                    + summary.orange_money_expenses
-                ),
-            ),
-            (_("Dont dépenses en espèces"), format_fcfa(summary.cash_expenses)),
-        )
-        return format_html(
-            "<table class='w-full text-sm'>{}</table>",
-            format_html_join(
-                "",
-                "<tr><td class='pr-6 text-base-500'>{}</td><td class='font-medium'>{}</td></tr>",
-                rows,
-            ),
-        )
-
-    @admin.display(description=_("rapport Z"))
-    def report_link(self, obj: CashSession) -> str:
-        if not obj.pk or obj.status != CashSession.Status.CLOSED:
-            return _("Disponible une fois la session clôturée.")
-        url = f"{settings.FRONTEND_URL}/cash-sessions/{obj.pk}/report"
-        return format_html(
-            '<a href="{}" target="_blank" rel="noopener" '
-            'class="rounded-default bg-primary-600 text-white px-3 py-2 text-sm inline-block">'
-            "{}</a>",
-            url,
-            _("Voir / imprimer le rapport Z"),
-        )
 
     def has_add_permission(self, request) -> bool:
         return False

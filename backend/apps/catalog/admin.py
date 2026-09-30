@@ -5,7 +5,6 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
-from django.utils.html import format_html, format_html_join
 from unfold.admin import ModelAdmin
 from unfold.decorators import action
 from unfold.widgets import (
@@ -24,6 +23,7 @@ from apps.inventory.services import adjust_stock, receive_stock
 from apps.observability import posthog_client
 from apps.stores.models import Store
 
+from .admin_summary import build_product_card
 from .models import Product
 from .services import import_products_from_csv
 
@@ -145,13 +145,21 @@ class ProductAdmin(ModelAdmin):
     selling_price_display = money_column("selling_price", "prix de vente")
     list_filter = ("sale_unit", "is_active")
     search_fields = ("name", "barcode")
-    readonly_fields = (
-        "id",
-        "created_at",
-        "updated_at",
-        "stocks_overview",
-        "stock_actions",
-    )
+    readonly_fields = ("id", "created_at", "updated_at")
+    # Fiche d'un produit existant : stock, valeur et ventes en tête (voir
+    # admin_summary), le formulaire en dessous pour modifier.
+    change_form_outer_before_template = "admin/catalog/product_summary.html"
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        product = self.get_object(request, object_id)
+        if product is not None:
+            extra_context = {
+                **(extra_context or {}),
+                "product_card": build_product_card(
+                    product, can_view_costs=can_view_stock_costs(request.user)
+                ),
+            }
+        return super().change_view(request, object_id, form_url, extra_context)
 
     def get_fieldsets(self, request, obj=None):
         fieldsets = [
@@ -164,10 +172,6 @@ class ProductAdmin(ModelAdmin):
         if obj is None:
             fieldsets.append(
                 ("Stock initial", {"fields": ("initial_store", "initial_quantity")})
-            )
-        else:
-            fieldsets.append(
-                ("Stocks", {"fields": ("stocks_overview", "stock_actions")})
             )
         fieldsets.append(
             (
@@ -236,67 +240,6 @@ class ProductAdmin(ModelAdmin):
                 f"({store.name}). ",
                 level=messages.SUCCESS,
             )
-
-    @admin.display(description="Stocks par magasin")
-    def stocks_overview(self, obj):
-        if obj is None or not obj.pk:
-            return "Enregistrez le produit pour voir ses stocks."
-
-        stocks = (
-            Stock.objects.filter(product=obj)
-            .select_related("store")
-            .order_by("store__name")
-        )
-        if not stocks:
-            return "Aucun stock enregistré pour ce produit."
-
-        rows = format_html_join(
-            "",
-            "<tr><td style='padding:4px 16px 4px 0'>{}</td>"
-            "<td style='padding:4px'>{}</td></tr>",
-            (
-                (stock.store.name, format_quantity(stock.quantity, obj.sale_unit))
-                for stock in stocks
-            ),
-        )
-        return format_html("<table>{}</table>", rows)
-
-    @admin.display(description="Actions de stock")
-    def stock_actions(self, obj):
-        if obj is None or not obj.pk:
-            return "-"
-
-        receive_url = reverse("admin:catalog_product_receive_stock", args=[obj.pk])
-        adjust_url = reverse("admin:catalog_product_adjust_stock", args=[obj.pk])
-
-        button_base = (
-            "font-medium inline-flex items-center gap-2 rounded-default "
-            "justify-center whitespace-nowrap cursor-pointer px-3 py-2 text-sm"
-        )
-        button_primary = (
-            f"{button_base} border border-transparent bg-primary-600 text-white "
-            "hover:bg-primary-600/80"
-        )
-        button_default = (
-            f"{button_base} border border-base-200 bg-white shadow-xs text-important "
-            "hover:bg-base-100/80 dark:border-base-700 dark:bg-transparent "
-            "dark:hover:bg-base-800/80"
-        )
-
-        return format_html(
-            '<div class="flex gap-2">'
-            '<a href="{}" class="{}">'
-            '<span class="material-symbols-outlined text-base">add</span>'
-            "Ajouter du stock</a>"
-            '<a href="{}" class="{}">'
-            '<span class="material-symbols-outlined text-base">tune</span>'
-            "Ajuster le stock</a>"
-            "</div>",
-            receive_url,
-            button_primary,
-            adjust_url,
-            button_default,
-        )
 
     def get_urls(self):
         custom_urls = [

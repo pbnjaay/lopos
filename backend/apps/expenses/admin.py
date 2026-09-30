@@ -4,6 +4,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
 from unfold.decorators import action
@@ -22,6 +23,46 @@ from .exceptions import (
 )
 from .models import Expense, ExpenseCategory
 from .services import cancel_expense
+
+
+def _local(value) -> str:
+    return timezone.localtime(value).strftime("%d/%m/%Y à %H:%M")
+
+
+def _person(user) -> str:
+    return (user.get_full_name() or user.username) if user else "—"
+
+
+def _expense_card(expense: Expense) -> dict:
+    """En-tête de la fiche dépense, déjà formaté pour le template."""
+    session = expense.cash_session
+    is_cancelled = expense.status == Expense.Status.CANCELLED
+    return {
+        "reference": expense.reference,
+        "category": expense.category.name,
+        "amount": format_fcfa(expense.amount),
+        "method": expense.get_payment_method_display(),
+        "is_cancelled": is_cancelled,
+        "status_label": expense.get_status_display(),
+        "occurred_at": _local(expense.occurred_at),
+        "created_by": _person(expense.created_by),
+        "description": expense.description,
+        "document_reference": expense.document_reference,
+        "cancelled_at": _local(expense.cancelled_at) if expense.cancelled_at else None,
+        "cancelled_by": _person(expense.cancelled_by),
+        "cancellation_reason": expense.cancellation_reason,
+        # Le bouton « Annuler » n'existe que tant que la session est ouverte :
+        # on dit pourquoi il manque, plutôt que de le laisser chercher.
+        "cancellation_locked": (
+            not is_cancelled
+            and session is not None
+            and session.status == CashSession.Status.CLOSED
+        ),
+        "session_label": str(session) if session else None,
+        "session_url": (
+            reverse("admin:cash_cashsession_change", args=[session.pk]) if session else None
+        ),
+    }
 
 
 @admin.register(ExpenseCategory)
@@ -81,23 +122,17 @@ class ExpenseAdmin(SingleStoreColumnsMixin, ModelAdmin):
         "cancelled_by",
         "cancellation_reason",
     )
+    # En-tête : montant, statut et, s'il y a lieu, l'annulation ou la raison
+    # pour laquelle elle n'est plus possible. Le reste est replié.
+    change_form_outer_before_template = "admin/expenses/expense_summary.html"
     fieldsets = (
         (
-            None,
+            _("Détails"),
             {
-                "fields": (
-                    "reference",
-                    "category",
-                    "amount_display",
-                    "payment_method",
-                    "description",
-                    "document_reference",
-                    "status_display",
-                )
+                "fields": ("store", "cash_session", "occurred_at", "created_by", "created_at"),
+                "classes": ("collapse",),
             },
         ),
-        (_("Caisse"), {"fields": ("store", "cash_session", "occurred_at", "created_by", "created_at")}),
-        (_("Annulation"), {"fields": ("cancelled_at", "cancelled_by", "cancellation_reason")}),
     )
     actions_detail = ["cancel_expense_action"]
 
@@ -108,6 +143,12 @@ class ExpenseAdmin(SingleStoreColumnsMixin, ModelAdmin):
     @admin.display(description=_("montant"), ordering="amount")
     def amount_display(self, obj: Expense) -> str:
         return format_fcfa(obj.amount)
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        expense = self.get_object(request, object_id)
+        if expense is not None:
+            extra_context = {**(extra_context or {}), "expense_card": _expense_card(expense)}
+        return super().change_view(request, object_id, form_url, extra_context)
 
     def has_add_permission(self, request) -> bool:
         return False

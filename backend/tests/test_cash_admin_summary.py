@@ -57,30 +57,39 @@ def test_difference_label_shows_ok_when_balanced(cash_session: CashSession) -> N
     assert model_admin.difference_label(cash_session) == ("ok", "OK — 0 FCFA")
 
 
-def test_report_link_unavailable_while_open(cash_session: CashSession) -> None:
-    model_admin = CashSessionAdmin(CashSession, admin.site)
+def test_z_report_link_waits_for_the_session_to_close(cash_session: CashSession) -> None:
+    from apps.cash.admin_summary import build_session_z
 
-    assert "Disponible une fois" in model_admin.report_link(cash_session)
+    assert build_session_z(cash_session).report_url is None
 
 
-def test_report_link_available_once_closed(cash_session: CashSession, settings) -> None:
+def test_z_report_link_once_closed(cash_session: CashSession, settings) -> None:
+    from apps.cash.admin_summary import build_session_z
+
     settings.FRONTEND_URL = "https://caisse.example.com"
     cash_session.status = CashSession.Status.CLOSED
     cash_session.closed_at = timezone.now()
     cash_session.save()
-    model_admin = CashSessionAdmin(CashSession, admin.site)
 
-    link = model_admin.report_link(cash_session)
+    z = build_session_z(cash_session)
 
-    assert f"https://caisse.example.com/cash-sessions/{cash_session.pk}/report" in link
+    assert z.report_url == f"https://caisse.example.com/cash-sessions/{cash_session.pk}/report"
 
 
-def test_sales_summary_reports_zero_sales_for_new_session(
+def test_z_of_a_new_session_follows_the_expected_cash_formula(
     cash_session: CashSession,
 ) -> None:
-    model_admin = CashSessionAdmin(CashSession, admin.site)
+    from apps.cash.admin_summary import build_session_z
 
-    summary_html = model_admin.sales_summary(cash_session)
+    z = build_session_z(cash_session)
 
-    assert "0" in summary_html
-    assert "0 FCFA" in summary_html
+    assert z.sales_count == 0
+    assert [row.label for row in z.drawer] == [
+        "Fond de caisse",
+        "Ventes en espèces",
+        "Retours remboursés en espèces",
+        "Remboursements cahier en espèces",
+        "Dépenses en espèces",
+    ]
+    assert z.expected == "15 000 FCFA"
+    assert z.difference is None

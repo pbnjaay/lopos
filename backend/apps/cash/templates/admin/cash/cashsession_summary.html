@@ -1,0 +1,77 @@
+{% load i18n %}
+{% if z %}
+<div class="flex flex-col gap-4 mb-6">
+    {# --- En-tête : quelle caisse, qui, quand ------------------------------ #}
+    <div class="flex flex-wrap items-start justify-between gap-4 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
+        <div class="flex flex-col gap-1">
+            <div class="flex items-center gap-2">
+                <h2 class="text-xl font-semibold text-base-900 dark:text-base-100">{{ z.register }}</h2>
+                {% if z.is_open %}
+                    {% include "unfold/helpers/label.html" with text=z.status_label type="info" %}
+                {% else %}
+                    {% include "unfold/helpers/label.html" with text=z.status_label %}
+                {% endif %}
+            </div>
+            <p class="text-sm text-base-500 dark:text-base-400">
+                {{ z.cashier }} · {% translate "ouverte le" %} {{ z.opened_at }}
+                {% if z.closed_at %} · {% translate "fermée le" %} {{ z.closed_at }}{% endif %}
+                · {% if z.is_open %}{% translate "depuis" %}{% else %}{% translate "durée" %}{% endif %} {{ z.duration }}
+            </p>
+        </div>
+        {% if z.report_url %}
+            <a href="{{ z.report_url }}" target="_blank" rel="noopener" class="text-sm px-3 py-2 rounded-default bg-primary-600 text-white hover:bg-primary-700">
+                {% translate "Voir / imprimer le rapport Z" %}
+            </a>
+        {% else %}
+            <span class="text-sm text-base-500 dark:text-base-400">{% translate "Rapport Z disponible une fois la session fermée." %}</span>
+        {% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {# --- Tiroir espèces : la formule de l'attendu, ligne à ligne -------- #}
+        <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
+            <h3 class="font-semibold text-base-900 dark:text-base-100 mb-3">{% translate "Tiroir espèces" %}</h3>
+            <div class="flex flex-col gap-1 text-sm">
+                {% for row in z.drawer %}
+                    <div class="flex justify-between gap-4"><span class="text-base-700 dark:text-base-300">{% if row.sign %}{{ row.sign }} {% endif %}{{ row.label }}</span><span class="font-medium whitespace-nowrap">{{ row.amount }}</span></div>
+                {% endfor %}
+                <div class="flex justify-between gap-4 border-t border-base-200 dark:border-base-800 pt-2 mt-1">
+                    <span class="font-semibold text-base-900 dark:text-base-100">= {% translate "Attendu dans le tiroir" %}</span>
+                    <span class="font-semibold whitespace-nowrap">{{ z.expected }}</span>
+                </div>
+                {% if z.counted %}
+                    <div class="flex justify-between gap-4"><span class="text-base-700 dark:text-base-300">{% translate "Compté à la fermeture" %}</span><span class="font-medium whitespace-nowrap">{{ z.counted }}</span></div>
+                {% endif %}
+                {% if z.difference %}
+                    <div class="flex justify-between items-center gap-4 mt-1">
+                        <span class="text-base-700 dark:text-base-300">{% translate "Écart" %}</span>
+                        {% include "unfold/helpers/label.html" with text=z.difference.1 type=z.difference.0 %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# --- Ventes --------------------------------------------------------- #}
+        <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
+            <h3 class="font-semibold text-base-900 dark:text-base-100 mb-3">
+                {% blocktranslate count counter=z.sales_count %}{{ counter }} vente{% plural %}{{ counter }} ventes{% endblocktranslate %}
+            </h3>
+            <div class="flex flex-col gap-1 text-sm">
+                {% for row in z.sales %}
+                    <div class="flex justify-between gap-4 {% if row.detail %}pl-3 text-xs text-base-500 dark:text-base-400{% else %}text-base-700 dark:text-base-300{% endif %}"><span>{% if row.sign %}{{ row.sign }} {% endif %}{{ row.label }}</span><span class="{% if not row.detail %}font-medium {% endif %}whitespace-nowrap">{{ row.amount }}</span></div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# --- Hors ventes ---------------------------------------------------- #}
+        <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
+            <h3 class="font-semibold text-base-900 dark:text-base-100 mb-3">{% translate "Hors ventes" %}</h3>
+            <div class="flex flex-col gap-1 text-sm">
+                {% for row in z.other %}
+                    <div class="flex justify-between gap-4"><span class="text-base-700 dark:text-base-300">{{ row.label }}</span><span class="font-medium whitespace-nowrap">{{ row.amount }}</span></div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
