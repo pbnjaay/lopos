@@ -13,8 +13,11 @@ Tout est calculé en base (annotations et une seule agrégation) : aucune
 boucle Python sur les stocks.
 """
 
+import csv
+from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
+from typing import TextIO
 
 from django.db.models import (
     Count,
@@ -145,3 +148,50 @@ def get_stock_valuation(*, store_id=None) -> StockValuationSummary:
     if store_id is not None:
         queryset = queryset.filter(store_id=store_id)
     return summarize_stock_valuation(queryset)
+
+
+# --- Export CSV ------------------------------------------------------------------
+
+CSV_HEADER = (
+    "Produit",
+    "Code-barres",
+    "Magasin",
+    "Stock",
+    "Coût moyen",
+    "Valeur d'achat",
+    "Prix de vente",
+    "Valeur de vente",
+    "Marge potentielle",
+)
+
+
+def _csv_number(value: Decimal | None, *, places: str = "0.01") -> str:
+    """Nombre lisible par un tableur français : virgule décimale, pas de
+    séparateur de milliers ; vide quand la valeur est inconnue (jamais 0)."""
+    if value is None:
+        return ""
+    rounded = value.quantize(Decimal(places), rounding=ROUND_HALF_UP)
+    return f"{rounded.normalize():f}".replace(".", ",")
+
+
+def write_stock_valuation_csv(stocks: Iterable[Stock], output: TextIO) -> None:
+    """Une ligne par stock annoté (`annotate_stock_values`), avec produit et
+    magasin chargés. Séparateur « ; » et BOM UTF-8 : le fichier s'ouvre tel
+    quel dans Excel en français."""
+    output.write("\ufeff")
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow(CSV_HEADER)
+    for stock in stocks:
+        writer.writerow(
+            (
+                stock.product.name,
+                stock.product.barcode or "",
+                stock.store.name,
+                _csv_number(stock.quantity, places="0.001"),
+                _csv_number(stock.average_unit_cost),
+                _csv_number(stock.cost_value),
+                _csv_number(stock.product.selling_price),
+                _csv_number(stock.sale_value),
+                _csv_number(stock.potential_margin),
+            )
+        )

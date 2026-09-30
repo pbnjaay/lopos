@@ -9,6 +9,7 @@ from django.utils.html import format_html, format_html_join
 from unfold.admin import ModelAdmin
 from unfold.decorators import action
 from unfold.widgets import (
+    UnfoldAdminDecimalFieldWidget,
     UnfoldAdminFileFieldWidget,
     UnfoldAdminIntegerFieldWidget,
     UnfoldAdminSelectWidget,
@@ -52,7 +53,7 @@ class ProductAdminForm(forms.ModelForm):
         initial=0,
         label="Quantité initiale",
         help_text="Laisser à 0 si vous n'ajoutez pas de stock maintenant.",
-        widget=forms.NumberInput(attrs={"step": "0.001", "inputmode": "decimal"}),
+        widget=UnfoldAdminDecimalFieldWidget(attrs={"step": "0.001", "inputmode": "decimal"}),
     )
 
     class Meta:
@@ -92,7 +93,7 @@ class ReceiveStockForm(forms.Form):
     quantity = forms.DecimalField(
         min_value=Decimal("0.001"), decimal_places=3,
         label="Quantité reçue",
-        widget=forms.NumberInput(attrs={"step": "0.001", "inputmode": "decimal"}),
+        widget=UnfoldAdminDecimalFieldWidget(attrs={"step": "0.001", "inputmode": "decimal"}),
     )
     unit_cost = forms.DecimalField(
         min_value=0,
@@ -103,7 +104,7 @@ class ReceiveStockForm(forms.Form):
             "Prix payé au fournisseur pour une unité (ou un kg), pré-rempli avec "
             "le dernier prix d'achat. Il met à jour le coût moyen du stock."
         ),
-        widget=forms.NumberInput(attrs={"step": "any", "inputmode": "decimal"}),
+        widget=UnfoldAdminDecimalFieldWidget(attrs={"step": "any", "inputmode": "decimal"}),
     )
 
 
@@ -118,7 +119,7 @@ class AdjustStockForm(forms.Form):
         decimal_places=3,
         label="Stock physique réel",
         help_text="Quantité réellement comptée en magasin.",
-        widget=forms.NumberInput(attrs={"step": "0.001", "inputmode": "decimal"}),
+        widget=UnfoldAdminDecimalFieldWidget(attrs={"step": "0.001", "inputmode": "decimal"}),
     )
 
 

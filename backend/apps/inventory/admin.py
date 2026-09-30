@@ -1,3 +1,4 @@
+import io
 from urllib.parse import urlencode
 
 from django import forms
@@ -8,11 +9,13 @@ from django.db.models import F
 from django.db.models.functions import Coalesce
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
+from django.urls import path, reverse
+from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
 from unfold.decorators import action
+from unfold.widgets import UnfoldAdminDecimalFieldWidget, UnfoldAdminTextareaWidget
 
 from apps.catalog.models import Product
 from apps.dashboard.formatting import format_fcfa
@@ -22,7 +25,11 @@ from .exceptions import InvalidStockCost
 from .models import InventoryMovement, Stock, StockCostChange, StockValuation
 from .permissions import SET_STOCK_COST_PERMISSION, can_view_stock_costs
 from .services import set_stock_unit_cost
-from .valuation import annotate_stock_values, summarize_stock_valuation
+from .valuation import (
+    annotate_stock_values,
+    summarize_stock_valuation,
+    write_stock_valuation_csv,
+)
 
 
 def default_low_stock_threshold() -> int:
@@ -177,12 +184,12 @@ class SetStockCostForm(forms.Form):
         decimal_places=4,
         label="Coût d'achat unitaire (FCFA)",
         help_text="Prix d'achat d'une unité (ou d'un kg) de ce produit dans ce magasin.",
-        widget=forms.NumberInput(attrs={"step": "any", "inputmode": "decimal"}),
+        widget=UnfoldAdminDecimalFieldWidget(attrs={"step": "any", "inputmode": "decimal"}),
     )
     reason = forms.CharField(
         required=False,
         label="Motif",
-        widget=forms.Textarea(attrs={"rows": 2}),
+        widget=UnfoldAdminTextareaWidget(attrs={"rows": 2}),
         help_text=(
             "Obligatoire pour corriger un coût déjà connu. "
             "Ex. « Facture fournisseur retrouvée »."
@@ -278,8 +285,37 @@ class StockValuationAdmin(ModelAdmin):
                 "valuation_negative_url": (
                     f"{base_url}?{urlencode({**store_query, 'valuation': 'negative'})}"
                 ),
+                # Même filtres, même tri que la liste affichée.
+                "valuation_export_url": (
+                    f"{reverse('admin:inventory_stockvaluation_export')}"
+                    f"?{request.GET.urlencode()}"
+                ),
             }
         )
+        return response
+
+    def get_urls(self):
+        return [
+            path(
+                "export-csv/",
+                self.admin_site.admin_view(self.export_csv_view),
+                name="inventory_stockvaluation_export",
+            ),
+            *super().get_urls(),
+        ]
+
+    def export_csv_view(self, request: HttpRequest) -> HttpResponse:
+        """La liste filtrée, toutes pages confondues, en CSV."""
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+        changelist = self.get_changelist_instance(request)
+        stocks = changelist.queryset.select_related("product", "store")
+
+        output = io.StringIO()
+        write_stock_valuation_csv(stocks.iterator(chunk_size=500), output)
+        filename = f"valorisation-stock-{timezone.localdate():%Y-%m-%d}.csv"
+        response = HttpResponse(output.getvalue(), content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
     @action(

@@ -322,3 +322,77 @@ def test_view_only_user_sees_values_but_cannot_set_costs(client, store: Store) -
     assert client.post(_set_cost_url(stock), {"unit_cost": "180"}).status_code == 403
     stock.refresh_from_db()
     assert stock.average_unit_cost is None
+
+
+# --- Export CSV ------------------------------------------------------------------
+
+EXPORT_URL = "admin:inventory_stockvaluation_export"
+
+
+def _csv_rows(response) -> list[list[str]]:
+    import csv
+    import io
+
+    text = response.content.decode("utf-8")
+    assert text.startswith("﻿")
+    return list(csv.reader(io.StringIO(text.lstrip("﻿")), delimiter=";"))
+
+
+def test_csv_export_lists_every_stock_with_french_numbers(manager_client, store: Store) -> None:
+    _stock(store, "Coca 50cl", "24", "500", "350")
+    _stock(store, "Riz", "2.5", "600", "333.3333")
+    _stock(store, "Savon", "20", "250", None)
+
+    response = manager_client.get(reverse(EXPORT_URL))
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "text/csv; charset=utf-8"
+    assert "valorisation-stock-" in response["Content-Disposition"]
+    header, *rows = _csv_rows(response)
+    assert header[0] == "Produit"
+    assert header[-1] == "Marge potentielle"
+    by_name = {row[0]: row for row in rows}
+    assert by_name["Coca 50cl"][3:] == ["24", "350", "8400", "500", "12000", "3600"]
+    assert by_name["Riz"][3:] == ["2,5", "333,33", "833,33", "600", "1500", "666,67"]
+    # Coût inconnu : cases vides, jamais 0.
+    assert by_name["Savon"][3:] == ["20", "", "", "250", "5000", ""]
+
+
+def test_csv_export_follows_the_page_filters(manager_client, store: Store) -> None:
+    other_store = Store.objects.create(name="Boutique Médina")
+    _stock(store, "Coca 50cl", "24", "500", "350")
+    _stock(store, "Savon", "20", "250", None)
+    _stock(other_store, "Fanta", "4", "500", "350")
+
+    response = manager_client.get(
+        reverse(EXPORT_URL), {"store__id__exact": str(store.pk), "valuation": "uncosted"}
+    )
+
+    _header, *rows = _csv_rows(response)
+    assert [row[0] for row in rows] == ["Savon"]
+
+
+def test_valuation_page_links_to_the_filtered_export(manager_client, store: Store) -> None:
+    _stock(store, "Coca 50cl", "24", "500", "350")
+
+    response = manager_client.get(reverse(VALUATION_URL), {"valuation": "in_stock"})
+
+    assert f"{reverse(EXPORT_URL)}?valuation=in_stock" in response.content.decode()
+
+
+def test_csv_export_requires_valuation_access(client, store: Store) -> None:
+    User.objects.create_user(username="staff", password="pass1234", is_staff=True)
+    client.login(username="staff", password="pass1234")
+    _stock(store, "Coca 50cl", "24", "500", "350")
+
+    assert client.get(reverse(EXPORT_URL)).status_code == 403
+
+
+def test_set_cost_form_uses_the_admin_styled_inputs(manager_client, store: Store) -> None:
+    stock = _stock(store, "Savon", "20", "250", None)
+
+    content = manager_client.get(_set_cost_url(stock)).content.decode()
+
+    # Widgets Unfold (bordure, fond) et non des champs HTML nus, peu visibles.
+    assert '<input type="number" name="unit_cost" class="border border-base-200' in content
+    assert '<textarea name="reason" cols="40" rows="2" class="vLargeTextField border' in content
