@@ -10,8 +10,10 @@ import { initPostHog } from "./analytics/posthog"
 import { createQueryClient } from "./queryClient"
 import { router } from "./router"
 import { registerOfflineServiceWorker } from "./serviceWorker"
+import { initTheme } from "./theme"
 import "./styles.css"
 
+initTheme()
 initSentry()
 initPostHog()
 if (import.meta.env.PROD) registerOfflineServiceWorker()

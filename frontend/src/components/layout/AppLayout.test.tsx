@@ -162,4 +162,35 @@ describe("AppLayout", () => {
     )
     expect(within(navigation).getByRole("link", { name: "Caisse" })).toHaveAttribute("href", "/")
   })
+
+  it("switches the terminal to dark mode from the session menu", async () => {
+    localStorage.clear()
+    const userEvents = userEvent.setup()
+    const queryClient = new QueryClient()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/pos"]}>
+          <Routes>
+            <Route element={<AppLayout user={user} />}>
+              <Route path="/pos" element={<p>Point de vente</p>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    await userEvents.click(screen.getByRole("button", { name: "Menu de session — Awa" }))
+    const appearance = within(screen.getByLabelText("Actions de session")).getByRole("radiogroup", {
+      name: "Apparence",
+    })
+    expect(within(appearance).getByRole("radio", { name: "Clair" })).toBeChecked()
+
+    await userEvents.click(within(appearance).getByRole("radio", { name: "Sombre" }))
+
+    expect(within(appearance).getByRole("radio", { name: "Sombre" })).toBeChecked()
+    expect(document.documentElement.dataset.theme).toBe("dark")
+    expect(screen.getByLabelText("Actions de session")).toBeInTheDocument()
+    delete document.documentElement.dataset.theme
+    localStorage.clear()
+  })
 })

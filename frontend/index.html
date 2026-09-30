@@ -12,6 +12,18 @@
     <meta name="apple-mobile-web-app-title" content="LoPOS" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>LoPOS</title>
+    <!-- Thème appliqué avant le premier rendu, sans flash blanc en sombre.
+         Même clé et mêmes couleurs que src/theme.ts. -->
+    <script>
+      try {
+        var pref = localStorage.getItem("lopos.theme")
+        var dark = pref === "dark" || (pref === "system" && matchMedia("(prefers-color-scheme: dark)").matches)
+        if (dark) {
+          document.documentElement.dataset.theme = "dark"
+          document.querySelector('meta[name="theme-color"]').setAttribute("content", "#121a16")
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

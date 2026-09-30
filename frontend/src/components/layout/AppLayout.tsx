@@ -8,6 +8,7 @@ import { resetAnalytics } from "../../analytics/posthog"
 import { clearSentryUser } from "../../analytics/sentry"
 import { CashRegisterIcon, ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, SettingsIcon, UsersIcon, WalletIcon } from "../ui/Icons"
 import { LogoMark } from "../ui/Logo"
+import { ThemeSetting } from "./ThemeSetting"
 import { ToastProvider, useToast } from "../ui/Toast"
 import { CashContextLabel } from "../../features/cash-session/CashContextLabel"
 import { SessionMenuStats } from "../../features/cash-session/SessionStatsLabel"
@@ -149,6 +150,8 @@ function AppShell({ user }: AppLayoutProps) {
                     <div className="session-menu-separator session-menu-close" />
                   </>
                 ) : null}
+                <ThemeSetting />
+                <div className="session-menu-separator" />
                 {user.is_staff ? (
                   <>
                     <a

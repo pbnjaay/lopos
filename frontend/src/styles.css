@@ -1,4 +1,9 @@
-:root {
+/* Les tokens sont aussi poses sur les documents papier (tickets, rapport Z) :
+   ils y restent clairs quel que soit le theme, car ils s'impriment et se
+   lisent comme du papier. Le theme sombre ne redefinit que la racine. */
+:root,
+.receipt,
+.z-report {
   --color-background: #f7f8f7;
   --color-surface: #ffffff;
   /* Trois surfaces remplies, et trois seulement.
@@ -16,6 +21,9 @@
   --color-surface-accent: #f4f8f6;
   --color-text: #17211c;
   --color-text-muted: #5a6b60;
+  /* Le vert de marque fixe (logo) : il ne suit pas le theme, contrairement
+     a --color-primary qui s'eclaircit en sombre pour rester lisible. */
+  --color-brand: #176b4d;
   --color-primary: #176b4d;
   --color-primary-hover: #0f563c;
   --color-border: #dde2df;
@@ -89,16 +97,125 @@
   --color-info-surface: #f3f5f4;
   --color-info-border: var(--color-border);
 
+  /* Nuances d'appoint - chaque valeur jusqu'ici ecrite en dur dans une
+     regle porte desormais un nom, pour que le theme sombre puisse la
+     redefinir. Les valeurs claires sont celles d'origine. */
+  --color-on-primary: #ffffff;
+  --color-on-danger: #ffffff;
+  --color-text-secondary: #3d4a43;
+  --color-text-soft: #526159;
+  --color-text-disabled: #74837c;
+  --color-text-placeholder: #7b8580;
+  --color-text-positive: #36594c;
+  /* Le total a payer : un vert plus profond que le texte courant. */
+  --color-text-total: #12372a;
+  --color-danger-hover: #83201a;
+  --color-danger-text-soft: #6f3b35;
+  --color-warning-surface-subtle: #fffdf8;
+  --color-divider: #edf1ef;
+  --color-border-emphasis: #a8bdb4;
+  --color-border-hover: #7c9b8e;
+  --color-surface-accent-hover: #e5f1eb;
+  /* Ce qui se detache de son conteneur (option choisie) : en clair une
+     ombre suffit, en sombre il faut une surface plus claire. */
+  --color-surface-raised: #ffffff;
+  --color-highlight: #1f9d63;
+  --color-highlight-ring: rgb(31 157 99 / 25%);
+  --color-focus-halo: rgb(23 107 77 / 10%);
+  --color-backdrop: rgb(12 28 22 / 58%);
+  --color-surface-translucent: rgb(255 255 255 / 96%);
+  --color-switch-track: #cbd3cf;
+  --color-skeleton: #ecefed;
+  --color-skeleton-highlight: #f5f7f6;
+  --shadow-button: 0 0.15rem 0.4rem rgb(23 107 77 / 12%);
+  --shadow-bottom-nav: 0 -0.35rem 1.5rem rgb(18 55 42 / 7%);
+
   --content-max-width: 70rem;
   --content-max-width-wide: 84rem;
   --content-max-width-narrow: 46rem;
   --font-ui:
     -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+}
+
+:root {
+  color-scheme: light;
   font-family: var(--font-ui);
   color: var(--color-text);
   background: var(--color-background);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+}
+
+/* ==========================================================================
+   Theme sombre - pose par src/theme.ts (data-theme="dark"), qui resout aussi
+   le choix « Systeme ». Le clair reste le defaut : en boutique, en plein
+   jour, il se lit mieux. Meme teinte verte que le clair ; le vert
+   s'eclaircit pour garder son contraste, et le texte pose dessus devient
+   sombre (--color-on-primary). Les ombres s'effacent : sur fond sombre, ce
+   sont les bordures qui separent les surfaces.
+   ========================================================================== */
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-background: #0f1512;
+  --color-surface: #161e1a;
+  --color-surface-muted: #1d2722;
+  --color-surface-chrome: #121a16;
+  --color-surface-subtle: #19221d;
+  --color-surface-accent: #173024;
+  --color-text: #e6ece8;
+  --color-text-muted: #9aaba1;
+  --color-primary: #5ccf9a;
+  --color-primary-hover: #7fdcb0;
+  --color-border: #2a3530;
+  --color-border-strong: #3a4842;
+  --shadow-card: none;
+  --shadow-popover: 0 0.6rem 1.5rem rgb(0 0 0 / 45%);
+
+  --color-danger: #ff8a80;
+  --color-danger-surface: #3a1a17;
+  --color-danger-border: #6b2f29;
+  --color-warning: #f0b465;
+  --color-warning-surface: #33260f;
+  --color-warning-border: #6a4f1c;
+  --color-success-surface: #173627;
+  --color-success-border: #2b5c43;
+  --color-info-surface: #1d2722;
+
+  --color-on-primary: #0b1f16;
+  --color-on-danger: #2a0d0a;
+  --color-text-secondary: #c3cec8;
+  --color-text-soft: #a9b8b0;
+  --color-text-disabled: #7d8d85;
+  --color-text-placeholder: #7f8f87;
+  --color-text-positive: #8fd3b2;
+  --color-text-total: #d4f5e4;
+  --color-danger-hover: #ffa89f;
+  --color-danger-text-soft: #f2b1aa;
+  --color-warning-surface-subtle: #231c10;
+  --color-divider: #232d28;
+  --color-border-emphasis: #46574f;
+  --color-border-hover: #5f7a6e;
+  --color-surface-accent-hover: #1f3a2d;
+  --color-surface-raised: #26322c;
+  --color-highlight: #3fbf85;
+  --color-highlight-ring: rgb(63 191 133 / 30%);
+  --color-focus-halo: rgb(92 207 154 / 18%);
+  --color-backdrop: rgb(0 0 0 / 65%);
+  --color-surface-translucent: rgb(18 26 22 / 96%);
+  --color-switch-track: #3a4842;
+  --color-skeleton: #1d2722;
+  --color-skeleton-highlight: #26322c;
+  --shadow-button: none;
+  --shadow-bottom-nav: 0 -0.35rem 1.5rem rgb(0 0 0 / 35%);
+}
+
+/* Le papier garde sa lecture claire, y compris le schema des controles
+   natifs (barres de defilement, cases) qu'il pourrait contenir. */
+.receipt,
+.z-report {
+  color-scheme: light;
+  color: var(--color-text);
 }
 
 * {
@@ -255,14 +372,14 @@ strong {
   display: grid;
   gap: 0.3rem;
   padding: 1rem 1.1rem;
-  border: 1px solid #c9ddd3;
+  border: 1px solid var(--color-success-border);
   border-radius: var(--radius-control);
   background: var(--color-surface-accent);
   color: var(--color-text-muted);
 }
 
 .opening-review strong {
-  color: #17211c;
+  color: var(--color-text);
   font-size: var(--text-card-title);
 }
 
@@ -277,7 +394,7 @@ strong {
 
 .field > label,
 .field > .field-label {
-  color: #3d4a43;
+  color: var(--color-text-secondary);
   font-size: var(--text-caption);
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -322,11 +439,11 @@ strong {
   outline: 0;
   border-color: var(--color-primary);
   background: var(--color-surface);
-  box-shadow: 0 0 0 3px rgb(23 107 77 / 10%);
+  box-shadow: 0 0 0 3px var(--color-focus-halo);
 }
 
 input::placeholder {
-  color: #7b8580;
+  color: var(--color-text-placeholder);
   opacity: 1;
 }
 
@@ -336,8 +453,8 @@ input::placeholder {
 
 .field input:disabled,
 .field select:disabled {
-  background: #edf1ef;
-  color: #74837c;
+  background: var(--color-surface-muted);
+  color: var(--color-text-disabled);
 }
 
 /* Validation de champ : au plus pres du controle, jamais en toast. */
@@ -427,8 +544,8 @@ input::placeholder {
 
 .button-primary {
   background: var(--color-primary);
-  color: #fff;
-  box-shadow: 0 0.15rem 0.4rem rgb(23 107 77 / 12%);
+  color: var(--color-on-primary);
+  box-shadow: var(--shadow-button);
 }
 
 .button-primary:hover:not(:disabled) {
@@ -457,11 +574,11 @@ input::placeholder {
 
 .button-destructive {
   background: var(--color-danger);
-  color: #fff;
+  color: var(--color-on-danger);
 }
 
 .button-destructive:hover:not(:disabled) {
-  background: #83201a;
+  background: var(--color-danger-hover);
 }
 
 .button:active:not(:disabled) {
@@ -563,7 +680,7 @@ input::placeholder {
 
 .icon-button-danger:hover:not(:disabled),
 .icon-button-danger:focus-visible {
-  background: #feecea;
+  background: var(--color-danger-surface);
   color: var(--color-danger);
 }
 
@@ -695,7 +812,7 @@ input::placeholder {
 
 .app-navigation-session-action:hover {
   background: var(--color-danger-surface);
-  color: #75403a;
+  color: var(--color-danger-text-soft);
 }
 
 .user-menu {
@@ -826,6 +943,22 @@ input::placeholder {
 .session-menu-item:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+.session-menu-setting {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
+.session-menu-setting > span {
+  color: var(--color-text-muted);
+  font-size: var(--text-eyebrow);
+  font-weight: 600;
+}
+
+.session-menu-setting .segmented-control {
+  display: flex;
 }
 
 .session-menu-separator {
@@ -1096,7 +1229,7 @@ input::placeholder {
 
 .badge-neutral {
   background: var(--color-surface-muted);
-  color: #526159;
+  color: var(--color-text-soft);
 }
 
 .badge-success {
@@ -1110,7 +1243,7 @@ input::placeholder {
 }
 
 .badge-danger {
-  background: #feecea;
+  background: var(--color-danger-surface);
   color: var(--color-danger);
 }
 
@@ -1201,7 +1334,7 @@ input::placeholder {
 
 .error-state p {
   margin: 0;
-  color: #6f3b35;
+  color: var(--color-danger-text-soft);
   font-size: var(--text-secondary);
 }
 
@@ -1256,7 +1389,7 @@ input::placeholder {
   display: block;
   height: 1rem;
   border-radius: var(--radius-sm);
-  background: linear-gradient(90deg, #ecefed 25%, #f5f7f6 50%, #ecefed 75%);
+  background: linear-gradient(90deg, var(--color-skeleton) 25%, var(--color-skeleton-highlight) 50%, var(--color-skeleton) 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.4s ease-in-out infinite;
 }
@@ -1326,14 +1459,14 @@ a.list-row:focus-visible {
 }
 
 a.list-row:active {
-  background: #eef2f0;
+  background: var(--color-surface-muted);
 }
 
 .list-row-highlighted,
 .list-row-highlighted:hover {
-  border-color: #1f9d63;
+  border-color: var(--color-highlight);
   background: var(--color-surface-accent);
-  box-shadow: 0 0 0 2px rgb(31 157 99 / 25%);
+  box-shadow: 0 0 0 2px var(--color-highlight-ring);
 }
 
 .list-row-leading {
@@ -1383,7 +1516,7 @@ a.list-row:active {
 
 .list-row-warning {
   border-color: var(--color-warning-border);
-  background: #fffdf8;
+  background: var(--color-warning-surface-subtle);
 }
 
 /* ==========================================================================
@@ -1582,7 +1715,7 @@ a.list-row:active {
 .closing-summary-opening,
 .closing-result-summary > div:not(.closing-summary-kpi) {
   grid-column: 1 / -1;
-  border-bottom: 1px solid #edf1ef;
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .closing-summary > .closing-summary-opening {
@@ -1626,7 +1759,7 @@ a.list-row:active {
   outline: 0;
   border-color: var(--color-primary);
   background: var(--color-surface);
-  box-shadow: 0 0 0 3px rgb(23 107 77 / 10%);
+  box-shadow: 0 0 0 3px var(--color-focus-halo);
 }
 
 .counted-cash-field small {
@@ -1731,7 +1864,7 @@ a.list-row:active {
 }
 
 .cash-difference-balanced dd {
-  color: #36594c;
+  color: var(--color-text-positive);
 }
 
 .closing-result-actions {
@@ -1775,7 +1908,7 @@ a.list-row:active {
 }
 
 .report-identity strong {
-  color: #17211c;
+  color: var(--color-text);
   font-size: var(--text-amount-sm);
 }
 
@@ -1974,8 +2107,8 @@ a.list-row:active {
 .list-pagination-button-active:hover:not(:disabled) {
   border-color: var(--color-primary);
   background: var(--color-primary);
-  color: #fff;
-  box-shadow: 0 0.15rem 0.4rem rgb(23 107 77 / 14%);
+  color: var(--color-on-primary);
+  box-shadow: var(--shadow-button);
 }
 
 .list-pagination-button:disabled {
@@ -2017,7 +2150,7 @@ a.list-row:active {
   justify-content: space-between;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-1);
-  border-bottom: 1px solid #edf1ef;
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .sale-detail-items li > div {
@@ -2146,7 +2279,7 @@ a.list-row:active {
   height: 1.4rem;
   flex: 0 0 auto;
   border-radius: 999px;
-  background: #cbd3cf;
+  background: var(--color-switch-track);
   transition: background-color 120ms ease;
 }
 
@@ -2582,7 +2715,7 @@ a.list-row:active {
 .return-detail-receipt .return-detail-items li {
   gap: 0.35rem;
   padding: var(--space-4) 0;
-  border-bottom: 1px solid #edf1ef;
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .return-detail-receipt .return-detail-items small {
@@ -2759,13 +2892,13 @@ a.list-row:active {
 }
 
 .network-status-offline {
-  background: #fdf1de;
-  color: #8a4b0b;
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
 }
 
 .network-status-attention {
-  background: #fdf1de;
-  color: #8a4b0b;
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
 }
 
 /* Le panier passe devant : une fois la vente commencee, c'est lui que le
@@ -2837,7 +2970,7 @@ a.list-row:active {
 .product-search-field:focus-within {
   border-color: var(--color-primary);
   background: var(--color-surface);
-  box-shadow: 0 0 0 3px rgb(23 107 77 / 10%);
+  box-shadow: 0 0 0 3px var(--color-focus-halo);
 }
 
 .product-search input {
@@ -2891,7 +3024,7 @@ a.list-row:active {
   gap: var(--space-4);
   min-height: 4.5rem;
   padding: 0.8rem 1rem;
-  border: 1px solid #e1e8e4;
+  border: 1px solid var(--color-divider);
   border-radius: var(--radius-control);
   background: var(--color-surface-subtle);
   color: inherit;
@@ -2905,14 +3038,14 @@ a.list-row:active {
 }
 
 .product-result:hover:not(:disabled) {
-  border-color: #73988a;
-  background: #f1f8f4;
+  border-color: var(--color-border-hover);
+  background: var(--color-surface-accent);
 }
 
 .product-result-highlighted:not(:disabled) {
-  border-color: #1f9d63;
-  background: #f1f8f4;
-  box-shadow: 0 0 0 2px rgba(31, 157, 99, 0.25);
+  border-color: var(--color-highlight);
+  background: var(--color-surface-accent);
+  box-shadow: 0 0 0 2px var(--color-highlight-ring);
 }
 
 .product-result:disabled {
@@ -3449,7 +3582,7 @@ a.list-row:active {
 }
 
 .quantity-step:hover:not(:disabled) {
-  background: #e5f1eb;
+  background: var(--color-surface-accent-hover);
 }
 
 .quantity-step svg {
@@ -3458,7 +3591,7 @@ a.list-row:active {
 }
 
 .quantity-step:disabled {
-  color: #9baea5;
+  color: var(--color-text-disabled);
   cursor: not-allowed;
 }
 
@@ -3470,8 +3603,8 @@ a.list-row:active {
   border: 0;
   border-inline: 1px solid var(--color-border);
   border-radius: 0;
-  background: #fff;
-  color: #17211c;
+  background: var(--color-surface);
+  color: var(--color-text);
   cursor: pointer;
   font: inherit;
   font-size: var(--text-secondary);
@@ -3480,7 +3613,7 @@ a.list-row:active {
 
 .quantity-control .quantity-value:disabled {
   cursor: not-allowed;
-  color: #74837c;
+  color: var(--color-text-disabled);
 }
 
 .quantity-input-wrap {
@@ -3507,10 +3640,10 @@ a.list-row:active {
   min-height: 0;
   padding: 0 0.45rem;
   border: 0;
-  border-inline: 1px solid #7c9b8e;
+  border-inline: 1px solid var(--color-border-hover);
   border-radius: 0;
-  background: #fff;
-  color: #17211c;
+  background: var(--color-surface);
+  color: var(--color-text);
   font-size: var(--text-secondary);
   font-weight: 800;
   text-align: center;
@@ -3539,7 +3672,7 @@ a.list-row:active {
 }
 
 .icon-button:hover {
-  background: #feecea;
+  background: var(--color-danger-surface);
 }
 
 /* Total et ENCAISSER cote a cote : la colonne panier est desormais assez
@@ -3632,7 +3765,7 @@ a.list-row:active {
    lui et le bouton, il peut prendre toute la place que son importance
    justifie. Ecart assume, pas oublie. */
 .cart-summary strong {
-  color: #12372a;
+  color: var(--color-text-total);
   font-size: 2rem;
   line-height: 1.15;
 }
@@ -3658,7 +3791,7 @@ a.list-row:active {
   display: grid;
   place-items: center;
   padding: var(--space-4);
-  background: rgb(12 28 22 / 58%);
+  background: var(--color-backdrop);
   backdrop-filter: blur(3px);
 }
 
@@ -3721,7 +3854,7 @@ a.list-row:active {
 
 .dialog-close {
   background: var(--color-surface-muted);
-  color: #36594c;
+  color: var(--color-text-positive);
 }
 
 /* Corps et pied partagent la meme respiration sur toutes les modales. */
@@ -3825,7 +3958,7 @@ a.list-row:active {
   padding: 1rem 1.15rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  background: #fff;
+  background: var(--color-surface);
   color: inherit;
   cursor: pointer;
   font: inherit;
@@ -3838,14 +3971,14 @@ a.list-row:active {
 
 .payment-method-card:hover,
 .payment-method-card:focus-visible {
-  border-color: #7c9b8e;
+  border-color: var(--color-border-hover);
   background: var(--color-surface-subtle);
-  box-shadow: 0 0 0 3px rgba(31, 107, 77, 0.08);
+  box-shadow: 0 0 0 3px var(--color-focus-halo);
 }
 
 .payment-method-card-last-used {
-  border-color: #a8bdb4;
-  box-shadow: inset 3px 0 #1f6b4d;
+  border-color: var(--color-border-emphasis);
+  box-shadow: inset 3px 0 var(--color-primary);
 }
 
 .payment-method-card strong {
@@ -3866,7 +3999,7 @@ a.list-row:active {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface-muted);
-  color: #526159;
+  color: var(--color-text-soft);
   font-size: var(--text-caption);
   font-weight: 700;
 }
@@ -3882,7 +4015,7 @@ a.list-row:active {
 }
 
 .payment-method-arrow {
-  color: #36594c;
+  color: var(--color-text-positive);
   font-size: 1.35rem;
   font-weight: 800;
 }
@@ -3912,7 +4045,7 @@ a.list-row:active {
 .payment-total {
   border: 1px solid var(--color-border);
   background: var(--color-surface-accent);
-  color: #17211c;
+  color: var(--color-text);
 }
 
 .payment-total strong {
@@ -3968,7 +4101,7 @@ a.list-row:active {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: var(--color-surface-subtle);
-  color: #17211c;
+  color: var(--color-text);
 }
 
 .payment-status span {
@@ -3984,7 +4117,7 @@ a.list-row:active {
 
 .payment-status-change,
 .payment-status-exact {
-  border-color: #a8bdb4;
+  border-color: var(--color-border-emphasis);
   background: var(--color-surface-accent);
 }
 
@@ -4013,7 +4146,7 @@ a.list-row:active {
   min-height: var(--control-md);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--color-surface);
   color: inherit;
   font: inherit;
   font-size: var(--text-body);
@@ -4023,8 +4156,8 @@ a.list-row:active {
 }
 
 .numeric-keypad-key:hover:not(:disabled) {
-  border-color: #a8b6af;
-  background: #eef1ef;
+  border-color: var(--color-border-emphasis);
+  background: var(--color-surface-muted);
 }
 
 .numeric-keypad-key:active:not(:disabled) {
@@ -4032,8 +4165,8 @@ a.list-row:active {
 }
 
 .numeric-keypad-key:focus-visible {
-  border-color: #7c9b8e;
-  box-shadow: 0 0 0 3px rgba(31, 107, 77, 0.08);
+  border-color: var(--color-border-hover);
+  box-shadow: 0 0 0 3px var(--color-focus-halo);
 }
 
 .numeric-keypad-key:disabled {
@@ -4043,8 +4176,8 @@ a.list-row:active {
 
 .numeric-keypad-clear,
 .numeric-keypad-backspace {
-  background: #ecefed;
-  color: #45534c;
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
 }
 
 /* Meme critere que CashPaymentModal (TOUCH_KEYPAD_QUERY). */
@@ -4102,12 +4235,12 @@ a.list-row:active {
 .change-preview {
   border: 1px solid var(--color-border);
   background: var(--color-surface-accent);
-  color: #17211c;
+  color: var(--color-text);
 }
 
 .change-preview-pending {
   background: var(--color-surface-accent);
-  color: #17211c;
+  color: var(--color-text);
 }
 
 .change-preview strong {
@@ -4138,7 +4271,7 @@ a.list-row:active {
   flex: 0 0 auto;
   place-items: center;
   border-radius: 999px;
-  background: #e4f1ea;
+  background: var(--color-success-surface);
   color: var(--color-primary);
   font-size: 1.5rem;
   font-weight: 800;
@@ -4148,8 +4281,8 @@ a.list-row:active {
   margin: var(--space-2) 0 0;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-control);
-  background: #fdf1de;
-  color: #8a4b0b;
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
   font-size: var(--text-secondary);
   font-weight: 600;
 }
@@ -4167,7 +4300,7 @@ a.list-row:active {
   justify-content: space-between;
   gap: var(--space-4);
   padding: 0.85rem 0;
-  border-bottom: 1px solid #e1e8e4;
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .sale-amounts dt {
@@ -4266,8 +4399,8 @@ a.list-row:active {
       max(1rem, env(safe-area-inset-left));
     border-top: 1px solid var(--color-border);
     border-right: 0;
-    background: rgb(255 255 255 / 96%);
-    box-shadow: 0 -0.35rem 1.5rem rgb(18 55 42 / 7%);
+    background: var(--color-surface-translucent);
+    box-shadow: var(--shadow-bottom-nav);
   }
 
   /* En barre basse le lien passe en rangee icone + libelle : sans consigne
@@ -4625,7 +4758,7 @@ a.list-row:active {
 }
 
 .segmented-control-option-selected {
-  background: var(--color-surface);
+  background: var(--color-surface-raised);
   color: var(--color-primary);
   box-shadow: var(--shadow-card);
 }

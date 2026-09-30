@@ -15,7 +15,7 @@ export function LogoMark({
   tone?: "brand" | "mono"
   className?: string
 }) {
-  const tile = tone === "brand" ? "var(--color-primary)" : "currentColor"
+  const tile = tone === "brand" ? "var(--color-brand)" : "currentColor"
   const mark = tone === "brand" ? "#ffffff" : "var(--logo-mono-cutout, #ffffff)"
   return (
     <svg
