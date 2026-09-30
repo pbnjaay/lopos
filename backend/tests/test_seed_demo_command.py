@@ -40,3 +40,6 @@ def test_seed_demo_is_idempotent_and_preserves_existing_admin_password() -> None
         movement_type=InventoryMovement.Type.STOCK_IN
     ).count() == 5
     assert CashSession.objects.filter(status=CashSession.Status.OPEN).count() == 1
+    # Le stock de démo entre au prix d'achat : valorisation et marges ont des chiffres.
+    assert not Stock.objects.filter(average_unit_cost__isnull=True).exists()
+    assert Stock.objects.get(product__name="Coca 50cl").average_unit_cost == 350
