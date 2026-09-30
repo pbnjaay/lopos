@@ -231,3 +231,253 @@ def test_reverse_forgets_only_what_it_initialized(store: Store, product: Product
     assert initialized.average_unit_cost is None
     assert set_by_hand.average_unit_cost == Decimal("4000.0000")
     assert list(StockCostChange.objects.all()) == [manual_change]
+
+
+# --- Réception et coût moyen pondéré ---------------------------------------
+
+
+def _receive(store: Store, product: Product, quantity, unit_cost=None, **kwargs):
+    from apps.inventory.services import receive_stock
+
+    return receive_stock(
+        store=store, product=product, quantity=quantity, unit_cost=unit_cost, **kwargs
+    )
+
+
+def test_first_receipt_sets_the_cost(store: Store, product: Product) -> None:
+    result = _receive(store, product, 10, Decimal("300"))
+
+    assert result.stock.average_unit_cost == Decimal("300.0000")
+    assert result.movement.unit_cost == Decimal("300.0000")
+    assert result.unit_cost == Decimal("300.0000")
+
+
+def test_receipts_at_different_costs_give_the_weighted_average(
+    store: Store, product: Product
+) -> None:
+    _receive(store, product, 10, Decimal("300"))
+    result = _receive(store, product, 20, Decimal("350"))
+
+    stock = Stock.objects.get(store=store, product=product)
+    assert stock.quantity == Decimal("30.000")
+    # 10 × 300 + 20 × 350 = 10 000 ; 10 000 / 30 = 333,3333… arrondi à 4 décimales.
+    assert stock.average_unit_cost == Decimal("333.3333")
+    assert result.movement.unit_cost == Decimal("350.0000")
+
+
+def test_average_is_rounded_half_up_to_four_decimals(store: Store, product: Product) -> None:
+    _receive(store, product, 1, Decimal("0"))
+    _receive(store, product, 2, Decimal("1"))
+
+    # 2 / 3 = 0,66666… → 0,6667
+    assert Stock.objects.get(store=store, product=product).average_unit_cost == Decimal("0.6667")
+
+
+def test_weighed_products_average_decimal_quantities(store: Store) -> None:
+    rice = Product.objects.create(
+        name="Riz au kilo", selling_price=Decimal("600"), sale_unit=Product.SaleUnit.KG
+    )
+    _receive(store, rice, Decimal("2.500"), Decimal("400"))
+    _receive(store, rice, Decimal("7.500"), Decimal("480"))
+
+    # (2,5 × 400 + 7,5 × 480) / 10 = 460
+    assert Stock.objects.get(store=store, product=rice).average_unit_cost == Decimal("460.0000")
+
+
+def test_receipt_into_a_negative_stock_takes_the_lot_cost(store: Store, product: Product) -> None:
+    Stock.objects.create(
+        store=store, product=product, quantity=-2, average_unit_cost=Decimal("300")
+    )
+
+    _receive(store, product, 10, Decimal("350"))
+
+    stock = Stock.objects.get(store=store, product=product)
+    assert stock.quantity == Decimal("8.000")
+    assert stock.average_unit_cost == Decimal("350.0000")
+
+
+def test_receipt_into_an_unknown_cost_takes_the_lot_cost(store: Store, product: Product) -> None:
+    Stock.objects.create(store=store, product=product, quantity=5)
+
+    _receive(store, product, 10, Decimal("350"))
+
+    assert Stock.objects.get(store=store, product=product).average_unit_cost == Decimal("350.0000")
+
+
+def test_receipt_without_cost_falls_back_to_the_last_purchase_price(
+    store: Store, product: Product
+) -> None:
+    result = _receive(store, product, 10)
+
+    assert result.stock.average_unit_cost == Decimal("350.0000")
+    assert result.movement.unit_cost == Decimal("350.0000")
+
+
+@pytest.mark.parametrize("purchase_price", [None, Decimal("0.00")])
+def test_receipt_without_any_cost_leaves_the_average_unchanged(
+    store: Store, product: Product, purchase_price: Decimal | None
+) -> None:
+    Product.objects.filter(pk=product.pk).update(purchase_price=purchase_price)
+    product.refresh_from_db()
+    Stock.objects.create(
+        store=store, product=product, quantity=5, average_unit_cost=Decimal("300")
+    )
+
+    result = _receive(store, product, 10)
+
+    assert result.stock.quantity == Decimal("15.000")
+    assert result.stock.average_unit_cost == Decimal("300.0000")
+    assert result.movement.unit_cost is None
+    assert result.unit_cost is None
+
+
+def test_receipt_without_any_cost_keeps_an_unknown_cost_unknown(store: Store) -> None:
+    unpriced = Product.objects.create(name="Savon", selling_price=Decimal("250"))
+
+    result = _receive(store, unpriced, 10)
+
+    assert result.stock.average_unit_cost is None
+
+
+def test_receipt_cost_becomes_the_last_purchase_price(store: Store, product: Product) -> None:
+    updated_at = product.updated_at
+
+    _receive(store, product, 10, Decimal("365.50"))
+
+    product.refresh_from_db()
+    assert product.purchase_price == Decimal("365.50")
+    # Rien n'a changé pour le POS : le produit ne repart pas en synchronisation.
+    assert product.updated_at == updated_at
+
+
+def test_free_lot_counts_in_the_average_but_not_as_a_purchase_price(
+    store: Store, product: Product
+) -> None:
+    _receive(store, product, 10, Decimal("300"))
+    _receive(store, product, 10, Decimal("0"))
+
+    product.refresh_from_db()
+    assert Stock.objects.get(store=store, product=product).average_unit_cost == Decimal("150.0000")
+    assert product.purchase_price == Decimal("300.00")
+
+
+def test_receipt_records_its_author(store: Store, product: Product) -> None:
+    manager = User.objects.create_user(username="gerant")
+
+    result = _receive(store, product, 10, Decimal("300"), created_by=manager)
+
+    assert result.movement.created_by == manager
+
+
+@pytest.mark.parametrize("unit_cost", [Decimal("-1"), "abc", True, Decimal("1.00001"), "NaN"])
+def test_receipt_rejects_an_invalid_cost_without_touching_the_stock(
+    store: Store, product: Product, unit_cost
+) -> None:
+    from apps.inventory.exceptions import InvalidStockCost
+
+    Stock.objects.create(
+        store=store, product=product, quantity=5, average_unit_cost=Decimal("300")
+    )
+
+    with pytest.raises(InvalidStockCost):
+        _receive(store, product, 10, unit_cost)
+
+    stock = Stock.objects.get(store=store, product=product)
+    assert stock.quantity == Decimal("5.000")
+    assert stock.average_unit_cost == Decimal("300.0000")
+    assert not InventoryMovement.objects.exists()
+
+
+def test_costs_are_kept_per_store(store: Store, product: Product) -> None:
+    other_store = Store.objects.create(name="Boutique 2")
+
+    _receive(store, product, 10, Decimal("300"))
+    _receive(other_store, product, 10, Decimal("400"))
+
+    assert Stock.objects.get(store=store, product=product).average_unit_cost == Decimal("300.0000")
+    assert Stock.objects.get(store=other_store, product=product).average_unit_cost == Decimal(
+        "400.0000"
+    )
+
+
+# --- Ajustement d'inventaire -------------------------------------------------
+
+
+@pytest.mark.parametrize("counted", [15, 5])
+def test_adjustment_keeps_the_average_and_values_the_gap_at_it(
+    store: Store, product: Product, counted: int
+) -> None:
+    from apps.inventory.services import adjust_stock
+
+    manager = User.objects.create_user(username="gerant")
+    Stock.objects.create(
+        store=store, product=product, quantity=10, average_unit_cost=Decimal("333.3333")
+    )
+
+    result = adjust_stock(
+        store=store, product=product, counted_quantity=counted, created_by=manager
+    )
+
+    assert result.stock.average_unit_cost == Decimal("333.3333")
+    assert result.movement.unit_cost == Decimal("333.3333")
+    assert result.movement.created_by == manager
+
+
+def test_adjustment_of_an_unknown_cost_stays_unknown(store: Store, product: Product) -> None:
+    from apps.inventory.services import adjust_stock
+
+    Stock.objects.create(store=store, product=product, quantity=10)
+
+    result = adjust_stock(store=store, product=product, counted_quantity=12)
+
+    assert result.stock.average_unit_cost is None
+    assert result.movement.unit_cost is None
+
+
+# --- API d'entrée de stock ---------------------------------------------------
+
+
+@pytest.fixture
+def api_client():
+    from rest_framework.test import APIClient
+
+    client = APIClient()
+    client.force_authenticate(User.objects.create_user(username="gerant"))
+    return client
+
+
+def _stock_in(api_client, store: Store, product: Product, **extra):
+    from django.urls import reverse
+
+    return api_client.post(
+        reverse("inventory-stock-in"),
+        {"store_id": str(store.pk), "product_id": str(product.pk), "quantity": "10", **extra},
+        format="json",
+    )
+
+
+def test_api_stock_in_applies_the_given_cost(api_client, store: Store, product: Product) -> None:
+    response = _stock_in(api_client, store, product, unit_cost="320.5")
+
+    assert response.status_code == 201
+    stock = Stock.objects.get(store=store, product=product)
+    assert stock.average_unit_cost == Decimal("320.5000")
+    movement = InventoryMovement.objects.get()
+    assert movement.unit_cost == Decimal("320.5000")
+    assert movement.created_by.username == "gerant"
+
+
+def test_api_stock_in_without_cost_uses_the_last_purchase_price(
+    api_client, store: Store, product: Product
+) -> None:
+    response = _stock_in(api_client, store, product)
+
+    assert response.status_code == 201
+    assert Stock.objects.get(store=store, product=product).average_unit_cost == Decimal("350.0000")
+
+
+def test_api_stock_in_rejects_a_negative_cost(api_client, store: Store, product: Product) -> None:
+    response = _stock_in(api_client, store, product, unit_cost="-1")
+
+    assert response.status_code == 400
+    assert not Stock.objects.exists()

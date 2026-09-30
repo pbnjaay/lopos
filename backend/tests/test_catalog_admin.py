@@ -81,6 +81,26 @@ def test_create_product_with_initial_stock(admin_client, store: Store) -> None:
     movement = InventoryMovement.objects.get(product=product, store=store)
     assert movement.movement_type == InventoryMovement.Type.STOCK_IN
     assert movement.quantity == 24
+    # Le stock initial entre au prix d'achat saisi, par l'utilisateur connecté.
+    assert stock.average_unit_cost == Decimal("350.0000")
+    assert movement.unit_cost == Decimal("350.0000")
+    assert movement.created_by.username == "manager"
+
+
+@pytest.mark.parametrize("purchase_price", ["", "0"])
+def test_create_product_with_initial_stock_requires_a_purchase_price(
+    admin_client, store: Store, purchase_price: str
+) -> None:
+    response = admin_client.post(
+        reverse("admin:catalog_product_add"),
+        _product_post_data(
+            initial_store=str(store.pk), initial_quantity="24", purchase_price=purchase_price
+        ),
+    )
+
+    assert response.status_code == 200
+    assert "Renseignez le prix d&#x27;achat" in response.content.decode()
+    assert not Product.objects.filter(barcode="5449000000996").exists()
 
 
 def test_create_product_with_quantity_but_no_store_is_rejected(admin_client) -> None:
@@ -141,9 +161,11 @@ def test_product_change_page_shows_stocks_overview(admin_client, product: Produc
 
 
 def test_receive_stock_view_adds_stock(admin_client, product: Product, store: Store) -> None:
+    Stock.objects.filter(product=product, store=store).update(average_unit_cost=Decimal("300"))
+
     response = admin_client.post(
         reverse("admin:catalog_product_receive_stock", args=[product.pk]),
-        {"store": str(store.pk), "quantity": "12"},
+        {"store": str(store.pk), "quantity": "12", "unit_cost": "360"},
         follow=True,
     )
 
@@ -151,11 +173,58 @@ def test_receive_stock_view_adds_stock(admin_client, product: Product, store: St
 
     stock = Stock.objects.get(product=product, store=store)
     assert stock.quantity == 36
+    # (24 × 300 + 12 × 360) / 36 = 320
+    assert stock.average_unit_cost == Decimal("320.0000")
+    assert "coût moyen : 320 FCFA" in response.content.decode()
 
     movement = InventoryMovement.objects.get(
         product=product, store=store, movement_type=InventoryMovement.Type.STOCK_IN
     )
     assert movement.quantity == 12
+    assert movement.unit_cost == Decimal("360.0000")
+    assert movement.created_by.username == "manager"
+    product.refresh_from_db()
+    assert product.purchase_price == Decimal("360.00")
+
+
+def test_receive_stock_view_prefills_the_last_purchase_price(
+    admin_client, product: Product
+) -> None:
+    response = admin_client.get(
+        reverse("admin:catalog_product_receive_stock", args=[product.pk])
+    )
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert 'name="unit_cost"' in content
+    assert 'value="350.00"' in content
+    assert "Coût moyen" in content
+
+
+def test_receive_stock_view_requires_a_unit_cost(
+    admin_client, product: Product, store: Store
+) -> None:
+    response = admin_client.post(
+        reverse("admin:catalog_product_receive_stock", args=[product.pk]),
+        {"store": str(store.pk), "quantity": "12", "unit_cost": ""},
+    )
+
+    assert response.status_code == 200
+    assert Stock.objects.get(product=product, store=store).quantity == 24
+    assert not InventoryMovement.objects.filter(product=product).exists()
+
+
+def test_receive_stock_view_rejects_a_negative_unit_cost(
+    admin_client, product: Product, store: Store
+) -> None:
+    response = admin_client.post(
+        reverse("admin:catalog_product_receive_stock", args=[product.pk]),
+        {"store": str(store.pk), "quantity": "12", "unit_cost": "-5"},
+    )
+
+    assert response.status_code == 200
+    assert Stock.objects.get(product=product, store=store).quantity == 24
+    assert not InventoryMovement.objects.filter(product=product).exists()
 
 
 def test_receive_stock_view_rejects_non_positive_quantity(
@@ -163,7 +232,7 @@ def test_receive_stock_view_rejects_non_positive_quantity(
 ) -> None:
     response = admin_client.post(
         reverse("admin:catalog_product_receive_stock", args=[product.pk]),
-        {"store": str(store.pk), "quantity": "0"},
+        {"store": str(store.pk), "quantity": "0", "unit_cost": "350"},
     )
 
     assert response.status_code == 200
@@ -180,7 +249,7 @@ def test_receive_stock_view_requires_change_permission(client, product: Product,
 
     response = client.post(
         reverse("admin:catalog_product_receive_stock", args=[product.pk]),
-        {"store": str(store.pk), "quantity": "12"},
+        {"store": str(store.pk), "quantity": "12", "unit_cost": "350"},
     )
 
     assert response.status_code == 403
@@ -204,6 +273,7 @@ def test_adjust_stock_view_decreases_quantity(admin_client, product: Product, st
         product=product, store=store, movement_type=InventoryMovement.Type.ADJUSTMENT
     )
     assert movement.quantity == -2
+    assert movement.created_by.username == "manager"
 
 
 def test_adjust_stock_view_with_same_quantity_creates_no_movement(

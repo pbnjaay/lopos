@@ -14,7 +14,8 @@ from unfold.widgets import (
     UnfoldAdminSelectWidget,
 )
 
-from apps.inventory.exceptions import InvalidStockQuantity
+from apps.dashboard.formatting import format_fcfa
+from apps.inventory.exceptions import InvalidStockCost, InvalidStockQuantity
 from apps.inventory.models import Stock
 from apps.inventory.services import adjust_stock, receive_stock
 from apps.observability import posthog_client
@@ -22,6 +23,10 @@ from apps.stores.models import Store
 
 from .models import Product
 from .services import import_products_from_csv
+
+
+def _format_cost(cost: Decimal | None) -> str:
+    return "inconnu" if cost is None else format_fcfa(cost)
 
 
 class ProductAdminForm(forms.ModelForm):
@@ -63,6 +68,13 @@ class ProductAdminForm(forms.ModelForm):
                 "initial_store",
                 "Sélectionnez un magasin pour enregistrer le stock initial.",
             )
+        # Un stock initial entre au coût d'achat : sans lui, sa valeur et la
+        # marge de ses ventes resteraient inconnues. 0 compte comme inconnu.
+        if quantity > 0 and not cleaned_data.get("purchase_price"):
+            self.add_error(
+                "purchase_price",
+                "Renseignez le prix d'achat pour valoriser le stock initial.",
+            )
 
         return cleaned_data
 
@@ -80,6 +92,17 @@ class ReceiveStockForm(forms.Form):
         min_value=Decimal("0.001"), decimal_places=3,
         label="Quantité reçue",
         widget=forms.NumberInput(attrs={"step": "0.001", "inputmode": "decimal"}),
+    )
+    unit_cost = forms.DecimalField(
+        min_value=0,
+        max_digits=14,
+        decimal_places=4,
+        label="Coût d'achat unitaire (FCFA)",
+        help_text=(
+            "Prix payé au fournisseur pour une unité (ou un kg), pré-rempli avec "
+            "le dernier prix d'achat. Il met à jour le coût moyen du stock."
+        ),
+        widget=forms.NumberInput(attrs={"step": "any", "inputmode": "decimal"}),
     )
 
 
@@ -179,7 +202,13 @@ class ProductAdmin(ModelAdmin):
         with transaction.atomic():
             super().save_model(request, obj, form, change)
             if quantity > 0:
-                receive_stock(store=store, product=obj, quantity=quantity)
+                receive_stock(
+                    store=store,
+                    product=obj,
+                    quantity=quantity,
+                    unit_cost=obj.purchase_price,
+                    created_by=request.user,
+                )
 
         posthog_client.capture(
             str(request.user.pk),
@@ -329,10 +358,16 @@ class ProductAdmin(ModelAdmin):
                 quantity = form.cleaned_data["quantity"]
                 try:
                     result = receive_stock(
-                        store=store, product=product, quantity=quantity
+                        store=store,
+                        product=product,
+                        quantity=quantity,
+                        unit_cost=form.cleaned_data["unit_cost"],
+                        created_by=request.user,
                     )
                 except InvalidStockQuantity as exc:
                     form.add_error("quantity", str(exc))
+                except InvalidStockCost as exc:
+                    form.add_error("unit_cost", str(exc))
                 else:
                     posthog_client.capture(
                         str(request.user.pk),
@@ -346,14 +381,15 @@ class ProductAdmin(ModelAdmin):
                     self.message_user(
                         request,
                         f"{quantity} unités de {product.name} ajoutées au stock de "
-                        f"{store.name}. Nouveau stock : {result.stock.quantity}.",
+                        f"{store.name}. Nouveau stock : {result.stock.quantity}, "
+                        f"coût moyen : {_format_cost(result.stock.average_unit_cost)}.",
                         level=messages.SUCCESS,
                     )
                     return redirect(
                         reverse("admin:catalog_product_change", args=[product.pk])
                     )
         else:
-            form = ReceiveStockForm()
+            form = ReceiveStockForm(initial={"unit_cost": product.purchase_price})
 
         return self._render_stock_action_page(
             request,
@@ -379,6 +415,7 @@ class ProductAdmin(ModelAdmin):
                         store=store,
                         product=product,
                         counted_quantity=counted_quantity,
+                        created_by=request.user,
                     )
                 except InvalidStockQuantity as exc:
                     form.add_error("counted_quantity", str(exc))
