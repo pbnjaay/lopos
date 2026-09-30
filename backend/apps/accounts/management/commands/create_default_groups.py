@@ -18,6 +18,10 @@ MANAGER_PERMISSIONS = [
     ("auth", "user", ("add", "change", "view")),
     ("inventory", "stock", ("view",)),
     ("inventory", "inventorymovement", ("view",)),
+    # Valorisation : coût d'achat et marges visibles ; « set_cost » définit
+    # ou corrige un coût moyen, toujours tracé dans le journal des coûts.
+    ("inventory", "stockvaluation", ("view", "set_cost")),
+    ("inventory", "stockcostchange", ("view",)),
     ("cash", "cashsession", ("view",)),
     ("sales", "sale", ("view",)),
     ("sales", "saleitem", ("view",)),

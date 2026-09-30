@@ -71,3 +71,13 @@ def test_command_is_idempotent_and_stays_in_sync() -> None:
     codenames = set(manager_group.permissions.values_list("codename", flat=True))
     assert "add_group" not in codenames
     assert "view_product" in codenames
+
+
+def test_manager_group_can_value_stock_and_set_costs_but_never_rewrite_the_cost_log() -> None:
+    call_command("create_default_groups")
+    manager_group = Group.objects.get(name="Gérant")
+    codenames = set(manager_group.permissions.values_list("codename", flat=True))
+
+    assert {"view_stockvaluation", "set_cost_stockvaluation", "view_stockcostchange"} <= codenames
+    assert "change_stockcostchange" not in codenames
+    assert "delete_stockcostchange" not in codenames

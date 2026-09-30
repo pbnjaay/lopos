@@ -44,6 +44,9 @@ def annotate_stock_values(queryset: QuerySet[Stock]) -> QuerySet[Stock]:
     """Ajoute à chaque stock : `valued_quantity`, `cost_value`, `sale_value`,
     `potential_margin`. `cost_value` et `potential_margin` sont NULL quand le
     coût est inconnu — jamais 0."""
+    if "cost_value" in queryset.query.annotations:
+        # Déjà annoté (la liste de l'admin) : on le réutilise tel quel.
+        return queryset
     valued_quantity = Greatest(
         F("quantity"), Value(Decimal("0"), output_field=_QUANTITY_FIELD)
     )

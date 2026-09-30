@@ -1,0 +1,59 @@
+{% extends "admin/base_site.html" %}
+{% load i18n unfold %}
+
+{% block content %}
+<div id="content-main">
+    <div class="flex flex-col gap-6">
+        <div class="flex items-center gap-3">
+            <a href="{{ back_url }}" class="block h-[24px]" title="{% trans 'Retour à la valorisation' %}">
+                <span class="material-symbols-outlined">arrow_back</span>
+            </a>
+            <div>
+                <h1 class="font-semibold text-important text-xl">{% trans 'Définir le coût' %}</h1>
+                <p class="text-subtle text-sm">
+                    <strong>{{ stock.product.name }}</strong> · {{ stock.store.name }}
+                    · {% trans 'stock' %} {{ stock.quantity }}
+                    · {% trans 'coût moyen actuel' %} : {{ current_cost }}
+                </p>
+            </div>
+        </div>
+
+        <p class="text-sm text-base-600 dark:text-base-300">
+            {% if is_correction %}
+                {% trans "Corriger le coût change la valeur du stock sans qu'aucune marchandise ne bouge. La correction est enregistrée dans le journal des coûts, avec son motif." %}
+            {% else %}
+                {% trans "Ce stock n'a pas encore de coût d'achat : sa valeur et la marge de ses ventes sont inconnues. L'initialisation est enregistrée dans le journal des coûts." %}
+            {% endif %}
+            {% trans "Les ventes passées gardent leur coût." %}
+        </p>
+
+        <form method="post" class="flex flex-col gap-6">
+            {% csrf_token %}
+
+            <fieldset class="module relative">
+                {% include "unfold/helpers/inline_heading.html" with title="Coût d'achat" %}
+
+                {% if form.non_field_errors %}
+                    {% include "unfold/helpers/messages/error.html" with errors=form.non_field_errors %}
+                {% endif %}
+
+                <div class="border border-base-200 overflow-hidden rounded-default shadow-xs dark:border-base-800 p-4">
+                    {% for field in form %}
+                        {% include "unfold/helpers/field.html" %}
+                    {% endfor %}
+                </div>
+            </fieldset>
+
+            <div class="flex gap-3">
+                {% component "unfold/components/button.html" with submit=1 variant="primary" %}
+                    {% trans 'Enregistrer le coût' %}
+                {% endcomponent %}
+
+                {% component "unfold/components/button.html" with href=back_url variant="default" %}
+                    {% trans 'Retour' %}
+                {% endcomponent %}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

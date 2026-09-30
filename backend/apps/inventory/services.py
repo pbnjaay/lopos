@@ -7,7 +7,7 @@ from apps.catalog.models import Product
 from apps.stores.models import Store
 
 from .exceptions import InvalidStockCost, InvalidStockQuantity
-from .models import InventoryMovement, Stock
+from .models import InventoryMovement, Stock, StockCostChange
 
 # Précision du coût moyen : 333,3333 pour 10 000 / 30. L'arrondi (au plus
 # proche, moitié vers le haut) ne dérive que d'une fraction de FCFA.
@@ -205,3 +205,47 @@ def adjust_stock(
         previous_quantity=previous_quantity,
         delta=delta,
     )
+
+
+@transaction.atomic
+def set_stock_unit_cost(
+    *, stock_id, unit_cost, reason: str = "", created_by
+) -> StockCostChange | None:
+    """Définit à la main le coût moyen d'un stock, avec une trace d'audit.
+
+    - coût inconnu → initialisation (motif facultatif) ;
+    - coût connu → correction, motif obligatoire : elle change la valeur du
+      stock sans qu'aucune marchandise ne bouge.
+    Le coût doit être supérieur à 0 : un 0 saisi ici serait presque toujours
+    une erreur, et gonflerait la marge. Rien n'est écrit si le coût ne change
+    pas (renvoie None).
+    """
+    stock = Stock.objects.select_for_update().get(pk=stock_id)
+    cost = _validate_unit_cost(unit_cost)
+    if cost is None or cost <= 0:
+        raise InvalidStockCost("Le coût d’achat doit être supérieur à 0.")
+    reason = (reason or "").strip()
+
+    previous_cost = stock.average_unit_cost
+    if previous_cost == cost:
+        return None
+    if previous_cost is None:
+        source = StockCostChange.Source.INITIAL
+    else:
+        source = StockCostChange.Source.CORRECTION
+        if not reason:
+            raise InvalidStockCost("Indiquez le motif de la correction du coût.")
+
+    change = StockCostChange.objects.create(
+        store_id=stock.store_id,
+        product_id=stock.product_id,
+        source=source,
+        previous_cost=previous_cost,
+        new_cost=cost,
+        quantity_at_change=stock.quantity,
+        reason=reason,
+        created_by=created_by,
+    )
+    stock.average_unit_cost = cost
+    stock.save(update_fields=("average_unit_cost", "updated_at"))
+    return change

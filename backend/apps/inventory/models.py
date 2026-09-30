@@ -128,6 +128,17 @@ class InventoryMovement(models.Model):
         return f"{self.movement_type} {self.quantity:+} — {self.product}"
 
 
+class StockValuation(Stock):
+    """Le stock vu par sa valeur : même table, écran et permissions à part —
+    le coût d'achat et les marges ne sont pas pour tout le monde."""
+
+    class Meta:
+        proxy = True
+        verbose_name = "valorisation du stock"
+        verbose_name_plural = "valorisation du stock"
+        permissions = (("set_cost_stockvaluation", "Peut définir le coût d'un stock"),)
+
+
 class StockCostChange(models.Model):
     """Journal immuable des changements de coût moyen hors réception.
 
