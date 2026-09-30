@@ -1,6 +1,6 @@
 from django import template
 
-from apps.dashboard.formatting import format_fcfa
+from apps.dashboard.formatting import format_fcfa, format_quantity
 
 register = template.Library()
 
@@ -30,3 +30,9 @@ def uncovered_share(coverage_percent):
     « moins de 1 »."""
     share = 100 - coverage_percent
     return share if share > 0 else "moins de 1"
+
+
+@register.filter(name="quantity")
+def quantity(value, sale_unit=None):
+    """« 6 », « 18,25 kg » — jamais « 6,000 »."""
+    return format_quantity(value, sale_unit)

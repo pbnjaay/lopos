@@ -5,7 +5,7 @@
 <div id="content-main">
     <div class="flex flex-col gap-6">
         <div class="flex items-center gap-3">
-            <a href="{{ back_url }}" class="block h-[24px]" title="{% trans 'Retour à la fiche produit' %}">
+            <a href="{{ back_url }}" class="block h-6" title="{% trans 'Retour à la fiche produit' %}">
                 <span class="material-symbols-outlined">arrow_back</span>
             </a>
             <div>
@@ -30,7 +30,7 @@
                         {% for stock in stocks %}
                         <tr class="border-t border-base-200 dark:border-base-800">
                             <td class="px-3 py-2">{{ stock.store.name }}</td>
-                            <td class="px-3 py-2">{{ stock.quantity }}</td>
+                            <td class="px-3 py-2">{{ stock.quantity|quantity:product.sale_unit }}</td>
                             {% if can_view_stock_costs %}<td class="px-3 py-2">{% if stock.average_unit_cost is None %}<span class="text-subtle">{% trans 'Inconnu' %}</span>{% else %}{{ stock.average_unit_cost|fcfa }}{% endif %}</td>{% endif %}
                         </tr>
                         {% empty %}

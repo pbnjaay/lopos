@@ -1,18 +1,18 @@
 {% extends "admin/base_site.html" %}
-{% load i18n unfold %}
+{% load i18n unfold dashboard_extras %}
 
 {% block content %}
 <div id="content-main">
     <div class="flex flex-col gap-6">
         <div class="flex items-center gap-3">
-            <a href="{{ back_url }}" class="block h-[24px]" title="{% trans 'Retour à la valorisation' %}">
+            <a href="{{ back_url }}" class="block h-6" title="{% trans 'Retour à la valorisation' %}">
                 <span class="material-symbols-outlined">arrow_back</span>
             </a>
             <div>
                 <h1 class="font-semibold text-important text-xl">{% trans 'Définir le coût' %}</h1>
                 <p class="text-subtle text-sm">
                     <strong>{{ stock.product.name }}</strong> · {{ stock.store.name }}
-                    · {% trans 'stock' %} {{ stock.quantity }}
+                    · {% trans 'stock' %} {{ stock.quantity|quantity:stock.product.sale_unit }}
                     · {% trans 'coût moyen actuel' %} : {{ current_cost }}
                 </p>
             </div>

@@ -1,5 +1,7 @@
-from django.conf import settings
+import re
 from decimal import Decimal
+
+from django.conf import settings
 from django.contrib import admin
 from django.db.models import QuerySet
 from django.http import HttpRequest
@@ -7,7 +9,8 @@ from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin, TabularInline
 
-from apps.dashboard.formatting import format_fcfa
+from apps.dashboard.admin_columns import money_column, quantity_column, status_badge
+from apps.dashboard.formatting import format_fcfa, format_quantity
 from apps.dashboard.period import PERIOD_CHOICES, resolve_period_range
 
 from .models import Payment, Sale, SaleItem, SaleReturn, SaleReturnItem
@@ -41,6 +44,9 @@ class ReadOnlySalesAdmin(ModelAdmin):
 class ReadOnlyTabularInline(TabularInline):
     extra = 0
     can_delete = False
+    # Les colonnes disent déjà tout : pas de titre « Pain × 1 » au-dessus
+    # de chaque ligne.
+    hide_title = True
 
     def has_add_permission(self, request, obj=None) -> bool:
         return False
@@ -54,38 +60,68 @@ class ReadOnlyTabularInline(TabularInline):
 
 class SaleItemInline(ReadOnlyTabularInline):
     model = SaleItem
-    fields = ("product_name", "sale_unit", "quantity", "catalog_unit_price", "unit_price", "line_total", "quantity_returned_display")
+    fields = (
+        "product_name",
+        "quantity_display",
+        "catalog_unit_price_display",
+        "unit_price_display",
+        "line_total_display",
+        "quantity_returned_display",
+    )
+    readonly_fields = fields
     verbose_name = "article vendu"
     verbose_name_plural = "articles vendus"
-    readonly_fields = ("quantity_returned_display",)
+
+    quantity_display = quantity_column("quantity", "quantité")
+    catalog_unit_price_display = money_column("catalog_unit_price", "prix catalogue")
+    unit_price_display = money_column("unit_price", "prix unitaire")
+    line_total_display = money_column("line_total", "total de la ligne")
 
     @admin.display(description="retourné")
     def quantity_returned_display(self, obj):
-        return obj.quantity_returned
+        return format_quantity(obj.quantity_returned, obj.sale_unit)
 
 
 class PaymentInline(ReadOnlyTabularInline):
     model = Payment
-    fields = ("method", "amount", "received_amount", "change_amount")
+    fields = ("method", "amount_display", "received_amount_display", "change_amount_display")
+    readonly_fields = fields
     verbose_name = "paiement"
     verbose_name_plural = "paiements"
+
+    amount_display = money_column("amount", "montant")
+    received_amount_display = money_column("received_amount", "montant reçu")
+    change_amount_display = money_column("change_amount", "monnaie rendue")
 
 
 class SaleReturnItemInline(ReadOnlyTabularInline):
     model = SaleReturnItem
-    fields = ("original_sale_item", "quantity", "unit_price", "refund_amount", "restock")
+    fields = (
+        "original_sale_item",
+        "quantity_display",
+        "unit_price_display",
+        "refund_amount_display",
+        "restock",
+    )
+    readonly_fields = fields
+
+    quantity_display = quantity_column(
+        "quantity", "quantité", unit_field="original_sale_item__sale_unit"
+    )
+    unit_price_display = money_column("unit_price", "prix remboursé")
+    refund_amount_display = money_column("refund_amount", "montant remboursé")
 
 
 @admin.register(Sale)
 class SaleAdmin(ReadOnlySalesAdmin):
     list_display = (
         "occurred_at",
-        "id",
+        "reference_display",
         "cash_session",
         "cashier",
         "total_display",
         "payment_method",
-        "status",
+        "status_display",
     )
     list_filter = (
         SalePeriodFilter,
@@ -97,16 +133,17 @@ class SaleAdmin(ReadOnlySalesAdmin):
     )
     date_hierarchy = "occurred_at"
     search_fields = ("id", "cashier__username")
+    search_help_text = _("Numéro de ticket (ex. E15F6488) ou caissier")
     readonly_fields = (
-        "id",
+        "reference_display",
         "cash_session",
         "cashier",
-        "subtotal",
-        "discount",
-        "total",
+        "subtotal_display",
+        "discount_display",
+        "total_display",
         "customer",
-        "credit_amount",
-        "status",
+        "credit_amount_display",
+        "status_display",
         "occurred_at",
         "created_at",
         "ticket_link",
@@ -118,17 +155,17 @@ class SaleAdmin(ReadOnlySalesAdmin):
             None,
             {
                 "fields": (
-                    "id",
+                    "reference_display",
                     "cash_session",
                     "cashier",
-                    "subtotal",
-                    "discount",
-                    "total",
+                    "subtotal_display",
+                    "discount_display",
+                    "total_display",
                     "customer",
-                    "credit_amount",
+                    "credit_amount_display",
                     "returned_total_display",
                     "net_total_display",
-                    "status",
+                    "status_display",
                     "occurred_at",
                     "created_at",
                     "ticket_link",
@@ -150,9 +187,22 @@ class SaleAdmin(ReadOnlySalesAdmin):
             .distinct()
         )
 
-    @admin.display(description=_("total"), ordering="total")
-    def total_display(self, obj: Sale) -> str:
-        return format_fcfa(obj.total)
+    @admin.display(description=_("ticket"))
+    def reference_display(self, obj: Sale) -> str:
+        return obj.reference
+
+    def get_search_results(self, request, queryset, search_term):
+        # « Ticket E15F6488 » tel qu'imprimé : seul le numéro compte.
+        search_term = re.sub(r"^\s*ticket\s*", "", search_term, flags=re.IGNORECASE)
+        return super().get_search_results(request, queryset, search_term)
+
+    status_display = status_badge(
+        "status", "statut", {"COMPLETED": "success", "CANCELLED": "danger"}
+    )
+    subtotal_display = money_column("subtotal", "sous-total")
+    discount_display = money_column("discount", "remise")
+    total_display = money_column("total", "total")
+    credit_amount_display = money_column("credit_amount", "mis au cahier")
 
     @admin.display(description=_("paiement"))
     def payment_method(self, obj: Sale) -> str:
@@ -187,25 +237,71 @@ class SaleAdmin(ReadOnlySalesAdmin):
 
 @admin.register(SaleItem)
 class SaleItemAdmin(ReadOnlySalesAdmin):
-    list_display = ("sale", "product_name", "unit_price", "quantity", "line_total")
+    list_display = ("sale", "product_name", "unit_price_display", "quantity_display", "line_total_display")
     search_fields = ("sale__id", "product_name", "product__barcode")
+
+    unit_price_display = money_column("unit_price", "prix unitaire")
+    quantity_display = quantity_column("quantity", "quantité")
+    line_total_display = money_column("line_total", "total de la ligne")
 
 
 @admin.register(Payment)
 class PaymentAdmin(ReadOnlySalesAdmin):
-    list_display = ("created_at", "sale", "method", "amount", "change_amount")
+    list_display = ("created_at", "sale", "method", "amount_display", "change_amount_display")
     list_filter = ("method",)
     search_fields = ("sale__id",)
+
+    amount_display = money_column("amount", "montant")
+    change_amount_display = money_column("change_amount", "monnaie rendue")
 
 
 @admin.register(SaleReturn)
 class SaleReturnAdmin(ReadOnlySalesAdmin):
-    list_display = ("reference", "created_at", "original_sale", "cash_session", "created_by", "total_refund", "credit_reduction", "payment_method")
+    list_display = (
+        "reference",
+        "created_at",
+        "original_sale",
+        "cash_session",
+        "created_by",
+        "total_refund_display",
+        "credit_reduction_display",
+        "payment_method",
+    )
     list_filter = ("payment_method", "cash_session__cash_register__store")
     search_fields = ("reference", "original_sale__id", "created_by__username")
+    fields = (
+        "reference",
+        "original_sale",
+        "cash_session",
+        "created_by",
+        "created_at",
+        "total_refund_display",
+        "credit_reduction_display",
+        "money_refund_display",
+        "payment_method",
+        "status",
+    )
+    readonly_fields = fields
     inlines = (SaleReturnItemInline,)
+
+    total_refund_display = money_column("total_refund", "valeur retournée")
+    credit_reduction_display = money_column("credit_reduction", "déduit du cahier")
+    money_refund_display = money_column("money_refund", "argent rendu")
 
 
 @admin.register(SaleReturnItem)
 class SaleReturnItemAdmin(ReadOnlySalesAdmin):
-    list_display = ("sale_return", "original_sale_item", "quantity", "unit_price", "refund_amount", "restock")
+    list_display = (
+        "sale_return",
+        "original_sale_item",
+        "quantity_display",
+        "unit_price_display",
+        "refund_amount_display",
+        "restock",
+    )
+
+    quantity_display = quantity_column(
+        "quantity", "quantité", unit_field="original_sale_item__sale_unit"
+    )
+    unit_price_display = money_column("unit_price", "prix remboursé")
+    refund_amount_display = money_column("refund_amount", "montant remboursé")

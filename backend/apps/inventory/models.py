@@ -32,10 +32,8 @@ class Stock(models.Model):
         blank=True,
         null=True,
         help_text=(
-            "Coût d'achat moyen pondéré d'une unité dans ce magasin. Vide quand "
-            "il n'est pas connu — jamais 0 par défaut, ce qui gonflerait la "
-            "marge. Ne se modifie que par une réception ou une initialisation "
-            "tracée, jamais à la main."
+            "Coût d'achat moyen d'une unité dans ce magasin, recalculé à chaque "
+            "réception. Vide tant qu'il n'est pas connu."
         ),
     )
     updated_at = models.DateTimeField("modifié le", auto_now=True)

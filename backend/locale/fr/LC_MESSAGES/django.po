@@ -1,0 +1,285 @@
+# Traductions françaises des chaînes d'Unfold : le paquet n'en fournit pas.
+# msgid extraits tels quels par `makemessages` sur le code d'Unfold.
+# Après modification : msgfmt --check -o django.mo django.po
+msgid ""
+msgstr ""
+"Project-Id-Version: lopos\n"
+"PO-Revision-Date: 2026-09-30 00:00+0000\n"
+"Last-Translator: LoPOS\n"
+"Language-Team: French\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: fr\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "Select record"
+msgstr "Choisir un élément"
+
+msgid "Select action"
+msgstr "Choisir une action"
+
+msgid "Value"
+msgstr "Valeur"
+
+msgid " By %(filter_title)s "
+msgstr "Par %(filter_title)s"
+
+msgid "From"
+msgstr "Du"
+
+msgid "To"
+msgstr "Au"
+
+msgid "Date from"
+msgstr "Du"
+
+msgid "Date to"
+msgstr "Au"
+
+msgid "Select format"
+msgstr "Choisir le format"
+
+msgid "\n                    Export %(len)s selected item.\n                "
+msgid_plural "\n                    Export %(len)s selected items.\n                "
+msgstr[0] "\nExporter %(len)s élément sélectionné."
+msgstr[1] "\nExporter %(len)s éléments sélectionnés."
+
+msgid "Submit"
+msgstr "Valider"
+
+msgid "entry"
+msgid_plural "entries"
+msgstr[0] "entrée"
+msgstr[1] "entrées"
+
+msgid "Select action to run"
+msgstr "Choisir l'action à exécuter"
+
+msgid "Dataset not found. No action performed."
+msgstr "Données introuvables. Aucune action effectuée."
+
+msgid "Select value"
+msgstr "Choisir une valeur"
+
+msgid "You can not create nested object without parent"
+msgstr "Impossible de créer un élément imbriqué sans son parent."
+
+msgid "Run"
+msgstr "Exécuter"
+
+msgid "Select all %(total_count)s %(module_name)s"
+msgstr "Tout sélectionner (%(total_count)s %(module_name)s)"
+
+msgid "Models in the %(name)s application"
+msgstr "Pages de %(name)s"
+
+msgid "Enter a new password for the user <strong>%(username)s</strong>."
+msgstr "Saisissez un nouveau mot de passe pour l'utilisateur <strong>%(username)s</strong>."
+
+msgid "Deleting the %(object_name)s '%(escaped_object)s' would result in deleting related objects, but your account doesn't have permission to delete the following types of objects:"
+msgstr "Supprimer %(object_name)s « %(escaped_object)s » supprimerait aussi des éléments liés, que votre compte n'a pas le droit de supprimer :"
+
+msgid "Deleting the %(object_name)s '%(escaped_object)s' would require deleting the following protected related objects:"
+msgstr "Supprimer %(object_name)s « %(escaped_object)s » obligerait à supprimer les éléments protégés suivants :"
+
+msgid "Are you sure you want to delete the %(object_name)s \"%(escaped_object)s\"? All of the following related items will be deleted:"
+msgstr "Voulez-vous vraiment supprimer %(object_name)s « %(escaped_object)s » ? Les éléments liés suivants seront aussi supprimés :"
+
+msgid "Deleting the selected %(objects_name)s would result in deleting related objects, but your account doesn't have permission to delete the following types of objects:"
+msgstr "Supprimer la sélection (%(objects_name)s) supprimerait aussi des éléments liés, que votre compte n'a pas le droit de supprimer :"
+
+msgid "Deleting the selected %(objects_name)s would require deleting the following protected related objects:"
+msgstr "Supprimer la sélection (%(objects_name)s) obligerait à supprimer les éléments protégés suivants :"
+
+msgid "Are you sure you want to delete the selected %(objects_name)s? All of the following objects and their related items will be deleted:"
+msgstr "Voulez-vous vraiment supprimer la sélection (%(objects_name)s) ? Les éléments suivants et leurs éléments liés seront supprimés :"
+
+msgid "You are authenticated as %(username)s, but are not authorized to access this page. Would you like to login to a different account?"
+msgstr "Vous êtes connecté en tant que %(username)s, mais cette page ne vous est pas accessible. Voulez-vous vous connecter avec un autre compte ?"
+
+msgid "Forgotten your password or username?"
+msgstr "Mot de passe ou identifiant oublié ?"
+
+msgid "Action"
+msgstr "Action"
+
+msgid "Type to search"
+msgstr "Rechercher…"
+
+msgid "You have been successfully logged out from the administration"
+msgstr "Vous êtes déconnecté de l'administration."
+
+msgid "No data"
+msgstr "Aucune donnée"
+
+msgid "Add %(name)s"
+msgstr "Ajouter : %(name)s"
+
+msgid "All applications"
+msgstr "Toutes les applications"
+
+msgid "True"
+msgstr "Oui"
+
+msgid "False"
+msgstr "Non"
+
+msgid "Apply Filters"
+msgstr "Appliquer les filtres"
+
+msgid "Filters"
+msgstr "Filtres"
+
+msgid "Sorting priority: %(priority_number)s"
+msgstr "Priorité de tri : %(priority_number)s"
+
+msgid "Navigate"
+msgstr "Naviguer"
+
+msgid "Select"
+msgstr "Choisir"
+
+msgid "Recent searches"
+msgstr "Recherches récentes"
+
+msgid "Nothing matched your search"
+msgstr "Aucun résultat pour cette recherche"
+
+msgid "\n            Found <span class=\"font-medium text-important\">%(counter)s</span> result in %(time)s seconds\n        "
+msgid_plural "\n            Found <span class=\"font-medium text-important\">%(counter)s</span> results in %(time)s seconds\n        "
+msgstr[0] "\n<span class=\"font-medium text-important\">%(counter)s</span> résultat en %(time)s secondes"
+msgstr[1] "\n<span class=\"font-medium text-important\">%(counter)s</span> résultats en %(time)s secondes"
+
+msgid "Cancel"
+msgstr "Annuler"
+
+msgid "Record picture"
+msgstr "Photo"
+
+msgid "This item will be deleted."
+msgstr "Cet élément sera supprimé."
+
+msgid "Click to cancel"
+msgstr "Cliquer pour annuler"
+
+msgid "No results found"
+msgstr "Aucun résultat"
+
+msgid "This page yielded into no results. Create a new item or reset your filters."
+msgstr "Aucun résultat. Créez un élément ou réinitialisez les filtres."
+
+msgid "Reset filters"
+msgstr "Réinitialiser les filtres"
+
+msgid "Image preview"
+msgstr "Aperçu de l'image"
+
+msgid "Click to download"
+msgstr "Cliquer pour télécharger"
+
+msgid "Go back"
+msgstr "Retour"
+
+msgid "Please correct the error below."
+msgid_plural "Please correct the errors below."
+msgstr[0] "Veuillez corriger l'erreur ci-dessous."
+msgstr[1] "Veuillez corriger les erreurs ci-dessous."
+
+msgid "Previous"
+msgstr "Précédent"
+
+msgid "Next"
+msgstr "Suivant"
+
+msgid "Search apps and models..."
+msgstr "Rechercher une page…"
+
+msgid "Available shortcuts"
+msgstr "Raccourcis disponibles"
+
+msgid "Global shortcuts"
+msgstr "Raccourcis généraux"
+
+msgid "Open command tool"
+msgstr "Ouvrir la recherche"
+
+msgid "Open shortcuts list"
+msgstr "Afficher les raccourcis"
+
+msgid "Toggle sidebar"
+msgstr "Afficher / masquer le menu"
+
+msgid "Toggle dark/light mode"
+msgstr "Mode clair / sombre"
+
+msgid "Changelist shortcuts"
+msgstr "Raccourcis de la liste"
+
+msgid "Toggle filter"
+msgstr "Afficher les filtres"
+
+msgid "Create new record"
+msgstr "Créer un élément"
+
+msgid "Command tool shortcuts"
+msgstr "Raccourcis de la recherche"
+
+msgid "Open selection"
+msgstr "Ouvrir"
+
+msgid "Open selection in new tab"
+msgstr "Ouvrir dans un nouvel onglet"
+
+msgid "General"
+msgstr "Général"
+
+msgid "Light"
+msgstr "Clair"
+
+msgid "Dark"
+msgstr "Sombre"
+
+msgid "System"
+msgstr "Système"
+
+msgid "Return to site"
+msgstr "Retour au site"
+
+msgid "%(counter)s result"
+msgid_plural "%(counter)s results"
+msgstr[0] "%(counter)s résultat"
+msgstr[1] "%(counter)s résultats"
+
+msgid "%(full_result_count)s total"
+msgstr "%(full_result_count)s au total"
+
+msgid "Choose file to upload"
+msgstr "Choisir un fichier"
+
+msgid "Toggle password visibility"
+msgstr "Afficher / masquer le mot de passe"
+
+msgid "Change selected %(model)s"
+msgstr "Modifier la sélection (%(model)s)"
+
+msgid "Add another %(model)s"
+msgstr "Ajouter : %(model)s"
+
+msgid "View selected %(model)s"
+msgstr "Voir la sélection (%(model)s)"
+
+msgid "Delete selected %(model)s"
+msgstr "Supprimer la sélection (%(model)s)"
+
+msgid "Add row"
+msgstr "Ajouter une ligne"
+
+msgid "Welcome"
+msgstr "Bienvenue"
+
+msgid "Date"
+msgstr "Date"
+
+msgid "Select currency"
+msgstr "Choisir la devise"

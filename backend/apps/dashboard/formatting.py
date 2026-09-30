@@ -9,6 +9,26 @@ def format_fcfa(amount: Decimal | int | float | None) -> str:
     return f"{value:,}".replace(",", " ") + " FCFA"
 
 
+def format_quantity(quantity: Decimal | int | None, sale_unit: str | None = None) -> str:
+    """Quantité telle qu'un gérant la lit : « 6 », « 1 250 », « 18,25 kg ».
+
+    Les quantités sont stockées sur 3 décimales : sans ce format, 6 unités
+    s'affichent « 6,000 » et se lisent six mille. Les zéros inutiles tombent,
+    la virgule est décimale et l'espace sépare les milliers, comme les montants.
+    """
+    if quantity is None:
+        return "—"
+    value = Decimal(quantity).quantize(Decimal("0.001"))
+    integral, _, decimals = f"{abs(value):f}".partition(".")
+    text = f"{int(integral):,}".replace(",", " ")
+    decimals = decimals.rstrip("0")
+    if decimals:
+        text += f",{decimals}"
+    if value < 0:
+        text = f"-{text}"
+    return f"{text} kg" if sale_unit == "KG" else text
+
+
 def format_count(count: int, singular: str, plural: str) -> str:
     """"1 produit" vs "2 produits" — centralizes singular/plural wording."""
     return f"{count} {singular if count == 1 else plural}"

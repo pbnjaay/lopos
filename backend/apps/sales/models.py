@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from apps.cash.models import CashSession
 from apps.catalog.models import Product
+from apps.dashboard.formatting import format_fcfa, format_quantity
 
 
 class Sale(models.Model):
@@ -48,8 +49,8 @@ class Sale(models.Model):
         decimal_places=2,
         default=Decimal("0"),
         help_text=(
-            "Part du total non encaissée, inscrite au cahier du client. Ce n'est "
-            "pas un paiement : sum(paiements) + mis au cahier = total."
+            "Part du total non encaissée, inscrite au cahier du client : ce "
+            "qu'il reste à payer une fois les paiements déduits."
         ),
     )
     status = models.CharField("statut", max_length=10, choices=Status.choices)
@@ -58,9 +59,8 @@ class Sale(models.Model):
         "réalisée le",
         default=timezone.now,
         help_text=(
-            "Moment réel de la vente sur la caisse. Identique à created_at pour une "
-            "vente en ligne ; peut être antérieur pour une vente synchronisée depuis "
-            "le mode hors-ligne."
+            "Heure de la vente sur la caisse. Une vente faite sans connexion garde "
+            "son heure réelle, même si elle arrive plus tard au serveur."
         ),
     )
 
@@ -104,7 +104,13 @@ class Sale(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Vente {self.id} — {self.total}"
+        return f"Ticket {self.reference}"
+
+    @property
+    def reference(self) -> str:
+        """Référence imprimée sur le ticket du POS : les 8 premiers caractères
+        de l'identifiant, en majuscules (« E15F6488 »)."""
+        return str(self.id)[:8].upper()
 
 
 class SaleItem(models.Model):
@@ -174,7 +180,7 @@ class SaleItem(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.product_name} × {self.quantity}"
+        return f"{self.product_name} × {format_quantity(self.quantity, self.sale_unit)}"
 
     @property
     def quantity_returned(self) -> Decimal:
@@ -248,7 +254,7 @@ class Payment(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.method} — {self.amount}"
+        return f"{self.get_method_display()} — {format_fcfa(self.amount)}"
 
 
 class SaleReturn(models.Model):

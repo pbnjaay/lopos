@@ -15,7 +15,8 @@ from unfold.widgets import (
     UnfoldAdminSelectWidget,
 )
 
-from apps.dashboard.formatting import format_fcfa
+from apps.dashboard.admin_columns import money_column
+from apps.dashboard.formatting import format_fcfa, format_quantity
 from apps.inventory.exceptions import InvalidStockCost, InvalidStockQuantity
 from apps.inventory.permissions import can_view_stock_costs
 from apps.inventory.models import Stock
@@ -139,7 +140,9 @@ class ImportProductsForm(forms.Form):
 class ProductAdmin(ModelAdmin):
     form = ProductAdminForm
     actions_list = ["import_products_view"]
-    list_display = ("name", "barcode", "sale_unit", "selling_price", "is_active", "updated_at")
+    list_display = ("name", "barcode", "sale_unit", "selling_price_display", "is_active", "updated_at")
+
+    selling_price_display = money_column("selling_price", "prix de vente")
     list_filter = ("sale_unit", "is_active")
     search_fields = ("name", "barcode")
     readonly_fields = (
@@ -251,7 +254,10 @@ class ProductAdmin(ModelAdmin):
             "",
             "<tr><td style='padding:4px 16px 4px 0'>{}</td>"
             "<td style='padding:4px'>{}</td></tr>",
-            ((stock.store.name, stock.quantity) for stock in stocks),
+            (
+                (stock.store.name, format_quantity(stock.quantity, obj.sale_unit))
+                for stock in stocks
+            ),
         )
         return format_html("<table>{}</table>", rows)
 
@@ -383,7 +389,8 @@ class ProductAdmin(ModelAdmin):
                     )
                     message = (
                         f"{quantity} unités de {product.name} ajoutées au stock de "
-                        f"{store.name}. Nouveau stock : {result.stock.quantity}"
+                        f"{store.name}. Nouveau stock : "
+                        f"{format_quantity(result.stock.quantity, product.sale_unit)}"
                     )
                     if can_view_stock_costs(request.user):
                         message += (

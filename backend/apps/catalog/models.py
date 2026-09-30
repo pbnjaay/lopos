@@ -56,8 +56,8 @@ class Product(models.Model):
         blank=True,
         null=True,
         help_text=(
-            "Laisser vide pour utiliser le seuil par défaut du commerce "
-            "(LOW_STOCK_THRESHOLD_DEFAULT)."
+            "En dessous de cette quantité, le produit est signalé en stock "
+            "faible. Laisser vide pour utiliser le seuil par défaut de la boutique."
         ),
     )
     is_active = models.BooleanField("actif", default=True)

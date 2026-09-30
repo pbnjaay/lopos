@@ -30,7 +30,9 @@ def test_status_label(store: Store, product: Product, quantity, expected_label) 
     stock = Stock.objects.create(store=store, product=product, quantity=quantity)
     model_admin = StockAdmin(Stock, admin.site)
 
-    assert model_admin.status_label(stock) == expected_label
+    # Pastille Unfold : (clé de couleur, texte affiché).
+    _color, label = model_admin.status_label(stock)
+    assert label == expected_label
 
 
 def test_stock_status_filter_low_excludes_out_of_stock(
@@ -75,7 +77,7 @@ def test_status_label_uses_the_product_own_threshold_when_set(store: Store) -> N
     stock = Stock.objects.create(store=store, product=rice, quantity=8)
     model_admin = StockAdmin(Stock, admin.site)
 
-    assert model_admin.status_label(stock) == "OK"
+    assert model_admin.status_label(stock) == ("ok", "OK")
 
 
 def test_stock_status_filter_low_uses_the_product_own_threshold(store: Store) -> None:

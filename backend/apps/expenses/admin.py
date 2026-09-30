@@ -10,7 +10,9 @@ from unfold.decorators import action
 from unfold.widgets import UnfoldAdminTextareaWidget
 
 from apps.cash.models import CashSession
+from apps.dashboard.admin_columns import status_badge
 from apps.dashboard.formatting import format_fcfa
+from apps.stores.admin_mixins import SingleStoreColumnsMixin
 
 from .exceptions import (
     ExpenseAlreadyCancelled,
@@ -44,7 +46,7 @@ class CancelExpenseForm(forms.Form):
 
 
 @admin.register(Expense)
-class ExpenseAdmin(ModelAdmin):
+class ExpenseAdmin(SingleStoreColumnsMixin, ModelAdmin):
     """Dépenses saisies en caisse : consultables, jamais modifiables. Seule
     l'annulation (avec motif) est possible, tant que la session est ouverte."""
 
@@ -54,7 +56,7 @@ class ExpenseAdmin(ModelAdmin):
         "category",
         "amount_display",
         "payment_method",
-        "status",
+        "status_display",
         "store",
         "created_by",
     )
@@ -67,11 +69,11 @@ class ExpenseAdmin(ModelAdmin):
         "store",
         "cash_session",
         "category",
-        "amount",
+        "amount_display",
         "payment_method",
         "description",
         "document_reference",
-        "status",
+        "status_display",
         "occurred_at",
         "created_by",
         "created_at",
@@ -86,11 +88,11 @@ class ExpenseAdmin(ModelAdmin):
                 "fields": (
                     "reference",
                     "category",
-                    "amount",
+                    "amount_display",
                     "payment_method",
                     "description",
                     "document_reference",
-                    "status",
+                    "status_display",
                 )
             },
         ),
@@ -98,6 +100,10 @@ class ExpenseAdmin(ModelAdmin):
         (_("Annulation"), {"fields": ("cancelled_at", "cancelled_by", "cancellation_reason")}),
     )
     actions_detail = ["cancel_expense_action"]
+
+    status_display = status_badge(
+        "status", "statut", {"POSTED": "success", "CANCELLED": "danger"}
+    )
 
     @admin.display(description=_("montant"), ordering="amount")
     def amount_display(self, obj: Expense) -> str:

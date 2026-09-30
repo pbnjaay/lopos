@@ -14,11 +14,13 @@ from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
-from unfold.decorators import action
+from unfold.decorators import action, display
 from unfold.widgets import UnfoldAdminDecimalFieldWidget, UnfoldAdminTextareaWidget
 
 from apps.catalog.models import Product
-from apps.dashboard.formatting import format_fcfa
+from apps.dashboard.admin_columns import quantity_column, status_badge
+from apps.dashboard.formatting import format_fcfa, format_quantity
+from apps.stores.admin_mixins import SingleStoreColumnsMixin
 from apps.stores.models import Store
 
 from .exceptions import InvalidStockCost
@@ -66,21 +68,27 @@ class StockStatusFilter(admin.SimpleListFilter):
 
 
 @admin.register(Stock)
-class StockAdmin(ModelAdmin):
-    list_display = ("product", "store", "quantity", "status_label", "updated_at")
+class StockAdmin(SingleStoreColumnsMixin, ModelAdmin):
+    list_display = ("product", "store", "quantity_display", "status_label", "updated_at")
     list_filter = ("store", StockStatusFilter)
     list_select_related = ("product", "store")
     search_fields = ("product__name", "product__barcode", "store__name")
-    readonly_fields = ("id", "store", "product", "quantity", "updated_at")
+    fields = ("id", "store", "product", "quantity_display", "updated_at")
+    readonly_fields = fields
+
+    quantity_display = quantity_column("quantity", "quantité", unit_field="product__sale_unit")
     autocomplete_fields = ("store", "product")
 
-    @admin.display(description=_("état"))
-    def status_label(self, obj: Stock) -> str:
+    @display(
+        description=_("état"),
+        label={"out": "danger", "low": "warning", "ok": "success"},
+    )
+    def status_label(self, obj: Stock):
         if obj.quantity <= 0:
-            return _("Rupture")
+            return "out", _("Rupture")
         if obj.quantity <= effective_low_stock_threshold(obj.product):
-            return _("Faible")
-        return "OK"
+            return "low", _("Faible")
+        return "ok", "OK"
 
     def has_add_permission(self, request) -> bool:
         return False
@@ -93,31 +101,57 @@ class StockAdmin(ModelAdmin):
 
 
 @admin.register(InventoryMovement)
-class InventoryMovementAdmin(ModelAdmin):
+class InventoryMovementAdmin(SingleStoreColumnsMixin, ModelAdmin):
     list_display = (
         "created_at",
         "movement_type",
         "store",
         "product",
-        "quantity",
+        "quantity_display",
         "unit_cost_display",
         "created_by",
-        "reference",
+        "reference_display",
     )
     list_select_related = ("store", "product", "created_by")
     list_filter = ("movement_type", "store")
     search_fields = ("product__name", "product__barcode", "reference")
-    readonly_fields = (
+    # Fiche en lecture seule, champs figés : sinon Django y ajoute les champs
+    # bruts du modèle (quantité « 6,000 », coût non formaté).
+    fields = (
         "id",
         "store",
         "product",
         "movement_type",
-        "quantity",
-        "unit_cost",
-        "reference",
+        "quantity_display",
+        "unit_cost_display",
+        "reference_display",
         "created_by",
         "created_at",
     )
+    readonly_fields = fields
+
+    @admin.display(description=_("origine"))
+    def reference_display(self, obj: InventoryMovement) -> str:
+        """La vente ou le retour à l'origine du mouvement, sous la référence
+        imprimée sur le ticket — sans requête : elle se lit dans l'identifiant."""
+        if obj.reference is None:
+            return "—"
+        short = str(obj.reference)[:8].upper()
+        if obj.movement_type in (InventoryMovement.Type.SALE, InventoryMovement.Type.CANCELLATION):
+            url = reverse("admin:sales_sale_change", args=[obj.reference])
+            label = f"Ticket {short}"
+        elif obj.movement_type == InventoryMovement.Type.RETURN_IN:
+            url = reverse("admin:sales_salereturn_change", args=[obj.reference])
+            label = f"RET-{short}"
+        else:
+            return "—"
+        return format_html('<a href="{}" class="text-primary-600">{}</a>', url, label)
+
+    @admin.display(description=_("quantité"), ordering="quantity")
+    def quantity_display(self, obj: InventoryMovement) -> str:
+        # Entrée « +20 », sortie « -2 kg » : le signe dit le sens du mouvement.
+        text = format_quantity(obj.quantity, obj.product.sale_unit)
+        return f"+{text}" if obj.quantity > 0 else text
 
     @admin.display(description=_("coût unitaire"), ordering="unit_cost")
     def unit_cost_display(self, obj: InventoryMovement) -> str:
@@ -134,7 +168,7 @@ class InventoryMovementAdmin(ModelAdmin):
         fields = super().get_fields(request, obj)
         if can_view_stock_costs(request.user):
             return fields
-        return [name for name in fields if name != "unit_cost"]
+        return [name for name in fields if name != "unit_cost_display"]
 
     def has_add_permission(self, request) -> bool:
         return False
@@ -198,7 +232,7 @@ class SetStockCostForm(forms.Form):
 
 
 @admin.register(StockValuation)
-class StockValuationAdmin(ModelAdmin):
+class StockValuationAdmin(SingleStoreColumnsMixin, ModelAdmin):
     """Ce que vaut la marchandise en rayon, produit par produit.
 
     Lecture seule : le coût moyen ne change que par une réception ou par
@@ -207,7 +241,7 @@ class StockValuationAdmin(ModelAdmin):
     list_display = (
         "product",
         "store",
-        "quantity",
+        "quantity_display",
         "average_cost_display",
         "cost_value_display",
         "selling_price_display",
@@ -220,6 +254,8 @@ class StockValuationAdmin(ModelAdmin):
     list_per_page = 50
     list_before_template = "admin/inventory/stock_valuation_summary.html"
     actions_row = ["set_cost_action"]
+
+    quantity_display = quantity_column("quantity", "stock", unit_field="product__sale_unit")
 
     def get_queryset(self, request):
         return annotate_stock_values(super().get_queryset(request))
@@ -378,34 +414,42 @@ class StockValuationAdmin(ModelAdmin):
 
 
 @admin.register(StockCostChange)
-class StockCostChangeAdmin(ModelAdmin):
+class StockCostChangeAdmin(SingleStoreColumnsMixin, ModelAdmin):
     """Journal des coûts définis à la main : consultable, jamais modifiable."""
 
     list_display = (
         "created_at",
         "store",
         "product",
-        "source",
+        "source_display",
         "previous_cost_display",
         "new_cost_display",
-        "quantity_at_change",
+        "quantity_at_change_display",
         "reason",
         "created_by",
     )
     list_filter = ("source", "store")
     list_select_related = ("store", "product", "created_by")
     search_fields = ("product__name", "product__barcode", "reason")
-    readonly_fields = (
+    fields = (
         "id",
         "store",
         "product",
         "source",
-        "previous_cost",
-        "new_cost",
-        "quantity_at_change",
+        "previous_cost_display",
+        "new_cost_display",
+        "quantity_at_change_display",
         "reason",
         "created_by",
         "created_at",
+    )
+    readonly_fields = fields
+
+    source_display = status_badge(
+        "source", "origine", {"INITIAL": "info", "CORRECTION": "warning"}
+    )
+    quantity_at_change_display = quantity_column(
+        "quantity_at_change", "stock au moment du changement", unit_field="product__sale_unit"
     )
 
     @admin.display(description=_("ancien coût"), ordering="previous_cost")

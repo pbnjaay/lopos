@@ -40,21 +40,21 @@ def test_difference_label_flags_shortage(cash_session: CashSession) -> None:
     cash_session.difference = Decimal("-1500.00")
     model_admin = CashSessionAdmin(CashSession, admin.site)
 
-    assert model_admin.difference_label(cash_session) == "Manque — -1 500 FCFA"
+    assert model_admin.difference_label(cash_session) == ("shortage", "Manque — 1 500 FCFA")
 
 
 def test_difference_label_flags_surplus(cash_session: CashSession) -> None:
     cash_session.difference = Decimal("500.00")
     model_admin = CashSessionAdmin(CashSession, admin.site)
 
-    assert model_admin.difference_label(cash_session) == "Surplus — 500 FCFA"
+    assert model_admin.difference_label(cash_session) == ("surplus", "Surplus — 500 FCFA")
 
 
 def test_difference_label_shows_ok_when_balanced(cash_session: CashSession) -> None:
     cash_session.difference = Decimal("0.00")
     model_admin = CashSessionAdmin(CashSession, admin.site)
 
-    assert model_admin.difference_label(cash_session) == "OK — 0 FCFA"
+    assert model_admin.difference_label(cash_session) == ("ok", "OK — 0 FCFA")
 
 
 def test_report_link_unavailable_while_open(cash_session: CashSession) -> None:

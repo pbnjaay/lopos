@@ -382,6 +382,9 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = "fr-fr"
 TIME_ZONE = "Africa/Dakar"
 USE_I18N = True
+# Unfold ne fournit pas de traduction française : ses chaînes (« Type to
+# search », « Search apps and models… ») le sont dans backend/locale.
+LOCALE_PATHS = [BASE_DIR / "locale"]
 USE_TZ = True
 
 STATIC_URL = "static/"

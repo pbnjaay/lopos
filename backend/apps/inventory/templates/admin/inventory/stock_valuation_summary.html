@@ -12,7 +12,7 @@
         </a>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
             <div class="text-xs font-medium uppercase text-base-400 dark:text-base-500">{% translate "Valeur d'achat du stock" %}</div>
             <div class="text-2xl font-semibold text-base-900 dark:text-base-100 mt-1">{{ valuation.cost_value|fcfa }}</div>
@@ -33,7 +33,7 @@
     {% if not valuation.is_complete or valuation.negative_count %}
     <div class="flex flex-col gap-2 text-sm">
         {% if not valuation.is_complete %}
-        <a href="{{ valuation_uncosted_url }}" class="flex items-center gap-2 hover:underline text-amber-600 dark:text-amber-400">
+        <a href="{{ valuation_uncosted_url }}" class="flex items-center gap-2 hover:text-orange-700 text-orange-700 dark:text-orange-400">
             <span class="material-symbols-outlined text-base">warning</span>
             <span>
                 {% blocktranslate count counter=valuation.uncosted_count %}{{ counter }} produit en stock sans coût d'achat{% plural %}{{ counter }} produits en stock sans coût d'achat{% endblocktranslate %}
@@ -43,7 +43,7 @@
         </a>
         {% endif %}
         {% if valuation.negative_count %}
-        <a href="{{ valuation_negative_url }}" class="flex items-center gap-2 hover:underline text-amber-600 dark:text-amber-400">
+        <a href="{{ valuation_negative_url }}" class="flex items-center gap-2 hover:text-orange-700 text-orange-700 dark:text-orange-400">
             <span class="material-symbols-outlined text-base">warning</span>
             <span>{% blocktranslate count counter=valuation.negative_count %}{{ counter }} produit en stock négatif — non valorisé, à vérifier{% plural %}{{ counter }} produits en stock négatif — non valorisés, à vérifier{% endblocktranslate %}</span>
         </a>

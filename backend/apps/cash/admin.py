@@ -3,7 +3,9 @@ from django.contrib import admin
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
+from unfold.decorators import display
 
+from apps.dashboard.admin_columns import money_column, status_badge
 from apps.dashboard.formatting import format_fcfa
 
 from .models import CashSession
@@ -17,7 +19,7 @@ class CashSessionAdmin(ModelAdmin):
         "cash_register",
         "cashier",
         "opening_balance_display",
-        "status",
+        "status_display",
         "closing_balance_display",
         "difference_label",
         "closed_at",
@@ -33,12 +35,12 @@ class CashSessionAdmin(ModelAdmin):
         "id",
         "cash_register",
         "cashier",
-        "opening_balance",
-        "status",
+        "opening_balance_display",
+        "status_display",
         "opened_at",
-        "closing_balance",
-        "expected_balance",
-        "difference",
+        "closing_balance_display",
+        "expected_balance_display",
+        "difference_label",
         "closed_at",
         "sales_summary",
         "report_link",
@@ -51,7 +53,7 @@ class CashSessionAdmin(ModelAdmin):
                     "id",
                     "cash_register",
                     "cashier",
-                    "status",
+                    "status_display",
                     "opened_at",
                     "closed_at",
                 )
@@ -65,10 +67,10 @@ class CashSessionAdmin(ModelAdmin):
             _("Caisse"),
             {
                 "fields": (
-                    "opening_balance",
-                    "expected_balance",
-                    "closing_balance",
-                    "difference",
+                    "opening_balance_display",
+                    "expected_balance_display",
+                    "closing_balance_display",
+                    "difference_label",
                 )
             },
         ),
@@ -89,18 +91,28 @@ class CashSessionAdmin(ModelAdmin):
     def opening_balance_display(self, obj: CashSession) -> str:
         return format_fcfa(obj.opening_balance)
 
+    expected_balance_display = money_column("expected_balance", "attendu")
+
     @admin.display(description=_("compté"), ordering="closing_balance")
     def closing_balance_display(self, obj: CashSession) -> str:
         return format_fcfa(obj.closing_balance) if obj.closing_balance is not None else "—"
 
-    @admin.display(description=_("écart"), ordering="difference")
-    def difference_label(self, obj: CashSession) -> str:
+    status_display = status_badge("status", "statut", {"OPEN": "info"})
+
+    @display(
+        description=_("écart"),
+        ordering="difference",
+        label={"ok": "success", "surplus": "warning", "shortage": "danger"},
+    )
+    def difference_label(self, obj: CashSession):
         if obj.difference is None:
             return "—"
         if obj.difference == 0:
-            return "OK — 0 FCFA"
-        label = _("Surplus") if obj.difference > 0 else _("Manque")
-        return f"{label} — {format_fcfa(obj.difference)}"
+            return "ok", "OK — 0 FCFA"
+        if obj.difference > 0:
+            return "surplus", f"{_('Surplus')} — {format_fcfa(obj.difference)}"
+        # « Manque » dit déjà le signe : pas de « Manque — -1 500 FCFA ».
+        return "shortage", f"{_('Manque')} — {format_fcfa(abs(obj.difference))}"
 
     @admin.display(description=_("détail des ventes"))
     def sales_summary(self, obj: CashSession) -> str:
@@ -133,7 +145,7 @@ class CashSessionAdmin(ModelAdmin):
             (_("Dont dépenses en espèces"), format_fcfa(summary.cash_expenses)),
         )
         return format_html(
-            "<table class='min-w-full text-sm'>{}</table>",
+            "<table class='w-full text-sm'>{}</table>",
             format_html_join(
                 "",
                 "<tr><td class='pr-6 text-base-500'>{}</td><td class='font-medium'>{}</td></tr>",
