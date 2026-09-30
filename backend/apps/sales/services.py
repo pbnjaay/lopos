@@ -833,17 +833,22 @@ def create_sale_return(
     ])
     store_id = locked_session.cash_register.store_id
     for item, quantity, restock, _ in specs:
+        # Non remis en stock : rien ne revient, le coût de l'article reste
+        # une charge (il reste dans le coût des marchandises vendues).
         if not restock:
             continue
         stock, _ = Stock.objects.select_for_update().get_or_create(
             store_id=store_id, product_id=item.product_id,
             defaults={"quantity": Decimal("0.000")},
         )
+        # L'article revient au coût auquel il est sorti, figé sur la vente.
+        apply_inbound_cost(stock, quantity, item.unit_cost)
         stock.quantity += quantity
-        stock.save(update_fields=("quantity", "updated_at"))
+        stock.save(update_fields=("quantity", "average_unit_cost", "updated_at"))
         InventoryMovement.objects.create(
             store_id=store_id, product_id=item.product_id,
             movement_type=InventoryMovement.Type.RETURN_IN,
-            quantity=quantity, reference=sale_return.id,
+            quantity=quantity, unit_cost=item.unit_cost,
+            reference=sale_return.id, created_by=created_by,
         )
     return sale_return
