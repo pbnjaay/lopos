@@ -41,7 +41,9 @@ class Stock(models.Model):
     class Meta:
         ordering = ("store_id", "product_id")
         verbose_name = "stock"
-        verbose_name_plural = "stocks"
+        # Même nom que l'entrée de la barre latérale : le fil d'Ariane lit
+        # « Stock › État du stock », pas « Stocks › Stocks ».
+        verbose_name_plural = "état du stock"
         constraints = [
             models.UniqueConstraint(
                 fields=("store", "product"),

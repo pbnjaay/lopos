@@ -238,7 +238,7 @@ UNFOLD = {
                 "separator": True,
                 "items": [
                     {
-                        "title": _("Ventes"),
+                        "title": _("Tickets de vente"),
                         "icon": "shopping_cart",
                         "link": reverse_lazy("admin:sales_sale_changelist"),
                     },
@@ -277,7 +277,7 @@ UNFOLD = {
                 "separator": True,
                 "items": [
                     {
-                        "title": _("Dépenses"),
+                        "title": _("Dépenses saisies"),
                         "icon": "receipt_long",
                         "link": reverse_lazy("admin:expenses_expense_changelist"),
                     },

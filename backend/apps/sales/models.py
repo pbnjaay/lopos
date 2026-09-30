@@ -66,8 +66,10 @@ class Sale(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
-        verbose_name = "vente"
-        verbose_name_plural = "ventes"
+        # Distinct du nom de la section (« Ventes ») : le fil d'Ariane lit
+        # « Ventes › Tickets de vente », comme les fiches « Ticket E15F6488 ».
+        verbose_name = "ticket de vente"
+        verbose_name_plural = "tickets de vente"
         # Coûts d'achat, marges et résultat estimé : pas pour tout le monde.
         permissions = (("view_profitability", "Peut voir la rentabilité"),)
         constraints = [

@@ -1,9 +1,8 @@
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
-from unfold.decorators import display
 
-from apps.dashboard.admin_columns import money_column, status_badge
+from apps.dashboard.admin_columns import money_column, render_badge, status_badge
 from apps.dashboard.formatting import format_fcfa
 
 from .admin_summary import build_session_z
@@ -78,20 +77,18 @@ class CashSessionAdmin(ModelAdmin):
 
     status_display = status_badge("status", "statut", {"OPEN": "info"})
 
-    @display(
-        description=_("écart"),
-        ordering="difference",
-        label={"ok": "success", "surplus": "warning", "shortage": "danger"},
-    )
-    def difference_label(self, obj: CashSession):
+    @admin.display(description=_("écart"), ordering="difference")
+    def difference_label(self, obj: CashSession) -> str:
+        # Session ouverte : pas encore d'écart, un simple tiret plutôt
+        # qu'une pastille vide.
         if obj.difference is None:
             return "—"
         if obj.difference == 0:
-            return "ok", "OK — 0 FCFA"
+            return render_badge("OK — 0 FCFA", "success")
         if obj.difference > 0:
-            return "surplus", f"{_('Surplus')} — {format_fcfa(obj.difference)}"
+            return render_badge(f"{_('Surplus')} — {format_fcfa(obj.difference)}", "warning")
         # « Manque » dit déjà le signe : pas de « Manque — -1 500 FCFA ».
-        return "shortage", f"{_('Manque')} — {format_fcfa(abs(obj.difference))}"
+        return render_badge(f"{_('Manque')} — {format_fcfa(abs(obj.difference))}", "danger")
 
     def has_add_permission(self, request) -> bool:
         return False

@@ -116,3 +116,30 @@ def test_uncolored_status_shows_its_french_label_not_its_code(store: Store) -> N
     # Clôturée, sans couleur : le libellé seul, jamais le code « CLOSED ».
     session.status = CashSession.Status.CLOSED
     assert model_admin.status_display(session) == CashSession.Status.CLOSED.label
+
+
+def test_stock_list_breadcrumb_matches_the_sidebar(admin_client, store: Store) -> None:
+    response = admin_client.get(reverse("admin:inventory_stock_changelist"))
+
+    content = response.content.decode()
+    assert "État du stock" in content
+    # Plus de « Stocks › Stocks » : l'application s'appelle « Stock ».
+    assert ">\n        Stocks\n        </" not in content
+    assert Stock._meta.app_config.verbose_name == "Stock"
+    assert Stock._meta.verbose_name_plural == "état du stock"
+
+
+@pytest.mark.parametrize(
+    "url_name, section, list_name",
+    [
+        ("admin:sales_sale_changelist", "Ventes", "Tickets de vente"),
+        ("admin:expenses_expense_changelist", "Dépenses", "Dépenses saisies"),
+    ],
+)
+def test_list_names_differ_from_their_section(admin_client, url_name, section, list_name) -> None:
+    response = admin_client.get(reverse(url_name))
+
+    opts = response.context["cl"].opts
+    assert opts.app_config.verbose_name == section
+    assert opts.verbose_name_plural.capitalize() == list_name
+    assert list_name in response.content.decode()

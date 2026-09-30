@@ -7,6 +7,7 @@ les utilise aussi bien en liste qu'en fiche.
 """
 
 from django.contrib import admin
+from django.template.loader import render_to_string
 from unfold.decorators import display
 
 from .formatting import format_fcfa, format_quantity
@@ -40,6 +41,12 @@ def quantity_column(field: str, description: str, *, unit_field: str = "sale_uni
         return format_quantity(_resolve(obj, field), _resolve(obj, unit_field))
 
     return column
+
+
+def render_badge(text: str, kind: str | None = None) -> str:
+    """Pastille Unfold (même rendu que `status_badge`), pour une colonne qui
+    n'en affiche qu'à certaines valeurs."""
+    return render_to_string("unfold/helpers/label.html", {"text": text, "type": kind})
 
 
 def status_badge(field: str, description: str, colors: dict[str, str]):
