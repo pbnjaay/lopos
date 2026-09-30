@@ -9,6 +9,7 @@ from django.db import models, transaction
 from apps.cash.exceptions import CashSessionClosed
 from apps.observability.sentry_context import tag_sale_scope
 from apps.cash.models import CashSession
+from apps.cash.services import expected_cash_for
 from apps.catalog.models import Product
 from apps.customers.exceptions import NegativeCustomerBalance
 from apps.customers.models import Customer, CustomerLedgerEntry
@@ -22,6 +23,7 @@ from apps.inventory.models import InventoryMovement, Stock
 
 from .exceptions import (
     CustomerNotFound,
+    InsufficientCashForRefund,
     InsufficientStock,
     InvalidCancellation,
     InvalidPayment,
@@ -787,6 +789,14 @@ def create_sale_return(
         refund_method = payment_method
     else:
         refund_method = None
+    # On ne rend pas en espèces plus que le tiroir n'en contient : sous le
+    # verrou de la session, le montant ne peut pas bouger pendant le
+    # contrôle. Sans ce garde-fou, la clôture échouerait sur la contrainte
+    # « solde attendu positif ou nul ».
+    if refund_method == Payment.Method.CASH:
+        available = expected_cash_for(locked_session)
+        if money_refund > available:
+            raise InsufficientCashForRefund(available)
 
     sale_return = SaleReturn.objects.create(
         original_sale=sale, cash_session=locked_session, created_by=created_by,

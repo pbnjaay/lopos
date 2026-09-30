@@ -9,6 +9,8 @@ import { CustomerDetailPage } from "../pages/CustomerDetailPage"
 import { CustomerPaymentReceiptPage } from "../pages/CustomerPaymentReceiptPage"
 import { CustomersPage } from "../pages/CustomersPage"
 import { CloseCashSessionPage } from "../pages/CloseCashSessionPage"
+import { ExpenseDetailPage } from "../pages/ExpenseDetailPage"
+import { ExpensesPage } from "../pages/ExpensesPage"
 import { LoginPage } from "../pages/LoginPage"
 import { OpenCashSessionPage } from "../pages/OpenCashSessionPage"
 import { PendingSalesPage } from "../pages/PendingSalesPage"
@@ -76,6 +78,8 @@ export const router = createBrowserRouter([
           { path: "/returns/:returnId/receipt", element: <SessionRoute requireOpen><SaleReturnReceiptPage /></SessionRoute> },
           { path: "/customers", element: <SessionRoute requireOpen><CustomersPage /></SessionRoute> },
           { path: "/customers/:customerId", element: <SessionRoute requireOpen><CustomerDetailPage /></SessionRoute> },
+          { path: "/expenses", element: <SessionRoute requireOpen><ExpensesPage /></SessionRoute> },
+          { path: "/expenses/:expenseId", element: <SessionRoute requireOpen><ExpenseDetailPage /></SessionRoute> },
           { path: "/customer-payments/:paymentId/receipt", element: <SessionRoute requireOpen><CustomerPaymentReceiptPage /></SessionRoute> },
         ],
       },

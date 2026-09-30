@@ -14,6 +14,12 @@ from apps.customers.views import (
     CustomerPaymentCreateView,
     CustomerPaymentDetailView,
 )
+from apps.expenses.views import (
+    ExpenseCancelView,
+    ExpenseCategoryListView,
+    ExpenseDetailView,
+    ExpenseListCreateView,
+)
 from apps.inventory.views import StockInView
 from apps.sales.views import (
     CancelSaleView,
@@ -70,6 +76,14 @@ urlpatterns = [
         CustomerPaymentDetailView.as_view(),
         name="customer-payment-detail",
     ),
+    path(
+        "expense-categories/",
+        ExpenseCategoryListView.as_view(),
+        name="expense-category-list",
+    ),
+    path("expenses/", ExpenseListCreateView.as_view(), name="expense-list"),
+    path("expenses/<uuid:pk>/", ExpenseDetailView.as_view(), name="expense-detail"),
+    path("expenses/<uuid:pk>/cancel/", ExpenseCancelView.as_view(), name="expense-cancel"),
     path("sync/push/", SyncPushView.as_view(), name="sync-push"),
     path("sync/pull/", SyncPullView.as_view(), name="sync-pull"),
 ]

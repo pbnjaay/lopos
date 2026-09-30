@@ -109,6 +109,10 @@ class CashSessionSummary:
     cash_customer_payments: Decimal
     wave_customer_payments: Decimal
     orange_money_customer_payments: Decimal
+    expenses_count: int
+    cash_expenses: Decimal
+    wave_expenses: Decimal
+    orange_money_expenses: Decimal
     opening_balance: Decimal
     expected_cash: Decimal
     counted_cash: Decimal | None
@@ -131,6 +135,10 @@ class _SessionTotals(NamedTuple):
     cash_customer_payments: Decimal
     wave_customer_payments: Decimal
     orange_money_customer_payments: Decimal
+    expenses_count: int
+    cash_expenses: Decimal
+    wave_expenses: Decimal
+    orange_money_expenses: Decimal
 
 
 def _expected_cash(opening_balance: Decimal, totals: _SessionTotals) -> Decimal:
@@ -139,18 +147,27 @@ def _expected_cash(opening_balance: Decimal, totals: _SessionTotals) -> Decimal:
 
     Les remboursements de cahier en espèces y entrent (l'argent est bien dans
     la caisse) sans être des ventes ; la part mise au cahier n'y entre pas
-    (aucun argent reçu).
+    (aucun argent reçu). Les dépenses en espèces en sortent ; celles payées
+    par Wave/OM ne touchent pas au tiroir.
     """
     return (
         opening_balance
         + totals.cash_sales
         - totals.cash_refunds
         + totals.cash_customer_payments
+        - totals.cash_expenses
     )
+
+
+def expected_cash_for(cash_session: CashSession) -> Decimal:
+    """Espèces attendues maintenant dans le tiroir de `cash_session`. Pour un
+    contrôle fiable, l'appelant tient déjà le verrou de la session."""
+    return _expected_cash(cash_session.opening_balance, _aggregate_totals(cash_session))
 
 
 def _aggregate_totals(cash_session: CashSession) -> _SessionTotals:
     from apps.customers.models import CustomerPayment
+    from apps.expenses.models import Expense
     from apps.sales.models import Payment, Sale, SaleReturn
 
     sale_totals = Sale.objects.filter(
@@ -190,6 +207,16 @@ def _aggregate_totals(cash_session: CashSession) -> _SessionTotals:
         orange_money=Sum("amount", filter=Q(method="ORANGE_MONEY")),
     )
 
+    # Une dépense annulée ne compte plus nulle part.
+    expenses = Expense.objects.filter(
+        cash_session=cash_session, status=Expense.Status.POSTED
+    ).aggregate(
+        count=Count("id"),
+        cash=Sum("amount", filter=Q(payment_method="CASH")),
+        wave=Sum("amount", filter=Q(payment_method="WAVE")),
+        orange_money=Sum("amount", filter=Q(payment_method="ORANGE_MONEY")),
+    )
+
     return _SessionTotals(
         sales_count=sale_totals["sales_count"] or 0,
         gross_sales=sale_totals["gross_sales"] or ZERO,
@@ -205,6 +232,10 @@ def _aggregate_totals(cash_session: CashSession) -> _SessionTotals:
         cash_customer_payments=customer_payments["cash"] or ZERO,
         wave_customer_payments=customer_payments["wave"] or ZERO,
         orange_money_customer_payments=customer_payments["orange_money"] or ZERO,
+        expenses_count=expenses["count"] or 0,
+        cash_expenses=expenses["cash"] or ZERO,
+        wave_expenses=expenses["wave"] or ZERO,
+        orange_money_expenses=expenses["orange_money"] or ZERO,
     )
 
 
@@ -228,6 +259,10 @@ def get_cash_session_summary(*, cash_session: CashSession) -> CashSessionSummary
         cash_customer_payments=totals.cash_customer_payments,
         wave_customer_payments=totals.wave_customer_payments,
         orange_money_customer_payments=totals.orange_money_customer_payments,
+        expenses_count=totals.expenses_count,
+        cash_expenses=totals.cash_expenses,
+        wave_expenses=totals.wave_expenses,
+        orange_money_expenses=totals.orange_money_expenses,
         opening_balance=cash_session.opening_balance,
         expected_cash=_expected_cash(cash_session.opening_balance, totals),
         counted_cash=cash_session.closing_balance,

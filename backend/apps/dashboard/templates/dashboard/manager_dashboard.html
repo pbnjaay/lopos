@@ -131,6 +131,34 @@
         </a>
     {% endif %}
 
+    {% if dashboard.expenses.is_used %}
+        {# --- Dépenses : à part du CA, jamais retranchées ------------------- #}
+        <a href="{{ dashboard.expenses.expenses_url }}" class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4 hover:border-base-300 dark:hover:border-base-700 transition-colors">
+            <h2 class="font-semibold text-[15px] text-base-900 dark:text-base-100 mb-3">{% translate "Dépenses" %}</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                    <div class="text-xs font-medium uppercase text-base-400 dark:text-base-500">{% translate "Total de la période" %}</div>
+                    <div class="text-xl font-semibold text-base-900 dark:text-base-100 mt-1">{{ dashboard.expenses.total|fcfa }}</div>
+                    <div class="text-xs text-base-500 mt-1">{% blocktranslate count counter=dashboard.expenses.count %}{{ counter }} dépense{% plural %}{{ counter }} dépenses{% endblocktranslate %}</div>
+                </div>
+                <div class="flex flex-col gap-1 text-sm">
+                    <div class="text-xs font-medium uppercase text-base-400 dark:text-base-500 mb-1">{% translate "Payées en" %}</div>
+                    <div class="flex justify-between gap-2"><span class="text-base-500 dark:text-base-400">{% translate "Espèces (sorties du tiroir)" %}</span><span class="font-medium">{{ dashboard.expenses.by_method.cash|fcfa }}</span></div>
+                    <div class="flex justify-between gap-2"><span class="text-base-500 dark:text-base-400">{% translate "Wave" %}</span><span class="font-medium">{{ dashboard.expenses.by_method.wave|fcfa }}</span></div>
+                    <div class="flex justify-between gap-2"><span class="text-base-500 dark:text-base-400">{% translate "Orange Money" %}</span><span class="font-medium">{{ dashboard.expenses.by_method.orange_money|fcfa }}</span></div>
+                </div>
+                <div class="flex flex-col gap-1 text-sm">
+                    <div class="text-xs font-medium uppercase text-base-400 dark:text-base-500 mb-1">{% translate "Principales catégories" %}</div>
+                    {% for category in dashboard.expenses.top_categories %}
+                        <div class="flex justify-between gap-2"><span class="text-base-500 dark:text-base-400">{{ category.name }}</span><span class="font-medium">{{ category.total|fcfa }}</span></div>
+                    {% empty %}
+                        <span class="text-base-500">{% translate "Aucune dépense sur la période" %}</span>
+                    {% endfor %}
+                </div>
+            </div>
+        </a>
+    {% endif %}
+
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {# --- Top products ------------------------------------------ #}
