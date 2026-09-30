@@ -195,7 +195,7 @@ describe("POS résilience hors ligne (reproduction pilote)", () => {
 
     await userEvents.click(screen.getByRole("button", { name: /Espèces/ }))
     await userEvents.type(screen.getByLabelText("Montant reçu"), "500")
-    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+    await userEvents.click(screen.getByRole("button", { name: "Valider le paiement" }))
 
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
 
@@ -264,7 +264,7 @@ describe("POS résilience hors ligne (reproduction pilote)", () => {
 
     await userEvents.click(screen.getByRole("button", { name: /Espèces/ }))
     await userEvents.type(screen.getByLabelText("Montant reçu"), "500")
-    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+    await userEvents.click(screen.getByRole("button", { name: "Valider le paiement" }))
 
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
     expect(await db.localSales.count()).toBe(1)
