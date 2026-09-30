@@ -68,6 +68,8 @@ class Sale(models.Model):
         ordering = ("-created_at",)
         verbose_name = "vente"
         verbose_name_plural = "ventes"
+        # Coûts d'achat, marges et résultat estimé : pas pour tout le monde.
+        permissions = (("view_profitability", "Peut voir la rentabilité"),)
         constraints = [
             models.CheckConstraint(
                 condition=Q(status__in=("COMPLETED", "CANCELLED")),
@@ -95,6 +97,10 @@ class Sale(models.Model):
                 condition=Q(credit_amount=Decimal("0")) | Q(customer__isnull=False),
                 name="sales_sale_credit_requires_customer",
             ),
+        ]
+        indexes = [
+            # Rapports par période (tableau de bord, rentabilité).
+            models.Index(fields=("status", "occurred_at"), name="sales_sale_status_date_idx"),
         ]
 
     def __str__(self) -> str:
@@ -126,6 +132,18 @@ class SaleItem(models.Model):
     unit_price = models.DecimalField("prix unitaire", max_digits=14, decimal_places=2)
     quantity = models.DecimalField("quantité", max_digits=12, decimal_places=3)
     line_total = models.DecimalField("total de la ligne", max_digits=14, decimal_places=2)
+    unit_cost = models.DecimalField(
+        "coût d'achat unitaire",
+        max_digits=14,
+        decimal_places=4,
+        blank=True,
+        null=True,
+        help_text=(
+            "Coût moyen du produit dans le magasin au moment de la vente, figé : "
+            "la marge d'une vente passée ne suit jamais le coût actuel. Vide si "
+            "le coût n'était pas connu (ventes antérieures au suivi des coûts)."
+        ),
+    )
 
     class Meta:
         ordering = ("id",)
@@ -148,6 +166,10 @@ class SaleItem(models.Model):
                 condition=Q(line_total__gte=Decimal("0"))
                 & Q(line_total=Round(F("unit_price") * F("quantity"), precision=2)),
                 name="sales_item_line_total_consistent",
+            ),
+            models.CheckConstraint(
+                condition=Q(unit_cost__isnull=True) | Q(unit_cost__gte=Decimal("0")),
+                name="sales_item_unit_cost_nonnegative",
             ),
         ]
 
@@ -295,6 +317,9 @@ class SaleReturn(models.Model):
                 ),
                 name="sales_return_method_iff_money_refund",
             ),
+        ]
+        indexes = [
+            models.Index(fields=("created_at",), name="sales_return_created_idx"),
         ]
 
     def save(self, *args, **kwargs):

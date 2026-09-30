@@ -3,6 +3,7 @@ from typing import Any
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -42,7 +43,12 @@ def _bootstrap_pos(client: APIClient, *, stock_quantity: int = 20) -> dict[str, 
         {"name": "Coca 50cl", "barcode": "123456789", "selling_price": "500.00"},
         format="json",
     ).json()
-    client.post(
+    # L'entrée de stock est réservée au droit de réception, pas au caissier.
+    manager = User.objects.create_user(username="stock-manager")
+    manager.user_permissions.add(Permission.objects.get(codename="change_product"))
+    manager_client = APIClient()
+    manager_client.force_authenticate(manager)
+    manager_client.post(
         reverse("inventory-stock-in"),
         {"store_id": store["id"], "product_id": product["id"], "quantity": stock_quantity},
         format="json",

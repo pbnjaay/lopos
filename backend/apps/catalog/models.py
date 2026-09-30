@@ -37,11 +37,16 @@ class Product(models.Model):
     barcode = models.CharField("code-barres", max_length=64, blank=True, null=True)
     selling_price = models.DecimalField("prix de vente", max_digits=14, decimal_places=2)
     purchase_price = models.DecimalField(
-        "prix d'achat",
+        "dernier prix d'achat",
         max_digits=14,
         decimal_places=2,
         blank=True,
         null=True,
+        help_text=(
+            "Prix payé au fournisseur lors de la dernière réception, mis à jour "
+            "à chaque réception et proposé pour la suivante. Le modifier ne "
+            "change pas la valeur du stock, calculée au coût moyen par magasin."
+        ),
     )
     sale_unit = models.CharField(
         "unité de vente", max_length=8, choices=SaleUnit.choices, default=SaleUnit.UNIT

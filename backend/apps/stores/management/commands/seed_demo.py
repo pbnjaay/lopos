@@ -21,30 +21,35 @@ DEMO_PRODUCTS = [
         "name": "Coca 50cl",
         "barcode": "3017620422003",
         "selling_price": Decimal("500.00"),
+        "purchase_price": Decimal("350.00"),
         "stock": 40,
     },
     {
         "name": "Eau minérale 1.5L",
         "barcode": "6111242100017",
         "selling_price": Decimal("400.00"),
+        "purchase_price": Decimal("280.00"),
         "stock": 60,
     },
     {
         "name": "Pain",
         "barcode": None,
         "selling_price": Decimal("150.00"),
+        "purchase_price": Decimal("120.00"),
         "stock": 30,
     },
     {
         "name": "Riz brisé 1kg",
         "barcode": "6111242100062",
         "selling_price": Decimal("900.00"),
+        "purchase_price": Decimal("750.00"),
         "stock": 25,
     },
     {
         "name": "Lait en poudre 400g",
         "barcode": "6111242100369",
         "selling_price": Decimal("2200.00"),
+        "purchase_price": Decimal("1800.00"),
         "stock": 15,
     },
 ]
@@ -140,6 +145,9 @@ class Command(BaseCommand):
                     defaults={
                         "barcode": item["barcode"],
                         "selling_price": item["selling_price"],
+                        # Dernier prix d'achat : le stock de démo entre à ce
+                        # coût, pour que valorisation et marges aient des chiffres.
+                        "purchase_price": item["purchase_price"],
                     },
                 )
                 self._report("Produit", product.name, product_created)

@@ -11,12 +11,15 @@ class ProductSerializer(serializers.ModelSerializer):
         decimal_places=2,
         min_value=Decimal("0"),
     )
+    # Écriture seule : un produit créé par l'API peut recevoir son prix
+    # d'achat, mais le coût ne repart jamais vers les postes de caisse.
     purchase_price = serializers.DecimalField(
         max_digits=14,
         decimal_places=2,
         min_value=Decimal("0"),
         allow_null=True,
         required=False,
+        write_only=True,
     )
     stock = serializers.DecimalField(source="current_stock", max_digits=12, decimal_places=3, read_only=True)
     low_stock_threshold = serializers.IntegerField(

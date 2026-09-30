@@ -15,7 +15,6 @@ function product(overrides: Partial<Product> & Pick<Product, "id" | "name">): Pr
   return {
     barcode: null,
     selling_price: "500.00",
-    purchase_price: null,
     is_active: true,
     stock: 18,
     created_at: "2026-08-17T00:00:00Z",

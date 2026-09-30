@@ -165,3 +165,44 @@ def test_sale_accepts_several_payments_for_a_split_payment(sale: Sale) -> None:
     )
 
     assert Payment.objects.filter(sale=sale).count() == 2
+
+
+def test_sale_item_cost_is_unknown_by_default(sale: Sale, product: Product) -> None:
+    item = SaleItem.objects.create(
+        sale=sale,
+        product=product,
+        product_name=product.name,
+        unit_price=Decimal("500.00"),
+        quantity=Decimal("2.000"),
+        line_total=Decimal("1000.00"),
+    )
+
+    assert item.unit_cost is None
+
+
+def test_sale_item_keeps_its_cost_snapshot(sale: Sale, product: Product) -> None:
+    item = SaleItem.objects.create(
+        sale=sale,
+        product=product,
+        product_name=product.name,
+        unit_price=Decimal("500.00"),
+        quantity=Decimal("2.000"),
+        line_total=Decimal("1000.00"),
+        unit_cost=Decimal("333.3333"),
+    )
+    item.refresh_from_db()
+
+    assert item.unit_cost == Decimal("333.3333")
+
+
+def test_sale_item_rejects_a_negative_cost(sale: Sale, product: Product) -> None:
+    with pytest.raises(IntegrityError), transaction.atomic():
+        SaleItem.objects.create(
+            sale=sale,
+            product=product,
+            product_name=product.name,
+            unit_price=Decimal("500.00"),
+            quantity=Decimal("1.000"),
+            line_total=Decimal("500.00"),
+            unit_cost=Decimal("-1"),
+        )

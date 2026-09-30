@@ -18,7 +18,6 @@ const product: Product = {
   name: "Coca 50cl",
   barcode: "123456",
   selling_price: "500.00",
-  purchase_price: null,
   is_active: true,
   stock: 20,
   created_at: "2026-08-01T00:00:00Z",

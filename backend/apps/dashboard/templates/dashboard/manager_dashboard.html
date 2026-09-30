@@ -5,12 +5,25 @@
     {# --- Filters + primary actions ---------------------------------- #}
     <div class="flex flex-wrap items-center justify-between gap-3">
         <form method="get" class="flex flex-wrap items-center gap-2">
-            <select name="period" onchange="this.form.submit()"
+            {# Un préréglage efface les dates ; deux dates l'emportent sur lui. #}
+            <select name="period" onchange="this.form.from.value='';this.form.to.value='';this.form.submit()"
                     class="text-sm rounded-default border border-base-200 dark:border-base-800 bg-white dark:bg-base-900 text-base-700 dark:text-base-300 py-2 px-3">
                 {% for value, label in dashboard_period_choices %}
                     <option value="{{ value }}" {% if value == dashboard.period %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
+                {% if dashboard.date_from %}<option value="custom" selected disabled>{% translate "Période choisie" %}</option>{% endif %}
             </select>
+            <label class="flex items-center gap-1 text-sm text-base-500 dark:text-base-400">
+                {% translate "du" %}
+                <input type="date" name="from" value="{{ dashboard.date_from|date:'Y-m-d' }}"
+                       class="text-sm rounded-default border border-base-200 dark:border-base-800 bg-white dark:bg-base-900 text-base-700 dark:text-base-300 py-1.5 px-2">
+            </label>
+            <label class="flex items-center gap-1 text-sm text-base-500 dark:text-base-400">
+                {% translate "au" %}
+                <input type="date" name="to" value="{{ dashboard.date_to|date:'Y-m-d' }}"
+                       class="text-sm rounded-default border border-base-200 dark:border-base-800 bg-white dark:bg-base-900 text-base-700 dark:text-base-300 py-1.5 px-2">
+            </label>
+            <button type="submit" class="text-sm px-3 py-2 rounded-default border border-base-200 dark:border-base-800 text-base-700 dark:text-base-300 hover:bg-base-50 dark:hover:bg-base-800">{% translate "Appliquer" %}</button>
 
             {% if dashboard_stores|length > 1 %}
                 <select name="store" onchange="this.form.submit()"
@@ -56,6 +69,58 @@
             {% endif %}
         </a>
     </div>
+
+    {% if dashboard.profitability %}
+        {% with p=dashboard.profitability %}
+        {# --- Rentabilité : ce que l'activité a approximativement rapporté -- #}
+        <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
+            <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+                <h2 class="font-semibold text-[15px] text-base-900 dark:text-base-100">{% translate "Rentabilité" %}</h2>
+                <span class="text-xs text-base-500 dark:text-base-400">{{ dashboard.period_label }} · {{ dashboard.scope_label }}</span>
+            </div>
+            {% if not p.has_cost_data %}
+                <p class="text-sm text-base-500 dark:text-base-400">
+                    {% translate "Coût d'achat non disponible pour cette période : la marge apparaît dès que les produits vendus ont un coût d'achat renseigné (réception de stock ou page Valorisation)." %}
+                </p>
+            {% else %}
+                <div class="flex flex-col gap-1 text-sm max-w-xl">
+                    <div class="flex justify-between gap-4"><span class="text-base-700 dark:text-base-300">{% translate "Chiffre d'affaires" %}</span><span class="font-medium">{{ p.revenue|fcfa }}</span></div>
+                    {% if p.uncovered_revenue %}
+                        <div class="flex justify-between gap-4 pl-3 text-xs text-base-500 dark:text-base-400"><span>{% translate "dont sans coût d'achat (hors marge)" %}</span><span>{{ p.uncovered_revenue|fcfa }}</span></div>
+                    {% endif %}
+                    <div class="flex justify-between gap-4"><span class="text-base-700 dark:text-base-300">{% translate "Coût des marchandises vendues" %}</span><span class="font-medium">{{ p.cost_of_goods_sold|fcfa }}</span></div>
+                    {% if p.unrestocked_return_cost %}
+                        <div class="flex justify-between gap-4 pl-3 text-xs text-base-500 dark:text-base-400"><span>{% translate "dont retours non remis en stock" %}</span><span>{{ p.unrestocked_return_cost|fcfa }}</span></div>
+                    {% endif %}
+                    <div class="flex justify-between gap-4"><span class="text-base-700 dark:text-base-300">{% translate "Marge brute" %}</span><span class="font-medium">{{ p.gross_margin|fcfa }}</span></div>
+                    <div class="flex justify-between gap-4"><span class="text-base-700 dark:text-base-300">{% translate "Dépenses" %}</span><span class="font-medium">{{ p.expenses|fcfa }}</span></div>
+                    <div class="flex justify-between gap-4 border-t border-base-200 dark:border-base-800 pt-2 mt-1">
+                        <span class="font-semibold text-base-900 dark:text-base-100">{% translate "Résultat estimé" %}</span>
+                        <span class="text-lg font-semibold text-base-900 dark:text-base-100">{{ p.estimated_result|fcfa }}</span>
+                    </div>
+                    <p class="text-xs text-base-500 dark:text-base-400 mt-1">
+                        {% translate "Estimation basée sur les ventes nettes, le coût enregistré des produits vendus et les dépenses saisies. Ce n'est pas un résultat comptable." %}
+                    </p>
+                </div>
+                {% if not p.is_complete %}
+                    <div class="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 mt-3">
+                        <span class="material-symbols-outlined text-base">warning</span>
+                        <span>
+                            {% if p.coverage_percent is not None %}
+                                {% blocktranslate with share=p.coverage_percent|uncovered_share %}Résultat incomplet : {{ share }} % du chiffre d'affaires sans coût d'achat.{% endblocktranslate %}
+                            {% else %}
+                                {% translate "Résultat incomplet : une partie des ventes n'a pas de coût d'achat." %}
+                            {% endif %}
+                            {% if perms.inventory.view_stockvaluation %}
+                                <a href="{% url 'admin:inventory_stockvaluation_changelist' %}?valuation=uncosted" class="underline underline-offset-2">{% translate "Renseigner les coûts" %}</a>
+                            {% endif %}
+                        </span>
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% endwith %}
+    {% endif %}
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 

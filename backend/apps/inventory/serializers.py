@@ -15,6 +15,14 @@ class StockInSerializer(serializers.Serializer):
         queryset=Product.objects.all(),
     )
     quantity = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal("0.001"))
+    # Facultatif : sans lui, le dernier prix d'achat du produit s'applique.
+    unit_cost = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        min_value=Decimal("0"),
+        required=False,
+        allow_null=True,
+    )
 
 
 class StockInResultSerializer(serializers.Serializer):

@@ -18,8 +18,14 @@ MANAGER_PERMISSIONS = [
     ("auth", "user", ("add", "change", "view")),
     ("inventory", "stock", ("view",)),
     ("inventory", "inventorymovement", ("view",)),
+    # Valorisation : coût d'achat et marges visibles ; « set_cost » définit
+    # ou corrige un coût moyen, toujours tracé dans le journal des coûts.
+    ("inventory", "stockvaluation", ("view", "set_cost")),
+    ("inventory", "stockcostchange", ("view",)),
     ("cash", "cashsession", ("view",)),
     ("sales", "sale", ("view",)),
+    # Permission sur mesure, déjà complète : pas de suffixe de modèle.
+    ("sales", None, ("view_profitability",)),
     ("sales", "saleitem", ("view",)),
     ("sales", "payment", ("view",)),
     # Pas de "delete" : un client se désactive (historique du cahier).
@@ -51,7 +57,7 @@ class Command(BaseCommand):
         permissions = []
         for app_label, model, actions in MANAGER_PERMISSIONS:
             for action in actions:
-                codename = f"{action}_{model}"
+                codename = action if model is None else f"{action}_{model}"
                 try:
                     permissions.append(
                         Permission.objects.get(

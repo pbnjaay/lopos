@@ -272,7 +272,6 @@ describe("syncPendingSales", () => {
       name: localProduct.name,
       barcode: localProduct.barcode,
       selling_price: "500.00",
-      purchase_price: null,
       sale_unit: "UNIT",
       is_active: true,
       stock: "90.000",

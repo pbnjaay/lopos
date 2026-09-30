@@ -7,6 +7,7 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
 from unfold.decorators import action
+from unfold.widgets import UnfoldAdminTextareaWidget
 
 from apps.cash.models import CashSession
 from apps.dashboard.formatting import format_fcfa
@@ -37,7 +38,7 @@ class ExpenseCategoryAdmin(ModelAdmin):
 class CancelExpenseForm(forms.Form):
     reason = forms.CharField(
         label="Motif de l’annulation",
-        widget=forms.Textarea(attrs={"rows": 3}),
+        widget=UnfoldAdminTextareaWidget(attrs={"rows": 3}),
         help_text="Ex. « Montant saisi deux fois ». La dépense reste visible, barrée.",
     )
 
