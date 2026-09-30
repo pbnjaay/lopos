@@ -85,7 +85,7 @@ def weighted_average_cost(
     )
 
 
-def _apply_inbound_cost(stock: Stock, quantity: Decimal, unit_cost: Decimal | None) -> None:
+def apply_inbound_cost(stock: Stock, quantity: Decimal, unit_cost: Decimal | None) -> None:
     """Fusionne `quantity` unités à `unit_cost` dans le coût moyen du stock,
     avant que sa quantité n'augmente. Ne sauvegarde pas."""
     stock.average_unit_cost = weighted_average_cost(
@@ -136,7 +136,7 @@ def receive_stock(
 
     stock = _get_or_create_locked_stock(store=store, product=product)
 
-    _apply_inbound_cost(stock, quantity, lot_cost)
+    apply_inbound_cost(stock, quantity, lot_cost)
     stock.quantity += quantity
     stock.save(update_fields=("quantity", "average_unit_cost", "updated_at"))
 
