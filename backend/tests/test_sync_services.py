@@ -10,7 +10,7 @@ from apps.cash.models import CashSession
 from apps.catalog.models import Product
 from apps.inventory.models import InventoryMovement, Stock
 from apps.sales.models import Payment, Sale, SaleItem
-from apps.stores.models import CashRegister, Store
+from apps.stores.models import CashRegister, Store, StoreAssignment
 from apps.sync.models import ProcessedSyncEvent
 from apps.sync.services import SyncEventStatus, process_sale_completed_event
 
@@ -344,7 +344,7 @@ def test_offline_sale_accepted_for_deactivated_but_existing_product(
     assert outcome.status == SyncEventStatus.SYNCED
 
 
-def test_offline_sale_rejected_when_cash_session_not_owned_by_cashier(
+def test_offline_sale_rejected_when_pusher_has_no_access_to_the_store(
     cash_session: CashSession, product: Product
 ) -> None:
     other_cashier = User.objects.create_user(username="other-cashier")
@@ -361,8 +361,36 @@ def test_offline_sale_rejected_when_cash_session_not_owned_by_cashier(
     )
 
     assert outcome.status == SyncEventStatus.REJECTED
-    assert outcome.code == "CASH_SESSION_NOT_OWNED"
+    assert outcome.code == "STORE_NOT_ALLOWED"
     assert Sale.objects.count() == 0
+
+
+def test_colleague_on_a_shared_register_syncs_a_pending_sale_for_its_cashier(
+    cash_session: CashSession, product: Product, cashier, store: Store
+) -> None:
+    """Awa vend puis se déconnecte ; Moussa, de la même boutique, se connecte
+    sur la caisse : les ventes d'Awa partent avec lui, mais restent les
+    siennes (sa session, son rapport Z)."""
+    colleague = User.objects.create_user(username="colleague")
+    StoreAssignment.objects.create(user=colleague, store=store)
+    event_id = uuid4()
+
+    outcome = process_sale_completed_event(
+        event_id=event_id,
+        terminal_id=uuid4(),
+        entity_id=uuid4(),
+        occurred_at=timezone.now(),
+        payload=_sale_event_payload(
+            cash_session=cash_session, product=product, unit_price=Decimal("500.00")
+        ),
+        cashier=colleague,
+    )
+
+    assert outcome.status == SyncEventStatus.SYNCED
+    sale = Sale.objects.get()
+    assert sale.cash_session == cash_session
+    assert sale.cashier == cashier
+    assert ProcessedSyncEvent.objects.get(pk=event_id).pushed_by == colleague
 
 
 def test_sale_keeps_its_original_session_even_if_a_new_one_opens_later(
@@ -390,3 +418,24 @@ def test_sale_keeps_its_original_session_even_if_a_new_one_opens_later(
 
     sale = Sale.objects.get(pk=outcome.entity_id)
     assert sale.cash_session_id == cash_session.id
+
+
+def test_session_cashier_removed_from_the_store_still_syncs_own_sales(
+    cash_session: CashSession, product: Product, cashier, store: Store
+) -> None:
+    # Aucune affectation active : le caissier a été retiré de la boutique
+    # après sa vente hors ligne, mais la vente a bien eu lieu.
+    StoreAssignment.objects.filter(user=cashier).update(is_active=False)
+
+    outcome = process_sale_completed_event(
+        event_id=uuid4(),
+        terminal_id=uuid4(),
+        entity_id=uuid4(),
+        occurred_at=timezone.now(),
+        payload=_sale_event_payload(
+            cash_session=cash_session, product=product, unit_price=Decimal("500.00")
+        ),
+        cashier=cashier,
+    )
+
+    assert outcome.status == SyncEventStatus.SYNCED

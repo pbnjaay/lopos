@@ -11,6 +11,7 @@ import {
   listPendingLocalSales,
   markLocalSaleConflict,
   markLocalSaleSynced,
+  requeueRetryableConflicts,
 } from "../db/sales"
 import { getOrCreateTerminalId } from "../db/terminal"
 import type { LocalSale } from "../db/types"
@@ -122,6 +123,8 @@ async function runSync(): Promise<SyncOutcome> {
   // deux sens. Si le réseau est réellement mort, le push échoue vite en
   // NetworkError et le backoff s'en charge ; s'il est vivant malgré un
   // navigateur qui se croit hors ligne, la synchronisation progresse.
+  // Conflits d'avant la règle de caisse partagée : ils repartent avec ce passage.
+  await requeueRetryableConflicts()
   const pending = await listPendingLocalSales()
   if (pending.length === 0) {
     consecutiveFailures = 0
