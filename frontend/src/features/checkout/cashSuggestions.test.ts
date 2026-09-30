@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest"
 import { getSuggestedCashAmounts } from "./cashSuggestions"
 
 describe("getSuggestedCashAmounts", () => {
+  it("suggests the next 500 and the notes a customer would hand over", () => {
+    expect(getSuggestedCashAmounts(4_150)).toEqual([4_500, 5_000, 10_000])
+  })
+
   it("suggests a round-up amount for a sub-1000 total", () => {
     expect(getSuggestedCashAmounts(700)).toContain(1_000)
   })
@@ -19,9 +23,15 @@ describe("getSuggestedCashAmounts", () => {
     expect(suggestions).toContain(10_000)
   })
 
-  it("never suggests an amount below the total", () => {
-    for (const amount of getSuggestedCashAmounts(6_300)) {
-      expect(amount).toBeGreaterThanOrEqual(6_300)
+  it("reaches the next 10 000 above a larger total", () => {
+    expect(getSuggestedCashAmounts(12_300)).toEqual([12_500, 15_000, 20_000])
+  })
+
+  it("never suggests the total itself nor anything below it", () => {
+    for (const total of [4_500, 6_300, 10_000]) {
+      for (const amount of getSuggestedCashAmounts(total)) {
+        expect(amount).toBeGreaterThan(total)
+      }
     }
   })
 
@@ -30,7 +40,8 @@ describe("getSuggestedCashAmounts", () => {
     expect(getSuggestedCashAmounts(-10)).toEqual([])
   })
 
-  it("caps suggestions at four amounts", () => {
-    expect(getSuggestedCashAmounts(100).length).toBeLessThanOrEqual(4)
+  it("caps suggestions at three amounts", () => {
+    expect(getSuggestedCashAmounts(100).length).toBeLessThanOrEqual(3)
+    expect(getSuggestedCashAmounts(123_456).length).toBeLessThanOrEqual(3)
   })
 })
