@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -494,7 +495,8 @@ def test_dashboard_query_count_stays_bounded(
         sale = make_sale(cash_session=cash_session, cashier=cashier, total=Decimal("500.00"), method=Payment.Method.CASH)
         SaleItem.objects.create(sale=sale, product=coca, product_name=coca.name, unit_price=coca.selling_price, quantity=1, line_total=Decimal("500.00"))
 
-    with django_assert_max_num_queries(15):
+    # Coût fixe, jamais par ligne : +1 agrégation pour la carte Dépenses.
+    with django_assert_max_num_queries(16):
         get_manager_dashboard()
 
 
@@ -538,3 +540,87 @@ def test_book_card_is_hidden_for_a_shop_without_credit(cash_session: CashSession
 
     assert dashboard.book.is_used is False
     assert dashboard.credit_total == Decimal("0.00")
+
+
+# --- Dépenses ------------------------------------------------------------
+
+
+def _expense(cash_session, cashier, category_name, amount, method="WAVE"):
+    from apps.expenses.models import ExpenseCategory
+    from apps.expenses.services import create_expense, ensure_default_categories
+
+    ensure_default_categories()
+    return create_expense(
+        cash_session=cash_session,
+        created_by=cashier,
+        category=ExpenseCategory.objects.get(name=category_name),
+        amount=Decimal(amount),
+        payment_method=method,
+        description="x",
+        idempotency_key=uuid4(),
+    )
+
+
+def test_expenses_are_summed_apart_from_sales(cash_session: CashSession, cashier) -> None:
+    from apps.expenses.services import cancel_expense
+
+    make_sale(cash_session=cash_session, cashier=cashier, total=Decimal("20000.00"), method=Payment.Method.CASH)
+    _expense(cash_session, cashier, "Électricité", "5000", method="CASH")
+    _expense(cash_session, cashier, "Électricité", "3000")
+    _expense(cash_session, cashier, "Transport", "2000", method="ORANGE_MONEY")
+    _expense(cash_session, cashier, "Eau", "1000")
+    _expense(cash_session, cashier, "Nettoyage", "500")
+    cancelled = _expense(cash_session, cashier, "Réparation", "9000")
+    cancel_expense(expense=cancelled, cancelled_by=cashier, reason="Doublon")
+
+    dashboard = get_manager_dashboard()
+
+    assert dashboard.expenses.is_used is True
+    assert dashboard.expenses.count == 5
+    assert dashboard.expenses.total == Decimal("11500.00")
+    assert dashboard.expenses.by_method == {
+        "cash": Decimal("5000.00"),
+        "wave": Decimal("4500.00"),
+        "orange_money": Decimal("2000.00"),
+    }
+    assert [(c.name, c.total) for c in dashboard.expenses.top_categories] == [
+        ("Électricité", Decimal("8000.00")),
+        ("Transport", Decimal("2000.00")),
+        ("Eau", Decimal("1000.00")),
+    ]
+    # Le CA ne bouge pas : une dépense n'est jamais une vente négative.
+    assert dashboard.net_sales == Decimal("20000.00")
+    assert "status__exact=POSTED" in dashboard.expenses.expenses_url
+
+
+def test_expenses_follow_the_period_and_store_filters(
+    cash_session: CashSession, cashier, store2: Store
+) -> None:
+    from apps.expenses.models import Expense, ExpenseCategory
+
+    _expense(cash_session, cashier, "Transport", "2000")
+    # Créée directement avec sa date : une dépense ne se modifie pas après coup.
+    Expense.objects.create(
+        store=cash_session.cash_register.store,
+        cash_session=cash_session,
+        category=ExpenseCategory.objects.get(name="Eau"),
+        amount=Decimal("1000"),
+        payment_method="WAVE",
+        occurred_at=timezone.now() - timedelta(days=2),
+        created_by=cashier,
+        idempotency_key=uuid4(),
+    )
+
+    assert get_manager_dashboard(period="today").expenses.total == Decimal("2000.00")
+    assert get_manager_dashboard(period="7d").expenses.total == Decimal("3000.00")
+    other_store = get_manager_dashboard(store_id=str(store2.pk)).expenses
+    assert other_store.is_used is False
+    assert other_store.total == Decimal("0.00")
+    assert f"store__id__exact={store2.pk}" in other_store.expenses_url
+
+
+def test_expense_card_is_hidden_until_the_shop_records_one(cash_session: CashSession, cashier) -> None:
+    dashboard = get_manager_dashboard()
+
+    assert dashboard.expenses.is_used is False
+    assert dashboard.expenses.top_categories == []

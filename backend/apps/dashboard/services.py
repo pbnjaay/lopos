@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from apps.cash.models import CashSession
 from apps.customers.models import CustomerLedgerEntry, CustomerPayment
+from apps.expenses.models import Expense
 from apps.inventory.models import Stock
 from apps.sales.models import Payment, Sale, SaleItem, SaleReturn
 from apps.stores.models import Store
@@ -55,6 +56,26 @@ class BookSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class ExpenseCategoryTotal:
+    name: str
+    total: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class ExpenseSummary:
+    """Argent sorti pour faire tourner la boutique sur la période. Jamais
+    retranché du CA : sans coût d'achat, « CA − dépenses » n'est pas un
+    bénéfice et ne s'affiche pas."""
+
+    is_used: bool
+    count: int
+    total: Decimal
+    by_method: dict[str, Decimal]
+    top_categories: list[ExpenseCategoryTotal]
+    expenses_url: str
+
+
+@dataclass(frozen=True, slots=True)
 class ManagerDashboard:
     period: str
     store_id: str | None
@@ -70,6 +91,7 @@ class ManagerDashboard:
     credit_total: Decimal
     credit_percentage: int
     book: "BookSummary"
+    expenses: "ExpenseSummary"
     open_sessions: list[CashSession]
     low_stock_threshold: int
     out_of_stock_count: int
@@ -266,6 +288,45 @@ def _book_summary(*, start, end, store_id: str | None, credit_granted: Decimal) 
     )
 
 
+def _expense_summary(*, start, end, store_id: str | None) -> ExpenseSummary:
+    scope = Expense.objects.all()
+    if store_id:
+        scope = scope.filter(store_id=store_id)
+    in_period = Q(status=Expense.Status.POSTED, occurred_at__gte=start, occurred_at__lt=end)
+    # Une seule requête : les totaux de la période, et si la boutique a déjà
+    # saisi des dépenses (sinon la carte reste masquée).
+    totals = scope.aggregate(
+        ever=Count("id"),
+        count=Count("id", filter=in_period),
+        total=Sum("amount", filter=in_period),
+        cash=Sum("amount", filter=in_period & Q(payment_method=Payment.Method.CASH)),
+        wave=Sum("amount", filter=in_period & Q(payment_method=Payment.Method.WAVE)),
+        orange_money=Sum("amount", filter=in_period & Q(payment_method=Payment.Method.ORANGE_MONEY)),
+    )
+    top_categories = [
+        ExpenseCategoryTotal(name=row["category__name"], total=row["total"])
+        for row in scope.filter(in_period)
+        .values("category__name")
+        .annotate(total=Sum("amount"))
+        .order_by("-total", "category__name")[:3]
+    ] if totals["count"] else []
+    url = f"{reverse('admin:expenses_expense_changelist')}?status__exact={Expense.Status.POSTED}"
+    if store_id:
+        url += f"&store__id__exact={store_id}"
+    return ExpenseSummary(
+        is_used=bool(totals["ever"]),
+        count=totals["count"],
+        total=totals["total"] or ZERO,
+        by_method={
+            "cash": totals["cash"] or ZERO,
+            "wave": totals["wave"] or ZERO,
+            "orange_money": totals["orange_money"] or ZERO,
+        },
+        top_categories=top_categories,
+        expenses_url=url,
+    )
+
+
 def get_manager_dashboard(
     *, period: str = DEFAULT_PERIOD, store_id: str | None = None
 ) -> ManagerDashboard:
@@ -314,6 +375,7 @@ def get_manager_dashboard(
     credit_total = credit_granted - (return_totals["credit"] or ZERO)
     credit_percentage = round(credit_total / net_sales * 100) if net_sales else 0
     book = _book_summary(start=start, end=end, store_id=store_id, credit_granted=credit_granted)
+    expenses = _expense_summary(start=start, end=end, store_id=store_id)
 
     open_sessions_qs = CashSession.objects.filter(status=CashSession.Status.OPEN).select_related(
         "cash_register", "cash_register__store", "cashier"
@@ -376,6 +438,7 @@ def get_manager_dashboard(
         credit_total=credit_total,
         credit_percentage=credit_percentage,
         book=book,
+        expenses=expenses,
         open_sessions=open_sessions,
         low_stock_threshold=threshold,
         out_of_stock_count=out_of_stock_count,

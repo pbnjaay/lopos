@@ -97,3 +97,39 @@ def test_admin_index_shows_the_customer_book_once_used(client, django_user_model
     assert "Cahier clients" in content
     assert "Encours total" in content
     assert "18 500 FCFA" in content
+
+
+def test_admin_index_shows_expenses_apart_from_sales(client, django_user_model) -> None:
+    from uuid import uuid4
+
+    from apps.cash.models import CashSession
+    from apps.expenses.models import ExpenseCategory
+    from apps.expenses.services import create_expense, ensure_default_categories
+    from apps.stores.models import CashRegister
+
+    user = django_user_model.objects.create_superuser(
+        username="gerant", password="pw", email="gerant@example.com"
+    )
+    client.force_login(user)
+    ensure_default_categories()
+    session = CashSession.objects.create(
+        cash_register=CashRegister.objects.create(store=Store.objects.create(name="Boutique"), name="Caisse"),
+        cashier=user,
+        opening_balance=Decimal("50000"),
+    )
+    create_expense(
+        cash_session=session,
+        created_by=user,
+        category=ExpenseCategory.objects.get(name="Électricité"),
+        amount=Decimal("25000"),
+        payment_method="CASH",
+        idempotency_key=uuid4(),
+    )
+
+    content = client.get(reverse("admin:index")).content.decode()
+
+    assert "Dépenses" in content
+    assert "Total de la période" in content
+    assert "25 000 FCFA" in content
+    assert "Électricité" in content
+    assert "bénéfice" not in content.lower()
