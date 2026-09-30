@@ -103,7 +103,7 @@ def test_receipt_message_hides_the_average_cost_without_valuation_access(
     )
 
     content = response.content.decode()
-    assert "Nouveau stock : 30.000." in content
+    assert "Nouveau stock : 30." in content
     assert "coût moyen :" not in content
     # Le coût moyen est quand même tenu à jour : (24 × 350 + 6 × 400) / 30.
     assert Stock.objects.get(store=store, product=product).average_unit_cost == Decimal("360.0000")

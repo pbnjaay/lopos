@@ -66,10 +66,11 @@ def test_payment_method_shows_french_label(sale: Sale) -> None:
     assert model_admin.payment_method(sale) == "Wave"
 
 
-def test_ticket_link_points_to_frontend_receipt_route(sale: Sale, settings) -> None:
+def test_ticket_links_to_the_frontend_receipt(sale: Sale, settings) -> None:
+    from apps.sales.admin_summary import build_sale_ticket
+
     settings.FRONTEND_URL = "https://caisse.example.com"
-    model_admin = SaleAdmin(Sale, admin.site)
 
-    link = model_admin.ticket_link(sale)
+    ticket = build_sale_ticket(sale)
 
-    assert f"https://caisse.example.com/sales/{sale.pk}/receipt" in link
+    assert ticket.print_url == f"https://caisse.example.com/sales/{sale.pk}/receipt"

@@ -34,8 +34,8 @@ class Customer(models.Model):
         blank=True,
         null=True,
         help_text=(
-            "Format normalisé E.164 (+221771234567). Obligatoire à la création "
-            "depuis la caisse ; facultatif pour un import ou une saisie admin."
+            "Numéro international, ex. +221 77 123 45 67. Obligatoire pour un "
+            "client créé depuis la caisse."
         ),
     )
     notes = models.TextField("notes", blank=True, default="")

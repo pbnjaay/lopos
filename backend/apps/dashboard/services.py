@@ -36,6 +36,7 @@ class TopProduct:
     name: str
     quantity: Decimal
     url: str
+    sale_unit: str = "UNIT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -426,7 +427,7 @@ def get_manager_dashboard(
 
     top_products_qs = (
         SaleItem.objects.filter(sale__in=sales)
-        .values("product_id", "product_name")
+        .values("product_id", "product_name", "product__sale_unit")
         .annotate(total_quantity=Sum("quantity"))
         .order_by("-total_quantity")[:5]
     )
@@ -436,6 +437,7 @@ def get_manager_dashboard(
             name=row["product_name"],
             quantity=row["total_quantity"],
             url=reverse("admin:catalog_product_change", args=[row["product_id"]]),
+            sale_unit=row["product__sale_unit"],
         )
         for row in top_products_qs
     ]

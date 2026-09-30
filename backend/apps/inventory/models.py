@@ -32,10 +32,8 @@ class Stock(models.Model):
         blank=True,
         null=True,
         help_text=(
-            "Coût d'achat moyen pondéré d'une unité dans ce magasin. Vide quand "
-            "il n'est pas connu — jamais 0 par défaut, ce qui gonflerait la "
-            "marge. Ne se modifie que par une réception ou une initialisation "
-            "tracée, jamais à la main."
+            "Coût d'achat moyen d'une unité dans ce magasin, recalculé à chaque "
+            "réception. Vide tant qu'il n'est pas connu."
         ),
     )
     updated_at = models.DateTimeField("modifié le", auto_now=True)
@@ -43,7 +41,9 @@ class Stock(models.Model):
     class Meta:
         ordering = ("store_id", "product_id")
         verbose_name = "stock"
-        verbose_name_plural = "stocks"
+        # Même nom que l'entrée de la barre latérale : le fil d'Ariane lit
+        # « Stock › État du stock », pas « Stocks › Stocks ».
+        verbose_name_plural = "état du stock"
         constraints = [
             models.UniqueConstraint(
                 fields=("store", "product"),

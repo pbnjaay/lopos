@@ -7,7 +7,16 @@ from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin, TabularInline
 
+from apps.dashboard.admin_columns import money_column
+from apps.stores.admin_mixins import SingleStoreColumnsMixin
 from apps.dashboard.formatting import format_fcfa
+
+
+def _signed_fcfa(amount: Decimal) -> str:
+    """Écriture du cahier : « + » quand le client doit plus, « − » quand il
+    doit moins."""
+    sign = "+" if amount > 0 else "−"
+    return f"{sign} {format_fcfa(abs(amount))}"
 
 from .exceptions import InvalidPhone
 from .models import Customer, CustomerLedgerEntry, CustomerPayment
@@ -64,11 +73,16 @@ class LedgerEntryInline(TabularInline):
     fk_name = "customer"
     extra = 0
     can_delete = False
-    fields = ("occurred_at", "entry_type", "amount", "sale", "reason", "created_by")
+    hide_title = True
+    fields = ("occurred_at", "entry_type", "amount_display", "sale", "reason", "created_by")
     readonly_fields = fields
     ordering = ("-occurred_at", "-created_at")
     verbose_name = "écriture"
     verbose_name_plural = "historique du cahier"
+
+    @admin.display(description=_("montant"))
+    def amount_display(self, obj: CustomerLedgerEntry) -> str:
+        return _signed_fcfa(obj.amount)
 
     def has_add_permission(self, request, obj=None) -> bool:
         return False
@@ -81,7 +95,7 @@ class LedgerEntryInline(TabularInline):
 
 
 @admin.register(Customer)
-class CustomerAdmin(ModelAdmin):
+class CustomerAdmin(SingleStoreColumnsMixin, ModelAdmin):
     form = CustomerAdminForm
     list_display = ("name", "phone", "store", "balance_display", "is_active")
     list_filter = ("store", CustomerBalanceFilter, "is_active")
@@ -171,7 +185,7 @@ class ManualLedgerEntryForm(forms.ModelForm):
 
 
 @admin.register(CustomerLedgerEntry)
-class CustomerLedgerEntryAdmin(ModelAdmin):
+class CustomerLedgerEntryAdmin(SingleStoreColumnsMixin, ModelAdmin):
     list_display = (
         "occurred_at",
         "customer",
@@ -191,7 +205,7 @@ class CustomerLedgerEntryAdmin(ModelAdmin):
         "customer",
         "store",
         "entry_type",
-        "amount",
+        "amount_display",
         "sale",
         "sale_return",
         "reversal_of",
@@ -204,8 +218,7 @@ class CustomerLedgerEntryAdmin(ModelAdmin):
 
     @admin.display(description=_("montant"), ordering="amount")
     def amount_display(self, obj: CustomerLedgerEntry) -> str:
-        sign = "+" if obj.amount > 0 else "−"
-        return f"{sign} {format_fcfa(abs(obj.amount))}"
+        return _signed_fcfa(obj.amount)
 
     def get_form(self, request, obj=None, change=False, **kwargs):
         if obj is None:
@@ -220,7 +233,8 @@ class CustomerLedgerEntryAdmin(ModelAdmin):
     def get_fieldsets(self, request, obj=None):
         if obj is None:
             return ((None, {"fields": ManualLedgerEntryForm.Meta.fields}),)
-        return super().get_fieldsets(request, obj)
+        # Écriture existante : uniquement les champs en lecture, montant formaté.
+        return ((None, {"fields": self.readonly_fields}),)
 
     def save_model(self, request, obj: CustomerLedgerEntry, form, change: bool) -> None:
         data = form.cleaned_data
@@ -270,13 +284,27 @@ class CustomerPaymentAdmin(ModelAdmin):
     search_fields = ("reference", "customer__name", "customer__phone")
     date_hierarchy = "created_at"
 
-    @admin.display(description=_("montant"), ordering="amount")
-    def amount_display(self, obj: CustomerPayment) -> str:
-        return format_fcfa(obj.amount)
+    fields = (
+        "reference",
+        "customer",
+        "store",
+        "method",
+        "amount_display",
+        "received_amount_display",
+        "change_amount_display",
+        "balance_before_display",
+        "balance_after_display",
+        "cash_session",
+        "created_by",
+        "created_at",
+    )
+    readonly_fields = fields
 
-    @admin.display(description=_("nouveau solde"), ordering="balance_after")
-    def balance_after_display(self, obj: CustomerPayment) -> str:
-        return format_fcfa(obj.balance_after)
+    amount_display = money_column("amount", "montant")
+    received_amount_display = money_column("received_amount", "montant reçu")
+    change_amount_display = money_column("change_amount", "monnaie rendue")
+    balance_before_display = money_column("balance_before", "ancien solde")
+    balance_after_display = money_column("balance_after", "nouveau solde")
 
     def has_add_permission(self, request) -> bool:
         return False
