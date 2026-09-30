@@ -20,10 +20,9 @@ from apps.stores.models import Store
 
 from .exceptions import InvalidStockCost
 from .models import InventoryMovement, Stock, StockCostChange, StockValuation
+from .permissions import SET_STOCK_COST_PERMISSION, can_view_stock_costs
 from .services import set_stock_unit_cost
 from .valuation import annotate_stock_values, summarize_stock_valuation
-
-SET_COST_PERMISSION = "inventory.set_cost_stockvaluation"
 
 
 def default_low_stock_threshold() -> int:
@@ -116,6 +115,19 @@ class InventoryMovementAdmin(ModelAdmin):
     @admin.display(description=_("coût unitaire"), ordering="unit_cost")
     def unit_cost_display(self, obj: InventoryMovement) -> str:
         return _format_cost(obj.unit_cost)
+
+    # Le coût d'un mouvement suit la permission de la valorisation.
+    def get_list_display(self, request):
+        list_display = super().get_list_display(request)
+        if can_view_stock_costs(request.user):
+            return list_display
+        return tuple(name for name in list_display if name != "unit_cost_display")
+
+    def get_fields(self, request, obj=None):
+        fields = super().get_fields(request, obj)
+        if can_view_stock_costs(request.user):
+            return fields
+        return [name for name in fields if name != "unit_cost"]
 
     def has_add_permission(self, request) -> bool:
         return False
@@ -219,7 +231,7 @@ class StockValuationAdmin(ModelAdmin):
         return False
 
     def has_set_cost_permission(self, request: HttpRequest, object_id=None) -> bool:
-        return request.user.has_perm(SET_COST_PERMISSION)
+        return request.user.has_perm(SET_STOCK_COST_PERMISSION)
 
     @admin.display(description=_("coût moyen"), ordering="average_unit_cost")
     def average_cost_display(self, obj: Stock) -> str:
@@ -277,7 +289,7 @@ class StockValuationAdmin(ModelAdmin):
         permissions=["set_cost"],
     )
     def set_cost_action(self, request: HttpRequest, object_id: str) -> HttpResponse:
-        if not request.user.has_perm(SET_COST_PERMISSION):
+        if not request.user.has_perm(SET_STOCK_COST_PERMISSION):
             raise PermissionDenied
         stock = get_object_or_404(Stock.objects.select_related("product", "store"), pk=object_id)
         back_url = reverse("admin:inventory_stockvaluation_changelist")

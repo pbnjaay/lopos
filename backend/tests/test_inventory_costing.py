@@ -441,8 +441,12 @@ def test_adjustment_of_an_unknown_cost_stays_unknown(store: Store, product: Prod
 def api_client():
     from rest_framework.test import APIClient
 
+    from django.contrib.auth.models import Permission
+
+    manager = User.objects.create_user(username="gerant")
+    manager.user_permissions.add(Permission.objects.get(codename="change_product"))
     client = APIClient()
-    client.force_authenticate(User.objects.create_user(username="gerant"))
+    client.force_authenticate(manager)
     return client
 
 
@@ -481,3 +485,16 @@ def test_api_stock_in_rejects_a_negative_cost(api_client, store: Store, product:
 
     assert response.status_code == 400
     assert not Stock.objects.exists()
+
+
+def test_api_stock_in_is_refused_to_a_cashier(store: Store, product: Product) -> None:
+    from rest_framework.test import APIClient
+
+    cashier_client = APIClient()
+    cashier_client.force_authenticate(User.objects.create_user(username="caissier"))
+
+    response = _stock_in(cashier_client, store, product, unit_cost="1")
+
+    assert response.status_code == 403
+    assert not Stock.objects.exists()
+    assert not InventoryMovement.objects.exists()

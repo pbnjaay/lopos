@@ -16,6 +16,7 @@ from unfold.widgets import (
 
 from apps.dashboard.formatting import format_fcfa
 from apps.inventory.exceptions import InvalidStockCost, InvalidStockQuantity
+from apps.inventory.permissions import can_view_stock_costs
 from apps.inventory.models import Stock
 from apps.inventory.services import adjust_stock, receive_stock
 from apps.observability import posthog_client
@@ -339,6 +340,7 @@ class ProductAdmin(ModelAdmin):
                 "submit_label": submit_label,
                 "product": product,
                 "stocks": self._current_stocks(product),
+                "can_view_stock_costs": can_view_stock_costs(request.user),
                 "form": form,
                 "opts": Product._meta,
                 "back_url": reverse(
@@ -378,13 +380,15 @@ class ProductAdmin(ModelAdmin):
                             "quantity": quantity,
                         },
                     )
-                    self.message_user(
-                        request,
+                    message = (
                         f"{quantity} unités de {product.name} ajoutées au stock de "
-                        f"{store.name}. Nouveau stock : {result.stock.quantity}, "
-                        f"coût moyen : {_format_cost(result.stock.average_unit_cost)}.",
-                        level=messages.SUCCESS,
+                        f"{store.name}. Nouveau stock : {result.stock.quantity}"
                     )
+                    if can_view_stock_costs(request.user):
+                        message += (
+                            f", coût moyen : {_format_cost(result.stock.average_unit_cost)}"
+                        )
+                    self.message_user(request, f"{message}.", level=messages.SUCCESS)
                     return redirect(
                         reverse("admin:catalog_product_change", args=[product.pk])
                     )
