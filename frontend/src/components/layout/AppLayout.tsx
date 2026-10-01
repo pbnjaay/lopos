@@ -6,6 +6,7 @@ import { logout } from "../../api/auth"
 import { API_BASE_URL } from "../../api/client"
 import { resetAnalytics } from "../../analytics/posthog"
 import { clearSentryUser } from "../../analytics/sentry"
+import { forgetAuthenticatedUser } from "../../db/tenancy"
 import { CashRegisterIcon, ChevronDownIcon, LogOutIcon, PowerIcon, ReceiptIcon, SettingsIcon, UsersIcon, WalletIcon } from "../ui/Icons"
 import { LogoMark } from "../ui/Logo"
 import { ToastProvider, useToast } from "../ui/Toast"
@@ -70,7 +71,10 @@ function AppShell({ user }: AppLayoutProps) {
       // un bandeau rouge en travers de l'application.
       toast.error("Déconnexion impossible", { description: describeErrorShort(error, "session") })
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Le poste oublie le compte (plus de reprise hors ligne) et le cahier
+      // clients ; les ventes en attente restent pour un collègue.
+      await forgetAuthenticatedUser()
       queryClient.clear()
       resetAnalytics()
       clearSentryUser()

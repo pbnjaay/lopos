@@ -180,6 +180,7 @@ export async function createLocalSale(
 
     const sale: LocalSale = {
       id: crypto.randomUUID(),
+      ...(session.organizationId ? { organizationId: session.organizationId } : {}),
       serverId: null,
       syncEventId: crypto.randomUUID(),
       cashSessionId: session.id,

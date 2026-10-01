@@ -21,7 +21,10 @@ export function initPostHog() {
 
 export function identifyUser(user: CurrentUser) {
   if (!isEnabled()) return
-  posthog.identify(String(user.id), { role: user.is_staff ? "staff" : "cashier" })
+  // Identifiants seulement : ni nom de commerce, ni données de clients.
+  posthog.identify(String(user.id), { role: user.role, organization_id: user.organization.id })
+  // Chaque commerce séparé dans les analyses (groupes PostHog).
+  posthog.group("organization", user.organization.id)
 }
 
 export function resetAnalytics() {
