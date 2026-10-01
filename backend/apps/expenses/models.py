@@ -9,16 +9,26 @@ from django.utils import timezone
 from apps.cash.models import CashSession
 from apps.sales.models import Payment
 from apps.stores.models import Store
+from apps.tenancy.models import Organization
 
 from .exceptions import ImmutableExpense
 
 
 class ExpenseCategory(models.Model):
-    """Nature d'une dépense (« Électricité », « Transport »…), commune à
-    toutes les boutiques. Se désactive, ne se supprime jamais : des dépenses
-    y restent rattachées."""
+    """Nature d'une dépense (« Électricité », « Transport »…), commune aux
+    boutiques d'un même commerce. Se désactive, ne se supprime jamais : des
+    dépenses y restent rattachées."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # Nullable le temps de la migration multi-organisation.
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.PROTECT,
+        related_name="expense_categories",
+        verbose_name="organisation",
+        blank=True,
+        null=True,
+    )
     name = models.CharField("nom", max_length=64, unique=True)
     requires_description = models.BooleanField(
         "description obligatoire",
@@ -43,6 +53,11 @@ class ExpenseCategory(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    def save(self, *args, **kwargs) -> None:
+        if self._state.adding and self.organization_id is None:
+            self.organization = Organization.objects.sole()
+        super().save(*args, **kwargs)
 
 
 class ExpenseQuerySet(models.QuerySet):

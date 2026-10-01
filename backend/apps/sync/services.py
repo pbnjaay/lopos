@@ -141,6 +141,7 @@ def process_sale_completed_event(
                 terminal_id=terminal_id,
                 event_type=ProcessedSyncEvent.EventType.SALE_COMPLETED,
                 entity_id=sale.id,
+                store_id=cash_session.cash_register.store_id,
                 pushed_by=cashier,
                 stock_discrepancy=stock_discrepancy,
             )

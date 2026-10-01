@@ -21,6 +21,12 @@ def some_data() -> None:
     Store.objects.create(name="Supérette Louga")
     Product.objects.create(name="Coca 50cl", selling_price=Decimal("500.00"))
     User.objects.create_user(username="caissier", password="password123")
+    # Le test tient tout dans une transaction : les contrôles de clés
+    # étrangères différés de ces insertions y restent en attente, et
+    # PostgreSQL refuse alors le TRUNCATE de `flush`. En production la
+    # commande tourne hors transaction, sans rien en attente.
+    with connection.cursor() as cursor:
+        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
 
 
 def _db_name() -> str:

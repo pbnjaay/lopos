@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "corsheaders",
     "rest_framework",
+    "apps.tenancy",
     "apps.stores",
     "apps.catalog",
     "apps.inventory",
@@ -292,6 +293,14 @@ UNFOLD = {
                 "title": _("Configuration"),
                 "separator": True,
                 "items": [
+                    # Plateforme : un gérant ne doit même pas savoir qu'il
+                    # existe d'autres commerces.
+                    {
+                        "title": _("Organisations"),
+                        "icon": "domain",
+                        "link": reverse_lazy("admin:tenancy_organization_changelist"),
+                        "permission": lambda request: request.user.is_superuser,
+                    },
                     {
                         "title": _("Magasins"),
                         "icon": "store",
