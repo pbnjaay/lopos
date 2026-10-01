@@ -12,6 +12,8 @@ Les coûts, eux, suivent en plus « voit les coûts et marges »
 
 from django.contrib.auth.models import Group
 
+from apps.stores.models import StoreAssignment
+
 from .models import OrganizationMembership
 
 Role = OrganizationMembership.Role
@@ -30,22 +32,28 @@ ADMIN_ROLES = (Role.OWNER, Role.MANAGER)
 
 
 def sync_member_access(user) -> None:
-    """Aligne groupes et accès à l'administration sur le rôle actif du compte.
+    """Aligne groupes, accès à l'administration et affectations sur le rôle
+    actif du compte.
 
     Sans membre actif (retiré, ou jamais rattaché), plus aucun groupe de rôle
-    ni accès à l'administration. Le super-utilisateur de la plateforme n'est
-    jamais touché."""
+    ni accès à l'administration ; ses affectations restent, pour une
+    éventuelle réactivation. Passé à un autre commerce, ses affectations aux
+    magasins de l'ancien sont désactivées. Le super-utilisateur de la
+    plateforme n'est jamais touché."""
     if user.is_superuser:
         return
     membership = (
         OrganizationMembership.objects.filter(user=user, is_active=True)
-        .only("role")
+        .only("role", "organization_id")
         .first()
     )
     user.groups.remove(*Group.objects.filter(name__in=ROLE_GROUPS.values()))
     if membership is not None:
         group, _ = Group.objects.get_or_create(name=ROLE_GROUPS[membership.role])
         user.groups.add(group)
+        StoreAssignment.objects.filter(user=user, is_active=True).exclude(
+            store__organization_id=membership.organization_id
+        ).update(is_active=False)
 
     is_staff = membership is not None and membership.role in ADMIN_ROLES
     if user.is_staff != is_staff:

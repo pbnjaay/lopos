@@ -9,12 +9,9 @@ class OrganizationQuerySet(models.QuerySet):
     def sole(self) -> "Organization | None":
         """L'organisation de la base quand il n'en existe qu'une, sinon None.
 
-        Transitoire : tant que le contexte tenant n'est pas branché, un
-        magasin, un produit ou une catégorie créé sans organisation est
-        rattaché à l'organisation pilote. Dès qu'une seconde organisation
-        existe, plus rien n'est deviné — la ligne reste sans organisation et
-        `tenancy_audit` la signale.
-        """
+        Pour les outils d'une installation à un seul commerce (démo,
+        catégories par défaut) ; jamais pour deviner le commerce d'une
+        donnée créée par un compte, qui vient toujours de son contexte."""
         organizations = list(self.order_by()[:2])
         return organizations[0] if len(organizations) == 1 else None
 

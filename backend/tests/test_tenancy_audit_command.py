@@ -1,14 +1,14 @@
-from decimal import Decimal
 from io import StringIO
+from uuid import uuid4
 
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 
 from apps.cash.models import CashSession
-from apps.catalog.models import Product
 from apps.expenses.models import ExpenseCategory
 from apps.stores.models import CashRegister, Store, StoreAssignment
+from apps.sync.models import ProcessedSyncEvent
 from apps.tenancy.models import Organization, OrganizationMembership
 
 pytestmark = [pytest.mark.django_db, pytest.mark.explicit_tenancy]
@@ -51,28 +51,23 @@ def test_audit_reports_organizations_stores_and_accounts(
 
 def test_audit_is_read_only(organization: Organization, store: Store) -> None:
     User.objects.create_user(username="orphelin")
-    unattached = Store.objects.create(name="Sans organisation")
-    Store.objects.filter(pk=unattached.pk).update(organization=None)
 
     _audit()
 
     assert Organization.objects.count() == 1
     assert not OrganizationMembership.objects.exists()
-    assert Store.objects.filter(organization__isnull=True).count() == 1
 
 
 def test_audit_flags_missing_owner(organization: Organization) -> None:
     assert "« Boutique Ndiaye » n'a aucun propriétaire" in _audit()
 
 
-def test_audit_flags_unattached_data() -> None:
-    Store.objects.create(name="Louga Centre")
-    Product.objects.create(name="Riz", selling_price=Decimal("700"))
+def test_audit_flags_sync_events_without_store(organization: Organization) -> None:
+    ProcessedSyncEvent.objects.create(
+        event_id=uuid4(), terminal_id=uuid4(), event_type="SALE_COMPLETED", entity_id=uuid4()
+    )
 
-    output = _audit()
-
-    assert "1 magasins à rattacher." in output
-    assert "1 produits à rattacher." in output
+    assert "1 événements de synchronisation sans magasin à rattacher." in _audit()
 
 
 def test_audit_flags_superuser_selling_at_the_register(store: Store) -> None:

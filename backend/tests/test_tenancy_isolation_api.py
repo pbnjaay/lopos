@@ -25,10 +25,18 @@ from apps.inventory.services import receive_stock
 from apps.sales.models import Sale, SaleReturn
 from apps.sync.models import ProcessedSyncEvent
 from apps.tenancy.exceptions import CrossTenantReference
+from apps.tenancy.integrity import find_violations
 
 from .tenancy_factories import Commerce, build_commerce
 
 pytestmark = [pytest.mark.django_db, pytest.mark.explicit_tenancy]
+
+
+@pytest.fixture(autouse=True)
+def no_cross_commerce_data_left_behind():
+    """Après chaque attaque, refusée ou non, rien ne relie deux commerces."""
+    yield
+    assert [rule.label for rule, _ in find_violations()] == []
 
 
 @pytest.fixture

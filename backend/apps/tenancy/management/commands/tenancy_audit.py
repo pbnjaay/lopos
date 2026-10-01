@@ -5,8 +5,6 @@ from django.core.management.base import BaseCommand
 from django.db.models import Count, Q
 from django.utils import timezone
 
-from apps.catalog.models import Product
-from apps.expenses.models import ExpenseCategory
 from apps.stores.models import Store
 from apps.sync.models import ProcessedSyncEvent
 from apps.tenancy.models import Organization, OrganizationMembership
@@ -97,13 +95,11 @@ class Command(BaseCommand):
             )
 
     def _unattached(self, warnings: list[str]) -> None:
+        # Magasins, produits et catégories ont toujours un commerce (colonne
+        # obligatoire) ; seul un événement de sync dont la vente a disparu
+        # peut rester sans magasin.
         self._title("Données sans organisation")
         counts = {
-            "magasins": Store.objects.filter(organization__isnull=True).count(),
-            "produits": Product.objects.filter(organization__isnull=True).count(),
-            "catégories de dépenses": ExpenseCategory.objects.filter(
-                organization__isnull=True
-            ).count(),
             "événements de synchronisation sans magasin": (
                 ProcessedSyncEvent.objects.filter(store__isnull=True).count()
             ),

@@ -31,10 +31,13 @@ def ensure_default_categories(organization: Organization | None = None) -> int:
     existantes (un gérant a pu les renommer ou les désactiver). Renvoie le
     nombre créé.
 
-    Sans commerce précisé : celui de la base s'il n'y en a qu'un (sinon des
-    catégories sans commerce, comme sur une installation neuve)."""
+    Sans commerce précisé : celui de la base s'il n'y en a qu'un. Sans aucun
+    commerce, rien n'est créé — une catégorie appartient toujours à un
+    commerce."""
     if organization is None:
         organization = Organization.objects.sole()
+    if organization is None:
+        return 0
     created_count = 0
     for position, (name, requires_description) in enumerate(DEFAULT_CATEGORIES):
         _category, created = ExpenseCategory.objects.get_or_create(

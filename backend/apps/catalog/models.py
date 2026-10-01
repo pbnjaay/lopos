@@ -37,14 +37,11 @@ class Product(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     # Le catalogue est celui du commerce, partagé par ses magasins ; chaque
     # magasin garde son propre stock et son propre coût moyen (`Stock`).
-    # Nullable le temps de la migration multi-organisation.
     organization = models.ForeignKey(
         Organization,
         on_delete=models.PROTECT,
         related_name="products",
         verbose_name="organisation",
-        blank=True,
-        null=True,
     )
     name = models.CharField("nom", max_length=255)
     barcode = models.CharField("code-barres", max_length=64, blank=True, null=True)
@@ -105,6 +102,4 @@ class Product(models.Model):
 
     def save(self, *args, **kwargs) -> None:
         self.name = format_product_name(self.name)
-        if self._state.adding and self.organization_id is None:
-            self.organization = Organization.objects.sole()
         super().save(*args, **kwargs)

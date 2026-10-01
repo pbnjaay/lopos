@@ -8,15 +8,11 @@ from apps.tenancy.models import Organization
 
 class Store(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    # Nullable le temps de la migration multi-organisation : rendue
-    # obligatoire une fois toutes les lignes existantes rattachées.
     organization = models.ForeignKey(
         Organization,
         on_delete=models.PROTECT,
         related_name="stores",
         verbose_name="organisation",
-        blank=True,
-        null=True,
     )
     name = models.CharField("nom", max_length=255)
     address = models.TextField("adresse", blank=True, null=True)
@@ -31,11 +27,6 @@ class Store(models.Model):
 
     def __str__(self) -> str:
         return self.name
-
-    def save(self, *args, **kwargs) -> None:
-        if self._state.adding and self.organization_id is None:
-            self.organization = Organization.objects.sole()
-        super().save(*args, **kwargs)
 
 
 class CashRegister(models.Model):

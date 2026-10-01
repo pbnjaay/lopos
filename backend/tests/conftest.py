@@ -1,9 +1,14 @@
 import pytest
 from django.contrib.auth import get_user_model
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 
+from apps.catalog.models import Product
 from apps.expenses.models import ExpenseCategory
+from apps.expenses.services import ensure_default_categories
+from apps.stores.models import Store
 from apps.tenancy.models import Organization, OrganizationMembership
+
+PILOT_CATALOG_MODELS = (Store, Product, ExpenseCategory)
 
 
 def pytest_configure(config) -> None:
@@ -17,9 +22,8 @@ def pytest_configure(config) -> None:
 @pytest.fixture(autouse=True)
 def pilot_organization(request):
     """Reproduit une installation à un seul commerce, comme le pilote après
-    migration : les catégories existantes et tout magasin, produit ou
-    catégorie créé ensuite y sont rattachés
-    (`Organization.objects.sole()`), et chaque compte autre que
+    migration : il a ses catégories de dépenses, tout magasin, produit ou
+    catégorie créé sans commerce y est rattaché, et chaque compte autre que
     super-utilisateur en est membre — propriétaire s'il est staff (l'accès
     à tous les magasins qu'il avait avant les organisations), caissier sinon.
 
@@ -31,9 +35,15 @@ def pilot_organization(request):
         return
 
     organization = Organization.objects.create(name="Commerce pilote", slug="pilote-test")
-    # Comme la migration 0002 : les catégories semées par migration
-    # appartiennent au commerce pilote.
-    ExpenseCategory.objects.filter(organization__isnull=True).update(organization=organization)
+    # Comme le pilote réel : ses catégories de dépenses par défaut.
+    ensure_default_categories(organization)
+
+    def join_pilot_catalog(sender, instance, raw=False, **kwargs) -> None:
+        # Raccourci de test : un magasin, produit ou catégorie créé sans
+        # commerce rejoint le commerce pilote (le code de production, lui,
+        # le précise toujours — la colonne est obligatoire).
+        if not raw and instance._state.adding and instance.organization_id is None:
+            instance.organization = organization
 
     def join_pilot(sender, instance, raw=False, **kwargs) -> None:
         if raw:
@@ -54,10 +64,14 @@ def pilot_organization(request):
 
     User = get_user_model()
     post_save.connect(join_pilot, sender=User, dispatch_uid="tests.join_pilot")
+    for model in PILOT_CATALOG_MODELS:
+        pre_save.connect(join_pilot_catalog, sender=model, dispatch_uid=f"tests.pilot.{model.__name__}")
     try:
         yield organization
     finally:
         post_save.disconnect(sender=User, dispatch_uid="tests.join_pilot")
+        for model in PILOT_CATALOG_MODELS:
+            pre_save.disconnect(sender=model, dispatch_uid=f"tests.pilot.{model.__name__}")
 
 
 def _uses_db(request) -> bool:

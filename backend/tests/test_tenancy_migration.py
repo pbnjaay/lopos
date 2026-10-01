@@ -25,11 +25,13 @@ def migrate_back():
     """Ramène `app` à `migration` (le reste à jour) et renvoie les modèles
     historiques ; tout est réappliqué à la fin du test, même en échec."""
 
-    def _migrate_back(app: str, migration: str):
+    def _migrate_back(app: str, migration: str, *others: tuple[str, str]):
+        nodes = [(app, migration), *others]
         executor = MigrationExecutor(connection)
+        apps_back = {node[0] for node in nodes}
         targets = [
-            node for node in executor.loader.graph.leaf_nodes() if node[0] != app
-        ] + [(app, migration)]
+            node for node in executor.loader.graph.leaf_nodes() if node[0] not in apps_back
+        ] + nodes
         executor.migrate(targets)
         executor.loader.build_graph()
         return executor.loader.project_state(targets).apps
@@ -99,7 +101,7 @@ def test_fresh_install_gets_no_organization(migrate_back) -> None:
     assert not Organization.objects.exists()
 
 
-def test_existing_organization_is_left_alone(migrate_back) -> None:
+def test_existing_organization_gets_no_pilot_and_no_guessed_member(migrate_back) -> None:
     apps = migrate_back("tenancy", "0001_initial")
     apps.get_model("tenancy", "Organization").objects.create(name="Déjà là", slug="deja")
     apps.get_model("auth", "User").objects.create(username="caissier")
@@ -109,7 +111,8 @@ def test_existing_organization_is_left_alone(migrate_back) -> None:
 
     assert list(Organization.objects.values_list("slug", flat=True)) == ["deja"]
     assert not OrganizationMembership.objects.exists()
-    assert Store.objects.get().organization is None
+    # Le passage en NOT NULL rattache le magasin resté seul au commerce unique.
+    assert Store.objects.get().organization.slug == "deja"
 
 
 def test_reverting_detaches_and_removes_the_pilot_organization(migrate_back) -> None:
@@ -129,7 +132,12 @@ def test_sync_events_take_the_store_of_their_sale(migrate_back) -> None:
     apps = migrate_back("sync", "0002_processed_sync_event_pushed_by")
     User = apps.get_model("auth", "User")
     cashier = User.objects.create(username="caissier")
-    store = apps.get_model("stores", "Store").objects.create(name="Louga Centre")
+    organization = apps.get_model("tenancy", "Organization").objects.create(
+        name="Boutique Ndiaye", slug="ndiaye"
+    )
+    store = apps.get_model("stores", "Store").objects.create(
+        name="Louga Centre", organization=organization
+    )
     register = apps.get_model("stores", "CashRegister").objects.create(
         store=store, name="Caisse 1"
     )
@@ -193,3 +201,56 @@ def test_staff_managers_keep_access_to_every_store_of_their_organization(migrate
         # Désactivée exprès : la migration ne la réactive pas.
         ("gerant", "Ancien dépôt"): False,
     }
+
+
+# --- Phase 6 : magasins, produits et catégories toujours dans un commerce --
+
+
+BEFORE_NOT_NULL = (
+    ("stores", "0004_store_organization"),
+    ("catalog", "0009_unique_per_organization"),
+    ("expenses", "0005_unique_per_organization"),
+)
+
+
+def test_not_null_guard_attaches_orphans_to_the_only_commerce(migrate_back) -> None:
+    apps = migrate_back(*BEFORE_NOT_NULL[0], *BEFORE_NOT_NULL[1:])
+    apps.get_model("tenancy", "Organization").objects.create(name="Seul", slug="seul")
+    apps.get_model("stores", "Store").objects.create(name="Orphelin")
+    apps.get_model("catalog", "Product").objects.create(name="Riz", selling_price=Decimal("700"))
+    apps.get_model("expenses", "ExpenseCategory").objects.create(name="Loyer")
+
+    _migrate_all()
+
+    for model in (Store, Product, ExpenseCategory):
+        assert {obj.organization.slug for obj in model.objects.all()} == {"seul"}, model
+
+
+def test_not_null_guard_drops_unused_seed_categories_of_a_fresh_install(migrate_back) -> None:
+    apps = migrate_back(*BEFORE_NOT_NULL[0], *BEFORE_NOT_NULL[1:])
+    Category = apps.get_model("expenses", "ExpenseCategory")
+    Category.objects.all().delete()
+    Category.objects.create(name="Électricité")
+
+    _migrate_all()
+
+    assert not ExpenseCategory.objects.exists()
+
+
+def test_not_null_guard_refuses_to_guess_between_commerces(migrate_back) -> None:
+    apps = migrate_back(*BEFORE_NOT_NULL[0], *BEFORE_NOT_NULL[1:])
+    Organization_ = apps.get_model("tenancy", "Organization")
+    Organization_.objects.create(name="A", slug="a")
+    Organization_.objects.create(name="B", slug="b")
+    orphan = apps.get_model("stores", "Store").objects.create(name="Orphelin")
+
+    with pytest.raises(RuntimeError, match="1 magasin\\(s\\) sans organisation"):
+        _migrate_all()
+
+    # Corrigé comme le message le demande, la migration passe.
+    apps.get_model("stores", "Store").objects.filter(pk=orphan.pk).update(
+        organization=Organization_.objects.get(slug="a")
+    )
+    _migrate_all()
+    assert Store.objects.get().organization.slug == "a"
+

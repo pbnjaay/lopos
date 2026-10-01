@@ -303,3 +303,23 @@ def test_platform_names_an_owner_from_the_organization_page(a) -> None:
     assert _groups(newcomer) == {"Propriétaire"}
     assert _staff(newcomer) is True
     assert _groups(a.cashier) == set()
+
+
+def test_transfer_to_another_commerce_drops_the_old_store_assignments(a) -> None:
+    b = build_commerce("b")
+    OrganizationMembership.objects.filter(user=a.cashier).update(is_active=False)
+    OrganizationMembership.objects.create(
+        organization=b.organization, user=a.cashier, role=Role.CASHIER
+    )
+
+    sync_member_access(a.cashier)
+
+    assert not a.cashier.store_assignments.filter(is_active=True, store=a.store).exists()
+
+
+def test_removed_member_keeps_its_assignments_for_a_reactivation(a) -> None:
+    OrganizationMembership.objects.filter(user=a.cashier).update(is_active=False)
+
+    sync_member_access(a.cashier)
+
+    assert a.cashier.store_assignments.filter(is_active=True, store=a.store).exists()

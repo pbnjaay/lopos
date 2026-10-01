@@ -114,39 +114,18 @@ def _create_category() -> ExpenseCategory:
 
 
 @pytest.mark.parametrize("create", [_create_store, _create_product, _create_category])
-def test_new_record_joins_the_only_organization(organization: Organization, create) -> None:
-    assert create().organization == organization
-
-
-@pytest.mark.parametrize("create", [_create_store, _create_product, _create_category])
-def test_new_record_stays_unattached_when_organization_is_ambiguous(
+def test_record_without_organization_is_refused_even_with_a_single_one(
     organization: Organization, create
 ) -> None:
-    Organization.objects.create(name="Autre commerce", slug="autre")
-
-    assert create().organization is None
-
-
-@pytest.mark.parametrize("create", [_create_store, _create_product, _create_category])
-def test_new_record_stays_unattached_without_organization(create) -> None:
-    assert create().organization is None
+    """Plus aucun rattachement deviné : la colonne est obligatoire, et le
+    code doit toujours dire à quel commerce appartient ce qu'il crée."""
+    with pytest.raises(IntegrityError), transaction.atomic():
+        create()
 
 
-def test_explicit_organization_is_kept(organization: Organization) -> None:
+def test_organization_is_kept_as_given(organization: Organization) -> None:
     other = Organization.objects.create(name="Autre commerce", slug="autre")
 
     store = Store.objects.create(name="Dakar", organization=other)
 
     assert store.organization == other
-
-
-def test_existing_record_is_never_reattached(organization: Organization) -> None:
-    store = Store.objects.create(name="Louga Centre")
-    Store.objects.filter(pk=store.pk).update(organization=None)
-    store.refresh_from_db()
-
-    store.name = "Louga Marché"
-    store.save()
-
-    store.refresh_from_db()
-    assert store.organization is None

@@ -22,12 +22,21 @@ from apps.inventory.models import InventoryMovement, Stock
 from apps.stores.models import CashRegister, Store, StoreAssignment
 from apps.tenancy.admin_mixins import TenantAdminMixin, TenantRelatedFieldListFilter
 from apps.tenancy.context import resolve_tenant
+from apps.tenancy.integrity import find_violations
 from apps.tenancy.models import Organization, OrganizationMembership
+from apps.tenancy.roles import sync_member_access
 from apps.tenancy.scoping import scope
 
 from .tenancy_factories import Commerce, build_commerce
 
 pytestmark = [pytest.mark.django_db, pytest.mark.explicit_tenancy]
+
+
+@pytest.fixture(autouse=True)
+def no_cross_commerce_data_left_behind():
+    """Après chaque attaque, refusée ou non, rien ne relie deux commerces."""
+    yield
+    assert [rule.label for rule, _ in find_violations()] == []
 User = get_user_model()
 
 # Réservés à la plateforme (ou à son propre compte) : pas de données de
@@ -381,10 +390,13 @@ def test_platform_dashboard_still_covers_everything(a, b) -> None:
 
 
 def _transfer_to(user, commerce: Commerce) -> None:
+    # Comme la fiche Organisation de la plateforme : membres modifiés, puis
+    # accès réalignés.
     OrganizationMembership.objects.filter(user=user).update(is_active=False)
     OrganizationMembership.objects.create(
         organization=commerce.organization, user=user, role=OrganizationMembership.Role.CASHIER
     )
+    sync_member_access(user)
 
 
 def test_former_commerce_loses_a_transferred_account(a, b, owner_a) -> None:
