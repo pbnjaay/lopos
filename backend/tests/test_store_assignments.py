@@ -137,7 +137,7 @@ def test_opening_rejects_an_inactive_assigned_store(cashier) -> None:
         )
 
 
-def test_api_opening_returns_403_for_an_unassigned_register(client: APIClient) -> None:
+def test_api_opening_rejects_an_unassigned_register_as_unknown(client: APIClient) -> None:
     store = Store.objects.create(name="Dakar")
     cash_register = CashRegister.objects.create(store=store, name="Caisse 01")
 
@@ -150,8 +150,7 @@ def test_api_opening_returns_403_for_an_unassigned_register(client: APIClient) -
         format="json",
     )
 
-    assert response.status_code == status.HTTP_403_FORBIDDEN
-    assert response.json() == {
-        "code": "CASH_REGISTER_NOT_ALLOWED",
-        "message": "Vous n’êtes pas autorisé à travailler dans cette boutique.",
-    }
+    # La caisse d'un magasin non affecté est introuvable, comme une caisse
+    # qui n'existe pas.
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json()["cash_register_id"][0].endswith("l'objet n'existe pas.")

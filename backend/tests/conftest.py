@@ -2,6 +2,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
 
+from apps.expenses.models import ExpenseCategory
 from apps.tenancy.models import Organization, OrganizationMembership
 
 
@@ -16,7 +17,8 @@ def pytest_configure(config) -> None:
 @pytest.fixture(autouse=True)
 def pilot_organization(request):
     """Reproduit une installation à un seul commerce, comme le pilote après
-    migration : tout magasin, produit ou catégorie créé y est rattaché
+    migration : les catégories existantes et tout magasin, produit ou
+    catégorie créé ensuite y sont rattachés
     (`Organization.objects.sole()`), et chaque compte autre que
     super-utilisateur en est membre — propriétaire s'il est staff (l'accès
     à tous les magasins qu'il avait avant les organisations), caissier sinon.
@@ -29,6 +31,9 @@ def pilot_organization(request):
         return
 
     organization = Organization.objects.create(name="Commerce pilote", slug="pilote-test")
+    # Comme la migration 0002 : les catégories semées par migration
+    # appartiennent au commerce pilote.
+    ExpenseCategory.objects.filter(organization__isnull=True).update(organization=organization)
 
     def join_pilot(sender, instance, raw=False, **kwargs) -> None:
         if raw:

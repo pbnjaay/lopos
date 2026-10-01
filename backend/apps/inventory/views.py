@@ -25,7 +25,7 @@ class StockInView(APIView):
     permission_classes = (IsAuthenticated, HasActiveTenant, CanReceiveStock)
 
     def post(self, request) -> Response:
-        serializer = StockInSerializer(data=request.data)
+        serializer = StockInSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
 
         try:

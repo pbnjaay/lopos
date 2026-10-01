@@ -5,6 +5,7 @@ from rest_framework import serializers
 from apps.cash.models import CashSession
 
 from apps.customers.services import reducible_credit
+from apps.tenancy.fields import TenantPrimaryKeyRelatedField
 
 from .models import Payment, Sale, SaleItem, SaleReturn, SaleReturnItem
 
@@ -35,7 +36,7 @@ class PaymentInputSerializer(serializers.Serializer):
 
 
 class CompleteSaleSerializer(serializers.Serializer):
-    cash_session_id = serializers.PrimaryKeyRelatedField(
+    cash_session_id = TenantPrimaryKeyRelatedField(
         source="cash_session",
         queryset=CashSession.objects.all(),
     )
@@ -177,8 +178,8 @@ class SaleReturnItemInputSerializer(serializers.Serializer):
 
 
 class CreateSaleReturnSerializer(serializers.Serializer):
-    sale_id = serializers.PrimaryKeyRelatedField(source="original_sale", queryset=Sale.objects.all())
-    cash_session_id = serializers.PrimaryKeyRelatedField(source="cash_session", queryset=CashSession.objects.all())
+    sale_id = TenantPrimaryKeyRelatedField(source="original_sale", queryset=Sale.objects.all())
+    cash_session_id = TenantPrimaryKeyRelatedField(source="cash_session", queryset=CashSession.objects.all())
     idempotency_key = serializers.UUIDField()
     # Inutile quand tout le retour est déduit du cahier ; le service l'exige
     # dès qu'une part est rendue en argent.

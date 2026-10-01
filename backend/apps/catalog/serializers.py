@@ -48,7 +48,10 @@ class ProductSerializer(serializers.ModelSerializer):
             return None
         if value is None:
             return None
-        if Product.objects.filter(barcode=value).exists():
+        # Seul le catalogue du commerce compte : dire qu'un code est pris
+        # ailleurs révélerait le catalogue d'un autre commerce.
+        organization = self.context["organization"]
+        if Product.objects.filter(organization=organization, barcode=value).exists():
             raise serializers.ValidationError("Ce code-barres est déjà utilisé.")
         return value
 

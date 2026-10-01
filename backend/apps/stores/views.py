@@ -16,7 +16,6 @@ from .access import (
 
 
 class StoreViewSet(
-    mixins.CreateModelMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet,
@@ -29,7 +28,6 @@ class StoreViewSet(
 
 
 class CashRegisterViewSet(
-    mixins.CreateModelMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet,

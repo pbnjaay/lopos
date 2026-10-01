@@ -23,7 +23,7 @@ from apps.expenses.models import Expense, ExpenseCategory
 from apps.expenses.services import cancel_expense, create_expense, ensure_default_categories
 from apps.inventory.models import Stock
 from apps.sales.services import complete_sale, create_sale_return
-from apps.stores.models import CashRegister, Store
+from apps.stores.models import CashRegister, Store, StoreAssignment
 
 
 pytestmark = pytest.mark.django_db
@@ -42,6 +42,8 @@ def store() -> Store:
 
 @pytest.fixture
 def cash_session(store: Store, cashier) -> CashSession:
+    # Une caisse ne s'ouvre que dans un magasin où le caissier est affecté.
+    StoreAssignment.objects.get_or_create(user=cashier, store=store)
     register = CashRegister.objects.create(store=store, name="Caisse 01")
     return CashSession.objects.create(
         cash_register=register, cashier=cashier, opening_balance=Decimal("20000.00")

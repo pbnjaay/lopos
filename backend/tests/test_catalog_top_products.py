@@ -19,7 +19,7 @@ from apps.cash.models import CashSession
 from apps.catalog.models import Product
 from apps.catalog.views import ProductViewSet
 from apps.sales.models import Payment, Sale, SaleItem
-from apps.stores.models import CashRegister, Store
+from apps.stores.models import CashRegister, Store, StoreAssignment
 
 
 pytestmark = pytest.mark.django_db
@@ -69,6 +69,7 @@ def _sell(session: CashSession, cashier, product: Product, quantity: str) -> Non
 @pytest.fixture
 def shop(cashier):
     store = Store.objects.create(name="Supérette Test")
+    StoreAssignment.objects.create(user=cashier, store=store)
     register = CashRegister.objects.create(store=store, name="Caisse 01")
     session = CashSession.objects.create(
         cash_register=register,
@@ -153,6 +154,7 @@ def test_ignore_les_ventes_hors_fenetre(api_client, shop, cashier):
 
 def test_ne_melange_pas_les_magasins(api_client, shop, cashier):
     autre_magasin = Store.objects.create(name="Autre boutique")
+    StoreAssignment.objects.create(user=cashier, store=autre_magasin)
     _sell(shop["session"], cashier, shop["products"]["Coca 50cl"], "10")
 
     response = api_client.get(

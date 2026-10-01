@@ -16,7 +16,7 @@ from rest_framework.test import APIClient
 from apps.catalog.models import Product
 from apps.inventory.models import InventoryMovement, Stock
 from apps.inventory.services import receive_stock
-from apps.stores.models import Store
+from apps.stores.models import Store, StoreAssignment
 
 
 pytestmark = pytest.mark.django_db
@@ -48,8 +48,10 @@ def _staff(client, *codenames: str):
 
 
 def test_pos_product_api_never_returns_the_purchase_price(store: Store, product: Product) -> None:
+    cashier = User.objects.create_user(username="caissier")
+    StoreAssignment.objects.create(user=cashier, store=store)
     api = APIClient()
-    api.force_authenticate(User.objects.create_user(username="caissier"))
+    api.force_authenticate(cashier)
 
     listed = api.get(reverse("product-list"), {"store_id": str(store.pk)}).json()
     detail = api.get(reverse("product-detail", args=[product.pk])).json()
@@ -61,7 +63,7 @@ def test_pos_product_api_never_returns_the_purchase_price(store: Store, product:
 
 def test_product_created_through_the_api_still_keeps_its_purchase_price() -> None:
     api = APIClient()
-    api.force_authenticate(User.objects.create_user(username="gerant"))
+    api.force_authenticate(User.objects.create_user(username="gerant", is_staff=True))
 
     response = api.post(
         reverse("product-list"),

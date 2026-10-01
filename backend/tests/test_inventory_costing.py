@@ -443,7 +443,7 @@ def api_client():
 
     from django.contrib.auth.models import Permission
 
-    manager = User.objects.create_user(username="gerant")
+    manager = User.objects.create_user(username="gerant", is_staff=True)
     manager.user_permissions.add(Permission.objects.get(codename="change_product"))
     client = APIClient()
     client.force_authenticate(manager)

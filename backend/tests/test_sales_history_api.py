@@ -9,7 +9,7 @@ from rest_framework.test import APIClient
 
 from apps.cash.models import CashSession
 from apps.sales.models import Payment, Sale
-from apps.stores.models import CashRegister, Store
+from apps.stores.models import CashRegister, Store, StoreAssignment
 
 
 pytestmark = pytest.mark.django_db
@@ -94,6 +94,7 @@ def test_cashier_can_see_a_colleagues_sale_in_the_same_store() -> None:
         cashier=second_cashier,
         opening_balance=Decimal("0.00"),
     )
+    StoreAssignment.objects.create(user=second_cashier, store=store)
     colleague_sale = _sale(session=first_session)
     client = APIClient()
     client.force_authenticate(second_cashier)

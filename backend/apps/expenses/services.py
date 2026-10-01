@@ -135,7 +135,13 @@ def create_expense(
     if locked_session.cashier_id != created_by.pk:
         raise ExpenseSessionNotOwned("Cette session appartient à un autre caissier.")
 
-    if not ExpenseCategory.objects.filter(pk=category.pk, is_active=True).exists():
+    # Une catégorie d'un autre commerce est refusée comme une catégorie
+    # retirée : rien ne dit qu'elle existe ailleurs.
+    if not ExpenseCategory.objects.filter(
+        pk=category.pk,
+        is_active=True,
+        organization__stores=locked_session.cash_register.store_id,
+    ).exists():
         raise InvalidExpense("Cette catégorie de dépense n’est plus utilisée.")
     description = (description or "").strip()
     if category.requires_description and not description:

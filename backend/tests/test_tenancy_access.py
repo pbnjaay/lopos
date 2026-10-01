@@ -203,7 +203,8 @@ def test_cash_session_summary_is_open_to_the_store_manager_only(ndiaye, louga, m
 
     assert _api(manager).get(url).status_code == status.HTTP_200_OK
     assert _api(colleague).get(url).status_code == status.HTTP_403_FORBIDDEN
-    assert _api(elsewhere).get(url).status_code == status.HTTP_403_FORBIDDEN
+    # Magasin non affecté : la session n'existe pas pour lui.
+    assert _api(elsewhere).get(url).status_code == status.HTTP_404_NOT_FOUND
 
 
 # --- API : refus par défaut ------------------------------------------------
@@ -383,3 +384,41 @@ def test_admin_opens_to_the_platform_superuser() -> None:
     User.objects.create_superuser(username="plateforme", password=PASSWORD)
 
     assert _admin_index("plateforme").status_code == 200
+
+
+def test_no_serializer_accepts_an_unscoped_foreign_key() -> None:
+    """Garde-fou : toute clé étrangère reçue d'un client est cherchée dans
+    le commerce du compte (`TenantPrimaryKeyRelatedField`)."""
+    import importlib
+    import inspect
+    import pkgutil
+
+    from rest_framework import serializers
+
+    import apps
+    from apps.tenancy.fields import TenantPrimaryKeyRelatedField
+
+    def writable_relations(serializer):
+        for name, field in serializer.fields.items():
+            if isinstance(field, serializers.ListSerializer):
+                field = field.child
+            if isinstance(field, serializers.BaseSerializer):
+                yield from writable_relations(field)
+            elif isinstance(field, serializers.ManyRelatedField) and not field.read_only:
+                yield name, field.child_relation
+            elif isinstance(field, serializers.RelatedField) and not field.read_only:
+                yield name, field
+
+    checked = 0
+    for module_info in pkgutil.iter_modules(apps.__path__):
+        try:
+            module = importlib.import_module(f"apps.{module_info.name}.serializers")
+        except ModuleNotFoundError:
+            continue
+        for _, cls in inspect.getmembers(module, inspect.isclass):
+            if not issubclass(cls, serializers.BaseSerializer) or cls.__module__ != module.__name__:
+                continue
+            for name, field in writable_relations(cls()):
+                assert isinstance(field, TenantPrimaryKeyRelatedField), f"{cls.__name__}.{name}"
+                checked += 1
+    assert checked >= 9

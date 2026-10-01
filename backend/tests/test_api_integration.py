@@ -10,7 +10,7 @@ from rest_framework.test import APIClient
 from apps.catalog.models import Product
 from apps.inventory.models import InventoryMovement, Stock
 from apps.sales.models import Payment, Sale, SaleItem
-from apps.stores.models import StoreAssignment
+from apps.stores.models import CashRegister, Store, StoreAssignment
 
 
 pytestmark = pytest.mark.django_db
@@ -29,24 +29,28 @@ def api_client(cashier) -> APIClient:
     return client
 
 
+def _owner_client() -> APIClient:
+    owner, _ = User.objects.get_or_create(username="owner", defaults={"is_staff": True})
+    client = APIClient()
+    client.force_authenticate(owner)
+    return client
+
+
 def _bootstrap_pos(
     client: APIClient,
     *,
     stock_quantity: int = 20,
 ) -> dict[str, Any]:
-    store_response = client.post(
-        reverse("store-list"),
-        {"name": "Supérette Test"},
-        format="json",
-    )
-    assert store_response.status_code == status.HTTP_201_CREATED
-    store = store_response.json()
+    # Magasin et caisse se créent dans l'administration, plus par l'API.
+    store_obj = Store.objects.create(name="Supérette Test")
+    store = {"id": str(store_obj.pk), "name": store_obj.name}
     StoreAssignment.objects.create(
         user=User.objects.get(username="cashier"),
-        store_id=store["id"],
+        store=store_obj,
     )
 
-    product_response = client.post(
+    # Un produit s'ajoute au catalogue par un propriétaire ou un gérant.
+    product_response = _owner_client().post(
         reverse("product-list"),
         {
             "name": "Coca 50cl",
@@ -60,7 +64,7 @@ def _bootstrap_pos(
 
     # L'entrée de stock est réservée au droit de réception (gérant), jamais
     # au caissier : un client dédié la fait.
-    manager = User.objects.create_user(username="stock-manager")
+    manager = User.objects.create_user(username="stock-manager", is_staff=True)
     manager.user_permissions.add(Permission.objects.get(codename="change_product"))
     manager_client = APIClient()
     manager_client.force_authenticate(manager)
@@ -75,16 +79,8 @@ def _bootstrap_pos(
     )
     assert stock_response.status_code == status.HTTP_201_CREATED
 
-    register_response = client.post(
-        reverse("cash-register-list"),
-        {
-            "store_id": store["id"],
-            "name": "Caisse 01",
-        },
-        format="json",
-    )
-    assert register_response.status_code == status.HTTP_201_CREATED
-    cash_register = register_response.json()
+    register = CashRegister.objects.create(store=store_obj, name="Caisse 01")
+    cash_register = {"id": str(register.pk), "store_id": store["id"], "name": register.name}
 
     session_response = client.post(
         reverse("cash-session-open"),
@@ -288,6 +284,8 @@ def test_cashier_cannot_sell_on_another_cashiers_session(
 ) -> None:
     context = _bootstrap_pos(api_client)
     other_cashier = User.objects.create_user(username="other-cashier")
+    # Un collègue du même magasin : la session lui est visible, pas à lui.
+    StoreAssignment.objects.create(user=other_cashier, store_id=context["store"]["id"])
     api_client.force_authenticate(other_cashier)
 
     response = api_client.post(
@@ -333,31 +331,19 @@ def test_inactive_product_returns_business_error(api_client: APIClient) -> None:
 def test_current_session_returns_404_when_register_has_no_open_session(
     api_client: APIClient,
 ) -> None:
-    store_response = api_client.post(
-        reverse("store-list"),
-        {"name": "Supérette Test"},
-        format="json",
-    )
-    register_response = api_client.post(
-        reverse("cash-register-list"),
-        {"store_id": store_response.json()["id"], "name": "Caisse 01"},
-        format="json",
-    )
+    store = Store.objects.create(name="Supérette Test")
+    StoreAssignment.objects.create(user=User.objects.get(username="cashier"), store=store)
+    register = CashRegister.objects.create(store=store, name="Caisse 01")
 
     response = api_client.get(
-        reverse(
-            "cash-register-current-session",
-            kwargs={"pk": register_response.json()["id"]},
-        )
+        reverse("cash-register-current-session", kwargs={"pk": register.pk})
     )
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-def test_product_low_stock_threshold_round_trips_through_the_api(
-    api_client: APIClient,
-) -> None:
-    response = api_client.post(
+def test_product_low_stock_threshold_round_trips_through_the_api() -> None:
+    response = _owner_client().post(
         reverse("product-list"),
         {"name": "Riz 25kg", "selling_price": "15000.00", "low_stock_threshold": 2},
         format="json",
@@ -368,8 +354,8 @@ def test_product_low_stock_threshold_round_trips_through_the_api(
     assert Product.objects.get().low_stock_threshold == 2
 
 
-def test_product_low_stock_threshold_defaults_to_null(api_client: APIClient) -> None:
-    response = api_client.post(
+def test_product_low_stock_threshold_defaults_to_null() -> None:
+    response = _owner_client().post(
         reverse("product-list"),
         {"name": "Soda", "selling_price": "500.00"},
         format="json",
@@ -379,8 +365,8 @@ def test_product_low_stock_threshold_defaults_to_null(api_client: APIClient) -> 
     assert response.json()["low_stock_threshold"] is None
 
 
-def test_product_rejects_a_negative_low_stock_threshold(api_client: APIClient) -> None:
-    response = api_client.post(
+def test_product_rejects_a_negative_low_stock_threshold() -> None:
+    response = _owner_client().post(
         reverse("product-list"),
         {"name": "Soda", "selling_price": "500.00", "low_stock_threshold": -1},
         format="json",
