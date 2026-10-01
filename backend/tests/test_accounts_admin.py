@@ -98,14 +98,18 @@ def test_manager_cannot_open_a_superuser_account_for_edit(client, gerant) -> Non
         username="root", email="root@example.com", password="pass12345"
     )
 
+    # Un super-utilisateur n'existe pas pour un commerce : introuvable, comme
+    # un compte inconnu (Django renvoie alors vers l'accueil de l'admin).
     response = client.get(reverse("admin:auth_user_change", args=[superuser.pk]))
-    assert response.status_code == 200  # visible, read-only
+    assert response.status_code == 302
 
     post_response = client.post(
         reverse("admin:auth_user_change", args=[superuser.pk]),
-        _user_change_post_data(username="root"),
+        _user_change_post_data(username="hacked"),
     )
-    assert post_response.status_code == 403
+    assert post_response.status_code == 302
+    superuser.refresh_from_db()
+    assert superuser.username == "root"
 
 
 def test_manager_can_reach_the_password_change_button_for_a_cashier(

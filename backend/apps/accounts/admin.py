@@ -9,13 +9,16 @@ from unfold.decorators import action
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
 from apps.stores.models import StoreAssignment
+from apps.tenancy.admin_mixins import TenantAdminMixin, is_platform_admin
+from apps.tenancy.context import get_tenant
+from apps.tenancy.models import OrganizationMembership
 
 
 admin.site.unregister(User)
 admin.site.unregister(Group)
 
 
-class StoreAssignmentInline(TabularInline):
+class StoreAssignmentInline(TenantAdminMixin, TabularInline):
     model = StoreAssignment
     fields = ("store", "is_active")
     autocomplete_fields = ("store",)
@@ -25,7 +28,10 @@ class StoreAssignmentInline(TabularInline):
 
 
 @admin.register(User)
-class UserAdmin(BaseUserAdmin, ModelAdmin):
+class UserAdmin(TenantAdminMixin, BaseUserAdmin, ModelAdmin):
+    """Un commerce ne voit que ses membres (jamais un super-utilisateur) ;
+    un compte qu'il crée en devient membre."""
+
     form = UserChangeForm
     add_form = UserCreationForm
     change_password_form = AdminPasswordChangeForm
@@ -65,6 +71,18 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
             )})
             for title, options in fieldsets
         )
+
+    def save_model(self, request: HttpRequest, obj: User, form, change: bool) -> None:
+        super().save_model(request, obj, form, change)
+        # Créé depuis un commerce : il en est membre, caissier par défaut.
+        # (Le rôle se choisira ici avec la gestion des rôles.)
+        if not change and not is_platform_admin(request):
+            OrganizationMembership.objects.create(
+                organization=get_tenant(request).organization,
+                user=obj,
+                role=OrganizationMembership.Role.CASHIER,
+                created_by=request.user,
+            )
 
     def has_change_permission(
         self, request: HttpRequest, obj: User | str | None = None

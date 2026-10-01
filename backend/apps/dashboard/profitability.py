@@ -77,9 +77,11 @@ def get_profitability_summary(
     start: datetime,
     end: datetime,
     store_id=None,
+    store_ids=None,
     expenses_total: Decimal | None = None,
 ) -> ProfitabilitySummary:
-    """Rentabilité de [start, end), pour un magasin ou tous (`store_id` None —
+    """Rentabilité de [start, end), pour un magasin (`store_id`), une liste
+    (`store_ids`) ou tous (les deux None, plateforme —
     à l'appelant d'afficher alors « Tous les magasins »)."""
     sale_lines = SaleItem.objects.filter(
         sale__status=Sale.Status.COMPLETED,
@@ -92,9 +94,11 @@ def get_profitability_summary(
         sale_return__created_at__lt=end,
     )
     if store_id is not None:
-        sale_lines = sale_lines.filter(sale__cash_session__cash_register__store_id=store_id)
+        store_ids = [store_id]
+    if store_ids is not None:
+        sale_lines = sale_lines.filter(sale__cash_session__cash_register__store_id__in=store_ids)
         return_lines = return_lines.filter(
-            sale_return__cash_session__cash_register__store_id=store_id
+            sale_return__cash_session__cash_register__store_id__in=store_ids
         )
 
     sale_cost_known = Q(unit_cost__isnull=False)
@@ -116,7 +120,7 @@ def get_profitability_summary(
     )
 
     if expenses_total is None:
-        expenses_total = _posted_expenses(start=start, end=end, store_id=store_id)
+        expenses_total = _posted_expenses(start=start, end=end, store_ids=store_ids)
 
     revenue = _money(sold["revenue"] - returned["revenue"])
     covered_revenue = _money(sold["covered_revenue"] - returned["covered_revenue"])
@@ -143,10 +147,10 @@ def get_profitability_summary(
     )
 
 
-def _posted_expenses(*, start: datetime, end: datetime, store_id) -> Decimal:
+def _posted_expenses(*, start: datetime, end: datetime, store_ids) -> Decimal:
     expenses = Expense.objects.filter(
         status=Expense.Status.POSTED, occurred_at__gte=start, occurred_at__lt=end
     )
-    if store_id is not None:
-        expenses = expenses.filter(store_id=store_id)
+    if store_ids is not None:
+        expenses = expenses.filter(store_id__in=store_ids)
     return expenses.aggregate(total=Sum("amount"))["total"] or ZERO

@@ -382,6 +382,13 @@ else:
         }
     }
 
+# Le veto sur les coûts passe avant les permissions de groupe : le membre
+# (« voit les coûts et marges ») a le dernier mot sur le groupe Django.
+AUTHENTICATION_BACKENDS = [
+    "apps.tenancy.backends.CostVisibilityBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},

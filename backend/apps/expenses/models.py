@@ -29,7 +29,7 @@ class ExpenseCategory(models.Model):
         blank=True,
         null=True,
     )
-    name = models.CharField("nom", max_length=64, unique=True)
+    name = models.CharField("nom", max_length=64)
     requires_description = models.BooleanField(
         "description obligatoire",
         default=False,
@@ -48,6 +48,10 @@ class ExpenseCategory(models.Model):
             models.CheckConstraint(
                 condition=~Q(name=""),
                 name="expenses_category_name_not_empty",
+            ),
+            models.UniqueConstraint(
+                fields=("organization", "name"),
+                name="expenses_unique_category_name_per_organization",
             ),
         ]
 

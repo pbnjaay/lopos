@@ -91,10 +91,12 @@ class Product(models.Model):
                 | Q(purchase_price__gte=Decimal("0")),
                 name="catalog_product_purchase_price_nonnegative",
             ),
+            # Unique dans le catalogue d'un commerce, pas dans toute la base :
+            # deux boutiques indépendantes peuvent coder leurs produits pareil.
             models.UniqueConstraint(
-                fields=("barcode",),
+                fields=("organization", "barcode"),
                 condition=Q(barcode__isnull=False),
-                name="catalog_unique_product_barcode_when_set",
+                name="catalog_unique_product_barcode_per_organization",
             ),
         ]
 

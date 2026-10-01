@@ -9,6 +9,7 @@ from apps.cash.models import CashSession
 from apps.cash.services import expected_cash_for
 from apps.sales.models import Payment
 from apps.stores.access import user_can_manage_store
+from apps.tenancy.models import Organization
 
 from .defaults import DEFAULT_CATEGORIES
 from .exceptions import (
@@ -25,12 +26,19 @@ ZERO = Decimal("0.00")
 DOCUMENT_REFERENCE_MAX_LENGTH = Expense._meta.get_field("document_reference").max_length
 
 
-def ensure_default_categories() -> int:
-    """Crée les catégories par défaut absentes, sans toucher aux existantes
-    (un gérant a pu les renommer ou les désactiver). Renvoie le nombre créé."""
+def ensure_default_categories(organization: Organization | None = None) -> int:
+    """Crée les catégories par défaut absentes du commerce, sans toucher aux
+    existantes (un gérant a pu les renommer ou les désactiver). Renvoie le
+    nombre créé.
+
+    Sans commerce précisé : celui de la base s'il n'y en a qu'un (sinon des
+    catégories sans commerce, comme sur une installation neuve)."""
+    if organization is None:
+        organization = Organization.objects.sole()
     created_count = 0
     for position, (name, requires_description) in enumerate(DEFAULT_CATEGORIES):
         _category, created = ExpenseCategory.objects.get_or_create(
+            organization=organization,
             name=name,
             defaults={
                 "requires_description": requires_description,

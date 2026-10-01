@@ -15,11 +15,13 @@ from .context import TenantContext
 STORE_PATHS: dict[str, str] = {
     "stores.Store": "pk",
     "stores.CashRegister": "store_id",
+    "stores.StoreAssignment": "store_id",
     "cash.CashSession": "cash_register__store_id",
     "sales.Sale": "cash_session__cash_register__store_id",
     "sales.SaleItem": "sale__cash_session__cash_register__store_id",
     "sales.Payment": "sale__cash_session__cash_register__store_id",
     "sales.SaleReturn": "cash_session__cash_register__store_id",
+    "sales.SaleReturnItem": "sale_return__cash_session__cash_register__store_id",
     "customers.Customer": "store_id",
     "customers.CustomerPayment": "store_id",
     "customers.CustomerLedgerEntry": "store_id",
