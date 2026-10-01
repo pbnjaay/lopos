@@ -1,3 +1,4 @@
+import sentry_sdk
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission
 
@@ -17,6 +18,11 @@ class HasActiveTenant(BasePermission):
     def has_permission(self, request, view) -> bool:
         if not request.user or not request.user.is_authenticated:
             return False
-        if get_tenant(request) is None:
+        tenant = get_tenant(request)
+        if tenant is None:
             raise TenantAccessDenied(denial_reason(request.user))
+        # Contexte technique des erreurs : quel commerce, quel rôle — jamais
+        # de données de clients.
+        sentry_sdk.set_tag("organization_id", str(tenant.organization.pk))
+        sentry_sdk.set_tag("role", tenant.role)
         return True
