@@ -311,6 +311,9 @@ UNFOLD = {
                         "title": _("Utilisateurs"),
                         "icon": "group",
                         "link": reverse_lazy("admin:auth_user_changelist"),
+                        # Propriétaire et plateforme : le gérant ne gère pas
+                        # les comptes.
+                        "permission": lambda request: request.user.has_perm("auth.view_user"),
                     },
                     {
                         "title": _("Groupes"),

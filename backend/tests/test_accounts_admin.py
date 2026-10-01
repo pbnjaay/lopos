@@ -1,8 +1,9 @@
 import pytest
-from django.contrib.auth.models import Group
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.urls import reverse
+
+from apps.tenancy.roles import sync_member_access
 
 
 pytestmark = pytest.mark.django_db
@@ -37,12 +38,12 @@ def _user_change_post_data(**overrides) -> dict:
 
 
 @pytest.fixture
-def gerant(client) -> User:
+def owner(client) -> User:
+    """Le propriétaire du commerce pilote : c'est lui qui gère les comptes."""
     call_command("create_default_groups")
-    manager_group = Group.objects.get(name="Gérant")
-    user = User.objects.create_user(username="gerant1", password="pass12345", is_staff=True)
-    user.groups.add(manager_group)
-    client.login(username="gerant1", password="pass12345")
+    user = User.objects.create_user(username="proprietaire1", password="pass12345", is_staff=True)
+    sync_member_access(user)
+    client.login(username="proprietaire1", password="pass12345")
     return user
 
 
@@ -70,7 +71,7 @@ def test_superuser_still_sees_permission_fields(superuser_client, cashier) -> No
         assert f'name="{field}"' in content
 
 
-def test_manager_does_not_see_permission_fields(client, gerant, cashier) -> None:
+def test_owner_does_not_see_permission_fields(client, owner, cashier) -> None:
     response = client.get(reverse("admin:auth_user_change", args=[cashier.pk]))
 
     content = response.content.decode()
@@ -79,8 +80,8 @@ def test_manager_does_not_see_permission_fields(client, gerant, cashier) -> None
     assert 'name="is_active"' in content
 
 
-def test_manager_cannot_self_elevate_a_cashier_via_forged_post(
-    client, gerant, cashier
+def test_owner_cannot_self_elevate_a_cashier_via_forged_post(
+    client, owner, cashier
 ) -> None:
     response = client.post(
         reverse("admin:auth_user_change", args=[cashier.pk]),
@@ -93,7 +94,7 @@ def test_manager_cannot_self_elevate_a_cashier_via_forged_post(
     assert cashier.is_superuser is False
 
 
-def test_manager_cannot_open_a_superuser_account_for_edit(client, gerant) -> None:
+def test_owner_cannot_open_a_superuser_account_for_edit(client, owner) -> None:
     superuser = User.objects.create_superuser(
         username="root", email="root@example.com", password="pass12345"
     )
@@ -112,8 +113,8 @@ def test_manager_cannot_open_a_superuser_account_for_edit(client, gerant) -> Non
     assert superuser.username == "root"
 
 
-def test_manager_can_reach_the_password_change_button_for_a_cashier(
-    client, gerant, cashier
+def test_owner_can_reach_the_password_change_button_for_a_cashier(
+    client, owner, cashier
 ) -> None:
     response = client.get(f"/admin/auth/user/{cashier.pk}/changer-mot-de-passe/")
 
@@ -123,7 +124,7 @@ def test_manager_can_reach_the_password_change_button_for_a_cashier(
     )
 
 
-def test_manager_cannot_reset_a_superuser_password(client, gerant) -> None:
+def test_owner_cannot_reset_a_superuser_password(client, owner) -> None:
     superuser = User.objects.create_superuser(
         username="root", email="root@example.com", password="pass12345"
     )
@@ -131,3 +132,14 @@ def test_manager_cannot_reset_a_superuser_password(client, gerant) -> None:
     response = client.get(f"/admin/auth/user/{superuser.pk}/changer-mot-de-passe/")
 
     assert response.status_code == 403
+
+
+def test_manager_has_no_access_to_accounts(client) -> None:
+    call_command("create_default_groups")
+    manager = User.objects.create_user(username="gerant1", password="pass12345", is_staff=True)
+    manager.memberships.update(role="MANAGER")
+    sync_member_access(manager)
+    client.login(username="gerant1", password="pass12345")
+
+    assert client.get(reverse("admin:auth_user_changelist")).status_code == 403
+    assert client.get(reverse("admin:stores_storeassignment_changelist")).status_code == 403

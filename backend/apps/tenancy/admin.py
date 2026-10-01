@@ -7,6 +7,7 @@ from unfold.admin import ModelAdmin, TabularInline
 from apps.stores.models import Store
 
 from .models import Organization, OrganizationMembership
+from .roles import sync_member_access
 
 
 class PlatformAdminOnlyMixin:
@@ -99,3 +100,8 @@ class OrganizationAdmin(PlatformAdminOnlyMixin, ModelAdmin):
                 membership.created_by = request.user
             membership.save()
         formset.save_m2m()
+        # Rôle nommé ou changé (un propriétaire, typiquement) : ses groupes
+        # et son accès à l'administration suivent aussitôt.
+        for membership in memberships:
+            if isinstance(membership, OrganizationMembership):
+                sync_member_access(membership.user)

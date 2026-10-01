@@ -52,11 +52,15 @@ def test_typing_the_db_name_flushes_everything(some_data) -> None:
     assert User.objects.count() == 0
 
 
-def test_flush_recreates_the_manager_and_cashier_groups(some_data) -> None:
+def test_flush_recreates_the_role_groups(some_data) -> None:
     with patch("builtins.input", return_value=_db_name()):
         call_command("reset_for_launch")
 
-    assert set(Group.objects.values_list("name", flat=True)) == {"Gérant", "Caissier"}
+    assert set(Group.objects.values_list("name", flat=True)) == {
+        "Propriétaire",
+        "Gérant",
+        "Caissier",
+    }
 
 
 

@@ -13,6 +13,7 @@ from apps.inventory.models import Stock
 from apps.inventory.services import receive_stock
 from apps.stores.models import CashRegister, Store, StoreAssignment
 from apps.tenancy.models import Organization, OrganizationMembership
+from apps.tenancy.roles import sync_member_access
 
 
 User = get_user_model()
@@ -224,6 +225,7 @@ class Command(BaseCommand):
             defaults={"role": role},
         )
         self._report("Membre", f"{user.username} ({membership.get_role_display()})", created)
+        sync_member_access(user)
 
     def _report(self, label: str, name: str, created: bool) -> None:
         marker = "+" if created else "="
