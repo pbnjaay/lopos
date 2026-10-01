@@ -8,6 +8,7 @@ from apps.cash.exceptions import CashSessionClosed
 from apps.cash.models import CashSession
 from apps.cash.services import expected_cash_for
 from apps.sales.models import Payment
+from apps.stores.access import user_can_manage_store
 
 from .defaults import DEFAULT_CATEGORIES
 from .exceptions import (
@@ -178,7 +179,7 @@ def cancel_expense(*, expense: Expense, cancelled_by, reason: str) -> Expense:
 
     Possible seulement tant que sa session est ouverte : le rapport Z d'une
     session clôturée ne change jamais après coup. Le caissier annule ses
-    propres dépenses, le staff toutes.
+    propres dépenses, un propriétaire ou un gérant du magasin toutes.
 
     Ordre des verrous : session → dépense.
     """
@@ -196,7 +197,9 @@ def cancel_expense(*, expense: Expense, cancelled_by, reason: str) -> Expense:
 
     if locked.status == Expense.Status.CANCELLED:
         raise ExpenseAlreadyCancelled("Cette dépense est déjà annulée.")
-    if not cancelled_by.is_staff and locked.created_by_id != cancelled_by.pk:
+    if locked.created_by_id != cancelled_by.pk and not user_can_manage_store(
+        cancelled_by, locked.store_id
+    ):
         raise ExpenseCancellationNotAllowed(
             "Cette dépense a été saisie par un autre utilisateur."
         )

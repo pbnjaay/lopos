@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 from apps.cash.exceptions import CashRegisterNotAllowed, StoreInactive
 from apps.cash.services import open_cash_session
 from apps.stores.models import CashRegister, Store, StoreAssignment
+from apps.tenancy.models import OrganizationMembership
 
 
 pytestmark = pytest.mark.django_db
@@ -82,17 +83,33 @@ def test_cash_register_list_can_be_filtered_by_assigned_store(
     assert [row["id"] for row in response.json()] == [str(louga_register.id)]
 
 
-def test_staff_lists_all_stores_and_registers() -> None:
-    staff = User.objects.create_user(username="manager", is_staff=True)
-    active = Store.objects.create(name="Louga")
-    inactive = Store.objects.create(name="Dakar", is_active=False)
-    CashRegister.objects.create(store=active, name="Caisse 01")
-    CashRegister.objects.create(store=inactive, name="Caisse inactive", is_active=False)
+def test_owner_lists_every_active_store_and_register_without_assignment() -> None:
+    owner = User.objects.create_user(username="owner", is_staff=True)
+    louga = Store.objects.create(name="Louga")
+    dakar = Store.objects.create(name="Dakar")
+    closed = Store.objects.create(name="Fermé", is_active=False)
+    CashRegister.objects.create(store=louga, name="Caisse 01")
+    CashRegister.objects.create(store=dakar, name="Caisse 01")
+    CashRegister.objects.create(store=closed, name="Caisse inactive", is_active=False)
     client = APIClient()
-    client.force_authenticate(staff)
+    client.force_authenticate(owner)
 
-    assert len(client.get(reverse("store-list")).json()) == 2
+    assert {s["name"] for s in client.get(reverse("store-list")).json()} == {"Louga", "Dakar"}
     assert len(client.get(reverse("cash-register-list")).json()) == 2
+
+
+def test_staff_flag_alone_no_longer_opens_every_store() -> None:
+    """`is_staff` ouvre l'administration, pas les magasins : un gérant ne
+    voit que ceux où il est affecté."""
+    manager = User.objects.create_user(username="manager", is_staff=True)
+    manager.memberships.update(role=OrganizationMembership.Role.MANAGER)
+    louga = Store.objects.create(name="Louga")
+    Store.objects.create(name="Dakar")
+    StoreAssignment.objects.create(user=manager, store=louga)
+    client = APIClient()
+    client.force_authenticate(manager)
+
+    assert [s["name"] for s in client.get(reverse("store-list")).json()] == ["Louga"]
 
 
 def test_opening_rejects_a_register_outside_cashier_assignment(cashier) -> None:

@@ -3,6 +3,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.stores.access import user_can_manage_store
+
 from .exceptions import (
     CashRegisterInactive,
     CashRegisterNotAllowed,
@@ -24,7 +26,9 @@ from .services import close_cash_session, get_cash_session_summary, open_cash_se
 
 
 def _forbidden_if_not_owner(request, cash_session: CashSession) -> Response | None:
-    if cash_session.cashier_id != request.user.pk and not request.user.is_staff:
+    if cash_session.cashier_id != request.user.pk and not user_can_manage_store(
+        request.user, cash_session.cash_register.store_id
+    ):
         return Response(
             {
                 "code": "CASH_SESSION_NOT_OWNED",

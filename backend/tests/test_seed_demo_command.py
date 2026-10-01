@@ -9,9 +9,10 @@ from apps.cash.models import CashSession
 from apps.catalog.models import Product
 from apps.inventory.models import InventoryMovement, Stock
 from apps.stores.models import CashRegister, Store
+from apps.tenancy.models import Organization, OrganizationMembership
 
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.explicit_tenancy]
 User = get_user_model()
 
 
@@ -43,3 +44,28 @@ def test_seed_demo_is_idempotent_and_preserves_existing_admin_password() -> None
     # Le stock de démo entre au prix d'achat : valorisation et marges ont des chiffres.
     assert not Stock.objects.filter(average_unit_cost__isnull=True).exists()
     assert Stock.objects.get(product__name="Coca 50cl").average_unit_cost == 350
+
+
+@override_settings(DEBUG=True)
+def test_seed_demo_creates_one_commerce_with_an_owner_and_a_cashier() -> None:
+    call_command("seed_demo", stdout=StringIO())
+    call_command("seed_demo", stdout=StringIO())
+
+    organization = Organization.objects.get()
+    assert Store.objects.get().organization == organization
+    assert not Product.objects.exclude(organization=organization).exists()
+    roles = dict(
+        OrganizationMembership.objects.values_list("user__username", "role")
+    )
+    assert roles == {"caissier": "CASHIER", "proprietaire": "OWNER"}
+    assert not OrganizationMembership.objects.filter(user__username="admin").exists()
+
+
+@override_settings(DEBUG=True)
+def test_seed_demo_reuses_the_existing_commerce() -> None:
+    pilot = Organization.objects.create(name="Organisation pilote", slug="pilote")
+
+    call_command("seed_demo", stdout=StringIO())
+
+    assert list(Organization.objects.all()) == [pilot]
+    assert Store.objects.get().organization == pilot

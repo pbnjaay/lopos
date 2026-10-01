@@ -17,7 +17,7 @@ from apps.stores.models import Store
 from apps.sync.models import ProcessedSyncEvent
 from apps.tenancy.models import Organization, OrganizationMembership
 
-pytestmark = pytest.mark.django_db(transaction=True)
+pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.explicit_tenancy]
 
 
 @pytest.fixture
@@ -155,3 +155,41 @@ def test_sync_events_take_the_store_of_their_sale(migrate_back) -> None:
 
     assert ProcessedSyncEvent.objects.get(pk=synced.pk).store_id == store.pk
     assert ProcessedSyncEvent.objects.get(pk=orphan.pk).store_id is None
+
+
+def test_staff_managers_keep_access_to_every_store_of_their_organization(migrate_back) -> None:
+    apps = migrate_back("tenancy", "0002_pilot_organization")
+    User = apps.get_model("auth", "User")
+    Organization = apps.get_model("tenancy", "Organization")
+    Membership = apps.get_model("tenancy", "OrganizationMembership")
+    Store = apps.get_model("stores", "Store")
+    Assignment = apps.get_model("stores", "StoreAssignment")
+    ndiaye = Organization.objects.create(name="Boutique Ndiaye", slug="ndiaye")
+    fall = Organization.objects.create(name="Supérette Fall", slug="fall")
+    louga = Store.objects.create(name="Louga", organization=ndiaye)
+    Store.objects.create(name="Marché", organization=ndiaye)
+    retired = Store.objects.create(name="Ancien dépôt", organization=ndiaye)
+    Store.objects.create(name="Dakar", organization=fall)
+    manager = User.objects.create(username="gerant", is_staff=True)
+    Membership.objects.create(organization=ndiaye, user=manager, role="MANAGER")
+    Assignment.objects.create(user=manager, store=louga)
+    Assignment.objects.create(user=manager, store=retired, is_active=False)
+    cashier = User.objects.create(username="caissier")
+    Membership.objects.create(organization=ndiaye, user=cashier, role="CASHIER")
+    not_staff = User.objects.create(username="gerant-sans-admin")
+    Membership.objects.create(organization=ndiaye, user=not_staff, role="MANAGER")
+
+    _migrate_all()
+
+    from apps.stores.models import StoreAssignment
+
+    assignments = {
+        (a.user.username, a.store.name): a.is_active
+        for a in StoreAssignment.objects.select_related("user", "store")
+    }
+    assert assignments == {
+        ("gerant", "Louga"): True,
+        ("gerant", "Marché"): True,
+        # Désactivée exprès : la migration ne la réactive pas.
+        ("gerant", "Ancien dépôt"): False,
+    }

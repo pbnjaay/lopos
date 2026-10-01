@@ -11,7 +11,7 @@ from apps.expenses.models import ExpenseCategory
 from apps.stores.models import CashRegister, Store, StoreAssignment
 from apps.tenancy.models import Organization, OrganizationMembership
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.explicit_tenancy]
 User = get_user_model()
 Role = OrganizationMembership.Role
 

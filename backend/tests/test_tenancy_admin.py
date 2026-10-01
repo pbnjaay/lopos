@@ -7,7 +7,7 @@ from django.urls import reverse
 from apps.stores.models import Store
 from apps.tenancy.models import Organization, OrganizationMembership
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.explicit_tenancy]
 User = get_user_model()
 
 CHANGELIST = "admin:tenancy_organization_changelist"
@@ -28,10 +28,13 @@ def superuser_client(client):
 
 
 @pytest.fixture
-def manager_client(client):
+def manager_client(client, organization: Organization):
     call_command("create_default_groups")
     user = User.objects.create_user(username="gerant", password="pass12345", is_staff=True)
     user.groups.add(Group.objects.get(name="Gérant"))
+    OrganizationMembership.objects.create(
+        organization=organization, user=user, role=OrganizationMembership.Role.MANAGER
+    )
     client.login(username="gerant", password="pass12345")
     return client
 
@@ -119,9 +122,10 @@ def test_sidebar_shows_organizations_to_superusers_only(
 
 
 def test_sidebar_hides_organizations_from_managers(manager_client) -> None:
-    link = reverse(CHANGELIST).encode()
+    response = manager_client.get(reverse("admin:index"))
 
-    assert link not in manager_client.get(reverse("admin:index")).content
+    assert response.status_code == 200
+    assert reverse(CHANGELIST).encode() not in response.content
 
 
 def test_organization_cannot_be_deleted_from_admin(

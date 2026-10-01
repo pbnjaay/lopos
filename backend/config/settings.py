@@ -68,7 +68,8 @@ ALLOWED_HOSTS = [
 ALLOWED_HOSTS.append("healthcheck.railway.app")
 
 INSTALLED_APPS = [
-    "unfold",
+    # Unfold, avec un site d'admin qui exige un commerce actif.
+    "apps.tenancy.admin_config.TenantUnfoldConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -418,8 +419,11 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
     ],
+    # Refus par défaut : toute vue exige un compte membre d'un commerce
+    # actif ; seules l'authentification et le jeton CSRF y échappent.
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
+        "apps.tenancy.permissions.HasActiveTenant",
     ],
 }
 

@@ -8,7 +8,11 @@ from apps.cash.serializers import CashSessionSerializer
 
 from .models import CashRegister, Store
 from .serializers import CashRegisterSerializer, StoreSerializer
-from .access import cash_registers_accessible_to, stores_accessible_to
+from .access import (
+    cash_registers_accessible_to,
+    stores_accessible_to,
+    user_can_manage_store,
+)
 
 
 class StoreViewSet(
@@ -46,7 +50,9 @@ class CashRegisterViewSet(
             cash_register=cash_register,
             status=CashSession.Status.OPEN,
         )
-        if session.cashier_id != request.user.pk and not request.user.is_staff:
+        if session.cashier_id != request.user.pk and not user_can_manage_store(
+            request.user, cash_register.store_id
+        ):
             return Response(
                 {
                     "code": "CASH_SESSION_NOT_OWNED",
