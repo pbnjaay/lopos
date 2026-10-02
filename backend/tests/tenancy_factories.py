@@ -98,3 +98,47 @@ def build_commerce(slug: str) -> Commerce:
         organization, store, owner, cashier, register, session, product, customer,
         sale, sale_return, payment, category, expense,
     )
+
+
+@dataclass
+class Branch:
+    store: Store
+    cashier: User
+    register: CashRegister
+    session: CashSession
+    customer: Customer
+    sale: Sale
+    expense: Expense
+
+
+def build_branch(commerce: Commerce, slug: str) -> Branch:
+    """Un second magasin du même commerce, avec son activité : même
+    catalogue et mêmes catégories, mais caisse, clients et ventes à lui."""
+    store = Store.objects.create(name=f"Magasin {slug}", organization=commerce.organization)
+    cashier = User.objects.create_user(username=f"cashier-{slug}")
+    OrganizationMembership.objects.create(
+        organization=commerce.organization, user=cashier, role=Role.CASHIER
+    )
+    StoreAssignment.objects.create(user=cashier, store=store)
+    register = CashRegister.objects.create(store=store, name="Caisse 01")
+    session = CashSession.objects.create(
+        cash_register=register, cashier=cashier, opening_balance=Decimal("20000")
+    )
+    receive_stock(
+        store=store, product=commerce.product, quantity=Decimal("10"), unit_cost=Decimal("700")
+    )
+    customer = create_customer(store=store, name=f"Client {slug}", phone="771234567")
+    sale = complete_sale(
+        cash_session=session,
+        items=[{"product_id": commerce.product.pk, "quantity": Decimal("1"), "unit_price": None}],
+        payments=[{"method": "CASH", "amount": Decimal("1000"), "received_amount": Decimal("1000")}],
+    )
+    expense = create_expense(
+        cash_session=session,
+        created_by=cashier,
+        category=commerce.category,
+        amount=Decimal("200"),
+        payment_method="CASH",
+        idempotency_key=uuid4(),
+    )
+    return Branch(store, cashier, register, session, customer, sale, expense)
