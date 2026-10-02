@@ -8,6 +8,7 @@ from unfold.admin import ModelAdmin, TabularInline
 
 from apps.dashboard.admin_columns import money_column, quantity_column, status_badge
 from apps.dashboard.period import PERIOD_CHOICES, resolve_period_range
+from apps.inventory.permissions import can_view_stock_costs
 from apps.tenancy.admin_mixins import TenantAdminMixin
 
 from .admin_summary import build_sale_ticket
@@ -155,6 +156,14 @@ class SaleItemAdmin(ReadOnlySalesAdmin):
     unit_price_display = money_column("unit_price", "prix unitaire")
     quantity_display = quantity_column("quantity", "quantité")
     line_total_display = money_column("line_total", "total de la ligne")
+
+    def get_fields(self, request, obj=None):
+        # Le coût figé de la ligne suit la permission des coûts, comme le
+        # coût d'un mouvement de stock : sans elle, la fiche ne le montre pas.
+        fields = super().get_fields(request, obj)
+        if can_view_stock_costs(request.user):
+            return fields
+        return [name for name in fields if name != "unit_cost"]
 
 
 @admin.register(Payment)

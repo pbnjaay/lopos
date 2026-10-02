@@ -533,3 +533,56 @@ def test_platform_must_choose_the_commerce_of_a_store_and_a_category(a, platform
     assert "organization" in category.context["adminform"].form.errors
     assert not Store.objects.filter(name="Orphelin").exists()
     assert not ExpenseCategory.objects.filter(name="Orpheline").exists()
+
+
+# Champs qui portent un coût d'achat ou une valeur au coût.
+COST_FIELDS = {
+    "unit_cost",
+    "average_unit_cost",
+    "previous_cost",
+    "new_cost",
+    "unit_cost_display",
+    "average_cost_display",
+    "cost_value_display",
+    "previous_cost_display",
+    "new_cost_display",
+}
+
+
+def _change_page_fields(client: Client, obj) -> set[str] | None:
+    from django.contrib.admin.utils import flatten_fieldsets
+
+    response = client.get(_change(obj))
+    if response.status_code != 200:
+        return None
+    return set(flatten_fieldsets(response.context["adminform"].fieldsets))
+
+
+def test_no_change_page_shows_a_cost_to_a_manager_without_cost_access(a, owner_a) -> None:
+    """Garde-fou : sur chaque fiche de l'admin, aucun champ de coût pour un
+    gérant à qui le propriétaire n'a pas ouvert les coûts."""
+    client = _manager(a, can_view_costs=False)
+    tenant = resolve_tenant(User.objects.get(username="manager-False"))
+    opened = 0
+    for model in admin.site._registry:
+        if model in PLATFORM_ADMINS or model is User:
+            continue
+        obj = scope(model.objects, tenant).first()
+        if obj is None:
+            continue
+        fields = _change_page_fields(client, obj)
+        if fields is None:  # pas de droit de lecture sur ce modèle
+            continue
+        assert not fields & COST_FIELDS, f"{model.__name__}: {fields & COST_FIELDS}"
+        opened += 1
+    assert opened >= 10
+
+
+def test_sale_line_cost_shows_only_with_cost_access(a, owner_a) -> None:
+    line = a.sale.items.get()
+
+    hidden = _change_page_fields(_manager(a, can_view_costs=False), line)
+    shown = _change_page_fields(_manager(a, can_view_costs=True), line)
+
+    assert "unit_cost" not in hidden
+    assert "unit_cost" in shown

@@ -727,6 +727,12 @@ synchronisation lui sont fermés dès la requête suivante, ses données restent
 intactes. Les ventes hors ligne restent sur ses postes et partiront à la
 réactivation.
 
+### Recette avant un nouveau pilote
+
+Dérouler [docs/recette-multi-commerce.md](docs/recette-multi-commerce.md) :
+deux navigateurs, deux commerces, identifiants croisés, déconnexion hors
+ligne, vente en attente puis changement de commerce, suspension.
+
 ## Déploiement
 
 Backend sur Railway (Dockerfile, domaine `api.lopos.app`), frontend sur
