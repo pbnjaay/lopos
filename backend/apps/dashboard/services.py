@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal
 
 from django.conf import settings
@@ -21,7 +22,8 @@ from .formatting import (
     format_count,
     format_open_duration,
 )
-from .period import DEFAULT_PERIOD, resolve_period_range
+from .period import DEFAULT_PERIOD, DashboardPeriod, resolve_dashboard_period
+from .profitability import ProfitabilitySummary, get_profitability_summary
 
 ZERO = Decimal("0.00")
 MAX_ALERTS_DISPLAYED = 5
@@ -34,6 +36,7 @@ class TopProduct:
     name: str
     quantity: Decimal
     url: str
+    sale_unit: str = "UNIT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,8 +67,8 @@ class ExpenseCategoryTotal:
 @dataclass(frozen=True, slots=True)
 class ExpenseSummary:
     """Argent sorti pour faire tourner la boutique sur la période. Jamais
-    retranché du CA : sans coût d'achat, « CA − dépenses » n'est pas un
-    bénéfice et ne s'affiche pas."""
+    retranché du CA : « CA − dépenses » n'est pas un bénéfice. Les dépenses ne
+    se retranchent que de la marge brute, dans le résultat estimé."""
 
     is_used: bool
     count: int
@@ -79,6 +82,9 @@ class ExpenseSummary:
 class ManagerDashboard:
     period: str
     store_id: str | None
+    period_label: str
+    # Périmètre toujours écrit : jamais d'agrégation implicite de magasins.
+    scope_label: str
     gross_sales: Decimal
     returns_total: Decimal
     net_sales: Decimal
@@ -98,13 +104,25 @@ class ManagerDashboard:
     low_stock_count: int
     sales_url: str
     open_sessions_url: str
+    date_from: date | None = None
+    date_to: date | None = None
+    # Réservé à qui a la permission de voir coûts et marges (None sinon).
+    profitability: ProfitabilitySummary | None = None
     alerts: list[Alert] = field(default_factory=list)
     top_products: list[TopProduct] = field(default_factory=list)
     recent_sales: list[Sale] = field(default_factory=list)
 
 
-def _sales_changelist_url(period: str, store_id: str | None) -> str:
-    url = f"{reverse('admin:sales_sale_changelist')}?period={period}"
+def _sales_changelist_url(period: DashboardPeriod, store_id: str | None) -> str:
+    if period.is_custom:
+        # Filtre de dates de la hiérarchie (jours locaux), bornes incluses.
+        query = (
+            f"occurred_at__date__gte={period.date_from.isoformat()}"
+            f"&occurred_at__date__lte={period.date_to.isoformat()}"
+        )
+    else:
+        query = f"period={period.key}"
+    url = f"{reverse('admin:sales_sale_changelist')}?{query}"
     if store_id:
         url += f"&cash_session__cash_register__store__id__exact={store_id}"
     return url
@@ -117,8 +135,7 @@ def _open_sessions_url(store_id: str | None) -> str:
     return url
 
 
-def _completed_sales(period: str, store_id: str | None) -> QuerySet[Sale]:
-    start, end = resolve_period_range(period)
+def _completed_sales(start, end, store_id: str | None) -> QuerySet[Sale]:
     qs = Sale.objects.filter(
         status=Sale.Status.COMPLETED,
         occurred_at__gte=start,
@@ -328,18 +345,24 @@ def _expense_summary(*, start, end, store_id: str | None) -> ExpenseSummary:
 
 
 def get_manager_dashboard(
-    *, period: str = DEFAULT_PERIOD, store_id: str | None = None
+    *,
+    period: str = DEFAULT_PERIOD,
+    store_id: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    include_profitability: bool = False,
 ) -> ManagerDashboard:
-    if store_id and not Store.objects.filter(pk=store_id).exists():
-        store_id = None
+    store = Store.objects.filter(pk=store_id).first() if store_id else None
+    store_id = str(store.pk) if store else None
+    dashboard_period = resolve_dashboard_period(period, date_from, date_to)
+    start, end = dashboard_period.start, dashboard_period.end
 
-    sales = _completed_sales(period, store_id)
+    sales = _completed_sales(start, end, store_id)
 
     totals = sales.aggregate(
         gross_sales=Sum("total"), sales_count=Count("id"), credit_granted=Sum("credit_amount")
     )
     gross_sales = totals["gross_sales"] or ZERO
-    start, end = resolve_period_range(period)
     returns_qs = SaleReturn.objects.filter(status=SaleReturn.Status.COMPLETED, created_at__gte=start, created_at__lt=end)
     if store_id:
         returns_qs = returns_qs.filter(cash_session__cash_register__store_id=store_id)
@@ -376,6 +399,13 @@ def get_manager_dashboard(
     credit_percentage = round(credit_total / net_sales * 100) if net_sales else 0
     book = _book_summary(start=start, end=end, store_id=store_id, credit_granted=credit_granted)
     expenses = _expense_summary(start=start, end=end, store_id=store_id)
+    profitability = (
+        get_profitability_summary(
+            start=start, end=end, store_id=store_id, expenses_total=expenses.total
+        )
+        if include_profitability
+        else None
+    )
 
     open_sessions_qs = CashSession.objects.filter(status=CashSession.Status.OPEN).select_related(
         "cash_register", "cash_register__store", "cashier"
@@ -397,7 +427,7 @@ def get_manager_dashboard(
 
     top_products_qs = (
         SaleItem.objects.filter(sale__in=sales)
-        .values("product_id", "product_name")
+        .values("product_id", "product_name", "product__sale_unit")
         .annotate(total_quantity=Sum("quantity"))
         .order_by("-total_quantity")[:5]
     )
@@ -407,6 +437,7 @@ def get_manager_dashboard(
             name=row["product_name"],
             quantity=row["total_quantity"],
             url=reverse("admin:catalog_product_change", args=[row["product_id"]]),
+            sale_unit=row["product__sale_unit"],
         )
         for row in top_products_qs
     ]
@@ -426,8 +457,13 @@ def get_manager_dashboard(
     )
 
     return ManagerDashboard(
-        period=period,
+        period=dashboard_period.key,
         store_id=store_id,
+        period_label=dashboard_period.label,
+        scope_label=store.name if store else "Tous les magasins",
+        date_from=dashboard_period.date_from,
+        date_to=dashboard_period.date_to,
+        profitability=profitability,
         gross_sales=gross_sales,
         returns_total=returns_total,
         net_sales=net_sales,
@@ -443,7 +479,7 @@ def get_manager_dashboard(
         low_stock_threshold=threshold,
         out_of_stock_count=out_of_stock_count,
         low_stock_count=low_stock_count,
-        sales_url=_sales_changelist_url(period, store_id),
+        sales_url=_sales_changelist_url(dashboard_period, store_id),
         open_sessions_url=_open_sessions_url(store_id),
         alerts=alerts,
         top_products=top_products,

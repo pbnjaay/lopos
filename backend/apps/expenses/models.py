@@ -134,7 +134,8 @@ class Expense(models.Model):
     class Meta:
         ordering = ("-occurred_at", "-created_at")
         verbose_name = "dépense"
-        verbose_name_plural = "dépenses"
+        # Distinct du nom de la section : « Dépenses › Dépenses saisies ».
+        verbose_name_plural = "dépenses saisies"
         permissions = (("cancel_expense", "Peut annuler une dépense"),)
         constraints = [
             models.CheckConstraint(

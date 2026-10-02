@@ -1,0 +1,81 @@
+{% load i18n %}
+{% if product_card %}
+{% with card=product_card %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+    {# --- Stock par magasin, et comment le réapprovisionner ------------------ #}
+    <div class="lg:col-span-2 bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 class="font-semibold text-base-900 dark:text-base-100">{% translate "Stock" %}</h3>
+            <div class="flex gap-2">
+                <a href="{{ card.receive_url }}" class="text-sm px-3 py-2 rounded-default bg-primary-600 text-white hover:bg-primary-700">{% translate "Ajouter du stock" %}</a>
+                <a href="{{ card.adjust_url }}" class="text-sm px-3 py-2 rounded-default border border-base-200 dark:border-base-800 text-base-700 dark:text-base-300 hover:bg-base-50">{% translate "Ajuster le stock" %}</a>
+            </div>
+        </div>
+        {% if card.stocks %}
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs uppercase text-base-400 dark:text-base-500">
+                        <th class="py-2 font-medium">{% translate "Magasin" %}</th>
+                        <th class="py-2 font-medium">{% translate "Quantité" %}</th>
+                        <th class="py-2 font-medium">{% translate "État" %}</th>
+                        {% if card.can_view_costs %}
+                            <th class="py-2 font-medium">{% translate "Coût moyen" %}</th>
+                            <th class="py-2 font-medium text-right">{% translate "Valeur d'achat" %}</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stock in card.stocks %}
+                        <tr class="border-t border-base-200 dark:border-base-800">
+                            <td class="py-2 text-base-900 dark:text-base-100">{{ stock.store }}</td>
+                            <td class="py-2 font-medium">{{ stock.quantity }}</td>
+                            <td class="py-2">{% include "unfold/helpers/label.html" with text=stock.status.1 type=stock.status.0 %}</td>
+                            {% if card.can_view_costs %}
+                                <td class="py-2">{{ stock.average_cost|default:"—" }}</td>
+                                <td class="py-2 text-right">{{ stock.cost_value|default:"—" }}</td>
+                            {% endif %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="text-sm text-base-500 dark:text-base-400">{% translate "Aucun stock enregistré pour ce produit." %}</p>
+        {% endif %}
+    </div>
+
+    {# --- Prix, ventes récentes, derniers mouvements ------------------------ #}
+    <div class="flex flex-col gap-4">
+        <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <div class="text-xs font-medium uppercase text-base-400 dark:text-base-500">{% translate "Prix de vente" %}</div>
+                    <div class="text-xl font-semibold text-base-900 dark:text-base-100">{{ card.selling_price }}</div>
+                    {% if card.last_purchase_price %}<div class="text-xs text-base-500 dark:text-base-400">{% translate "acheté" %} {{ card.last_purchase_price }}</div>{% endif %}
+                </div>
+                <div>
+                    <div class="text-xs font-medium uppercase text-base-400 dark:text-base-500">{% translate "Vendu sur 30 jours" %}</div>
+                    <div class="text-xl font-semibold text-base-900 dark:text-base-100">{{ card.sold_quantity }}</div>
+                    <div class="text-xs text-base-500 dark:text-base-400">{{ card.sold_revenue }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white dark:bg-base-900 border border-base-200 dark:border-base-800 rounded-default p-4">
+            <div class="flex items-center justify-between gap-2 mb-2">
+                <h3 class="font-semibold text-base-900 dark:text-base-100">{% translate "Derniers mouvements" %}</h3>
+                <a href="{{ card.movements_url }}" class="text-xs text-primary-600">{% translate "Tout voir" %}</a>
+            </div>
+            <div class="flex flex-col gap-1 text-sm">
+                {% for movement in card.movements %}
+                    <div class="flex justify-between gap-4">
+                        <span class="text-base-700 dark:text-base-300">{{ movement.date }} · {{ movement.kind }}</span>
+                        <span class="font-medium whitespace-nowrap">{{ movement.quantity }}</span>
+                    </div>
+                {% empty %}
+                    <span class="text-base-500">{% translate "Aucun mouvement" %}</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endwith %}
+{% endif %}

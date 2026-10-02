@@ -20,6 +20,7 @@ from apps.customers.services import (
     reverse_ledger_entry,
 )
 from apps.inventory.models import InventoryMovement, Stock
+from apps.inventory.services import apply_inbound_cost
 
 from .exceptions import (
     CustomerNotFound,
@@ -396,6 +397,14 @@ def _execute_sale(
         sale_kwargs["occurred_at"] = occurred_at
     sale = Sale.objects.create(**sale_kwargs)
 
+    # Coût figé au moment de la vente : le coût moyen du magasin, lu sur la
+    # ligne de stock déjà verrouillée. La marge de cette vente ne suivra
+    # jamais le coût courant. Une vente hors-ligne prend le coût connu du
+    # serveur à la synchronisation — le payload du POS ne change pas.
+    unit_costs = {
+        product_id: stock.average_unit_cost for product_id, stock in stocks_by_product.items()
+    }
+
     SaleItem.objects.bulk_create(
         [
             SaleItem(
@@ -407,6 +416,7 @@ def _execute_sale(
                 unit_price=unit_price,
                 quantity=quantity,
                 line_total=_money(unit_price * quantity),
+                unit_cost=unit_costs[product.id],
             )
             for product, quantity, unit_price, catalog_unit_price, product_name in line_values
         ]
@@ -445,7 +455,9 @@ def _execute_sale(
                 product_id=spec.product.id,
                 movement_type=InventoryMovement.Type.SALE,
                 quantity=-spec.quantity,
+                unit_cost=unit_costs[spec.product.id],
                 reference=sale.id,
+                created_by=locked_session.cashier,
             )
             for spec in line_specs
         ]
@@ -645,14 +657,17 @@ def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
     store_id = sale.cash_session.cash_register.store_id
     items = list(sale.items.select_related("product").order_by("product_id"))
 
+    # Les unités reviennent au coût auquel elles sont sorties (figé sur la
+    # ligne), pas au coût moyen courant : annuler rend au stock sa valeur.
     for item in items:
         stock, _ = Stock.objects.select_for_update().get_or_create(
             store_id=store_id,
             product_id=item.product_id,
             defaults={"quantity": Decimal("0.000")},
         )
+        apply_inbound_cost(stock, item.quantity, item.unit_cost)
         stock.quantity += item.quantity
-        stock.save(update_fields=("quantity", "updated_at"))
+        stock.save(update_fields=("quantity", "average_unit_cost", "updated_at"))
 
     InventoryMovement.objects.bulk_create(
         [
@@ -661,7 +676,9 @@ def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
                 product_id=item.product_id,
                 movement_type=InventoryMovement.Type.CANCELLATION,
                 quantity=item.quantity,
+                unit_cost=item.unit_cost,
                 reference=sale.id,
+                created_by=cancelled_by,
             )
             for item in items
         ]
@@ -816,17 +833,22 @@ def create_sale_return(
     ])
     store_id = locked_session.cash_register.store_id
     for item, quantity, restock, _ in specs:
+        # Non remis en stock : rien ne revient, le coût de l'article reste
+        # une charge (il reste dans le coût des marchandises vendues).
         if not restock:
             continue
         stock, _ = Stock.objects.select_for_update().get_or_create(
             store_id=store_id, product_id=item.product_id,
             defaults={"quantity": Decimal("0.000")},
         )
+        # L'article revient au coût auquel il est sorti, figé sur la vente.
+        apply_inbound_cost(stock, quantity, item.unit_cost)
         stock.quantity += quantity
-        stock.save(update_fields=("quantity", "updated_at"))
+        stock.save(update_fields=("quantity", "average_unit_cost", "updated_at"))
         InventoryMovement.objects.create(
             store_id=store_id, product_id=item.product_id,
             movement_type=InventoryMovement.Type.RETURN_IN,
-            quantity=quantity, reference=sale_return.id,
+            quantity=quantity, unit_cost=item.unit_cost,
+            reference=sale_return.id, created_by=created_by,
         )
     return sale_return

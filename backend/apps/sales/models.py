@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from apps.cash.models import CashSession
 from apps.catalog.models import Product
+from apps.dashboard.formatting import format_fcfa, format_quantity
 
 
 class Sale(models.Model):
@@ -48,8 +49,8 @@ class Sale(models.Model):
         decimal_places=2,
         default=Decimal("0"),
         help_text=(
-            "Part du total non encaissée, inscrite au cahier du client. Ce n'est "
-            "pas un paiement : sum(paiements) + mis au cahier = total."
+            "Part du total non encaissée, inscrite au cahier du client : ce "
+            "qu'il reste à payer une fois les paiements déduits."
         ),
     )
     status = models.CharField("statut", max_length=10, choices=Status.choices)
@@ -58,16 +59,19 @@ class Sale(models.Model):
         "réalisée le",
         default=timezone.now,
         help_text=(
-            "Moment réel de la vente sur la caisse. Identique à created_at pour une "
-            "vente en ligne ; peut être antérieur pour une vente synchronisée depuis "
-            "le mode hors-ligne."
+            "Heure de la vente sur la caisse. Une vente faite sans connexion garde "
+            "son heure réelle, même si elle arrive plus tard au serveur."
         ),
     )
 
     class Meta:
         ordering = ("-created_at",)
-        verbose_name = "vente"
-        verbose_name_plural = "ventes"
+        # Distinct du nom de la section (« Ventes ») : le fil d'Ariane lit
+        # « Ventes › Tickets de vente », comme les fiches « Ticket E15F6488 ».
+        verbose_name = "ticket de vente"
+        verbose_name_plural = "tickets de vente"
+        # Coûts d'achat, marges et résultat estimé : pas pour tout le monde.
+        permissions = (("view_profitability", "Peut voir la rentabilité"),)
         constraints = [
             models.CheckConstraint(
                 condition=Q(status__in=("COMPLETED", "CANCELLED")),
@@ -96,9 +100,19 @@ class Sale(models.Model):
                 name="sales_sale_credit_requires_customer",
             ),
         ]
+        indexes = [
+            # Rapports par période (tableau de bord, rentabilité).
+            models.Index(fields=("status", "occurred_at"), name="sales_sale_status_date_idx"),
+        ]
 
     def __str__(self) -> str:
-        return f"Vente {self.id} — {self.total}"
+        return f"Ticket {self.reference}"
+
+    @property
+    def reference(self) -> str:
+        """Référence imprimée sur le ticket du POS : les 8 premiers caractères
+        de l'identifiant, en majuscules (« E15F6488 »)."""
+        return str(self.id)[:8].upper()
 
 
 class SaleItem(models.Model):
@@ -126,6 +140,18 @@ class SaleItem(models.Model):
     unit_price = models.DecimalField("prix unitaire", max_digits=14, decimal_places=2)
     quantity = models.DecimalField("quantité", max_digits=12, decimal_places=3)
     line_total = models.DecimalField("total de la ligne", max_digits=14, decimal_places=2)
+    unit_cost = models.DecimalField(
+        "coût d'achat unitaire",
+        max_digits=14,
+        decimal_places=4,
+        blank=True,
+        null=True,
+        help_text=(
+            "Coût moyen du produit dans le magasin au moment de la vente, figé : "
+            "la marge d'une vente passée ne suit jamais le coût actuel. Vide si "
+            "le coût n'était pas connu (ventes antérieures au suivi des coûts)."
+        ),
+    )
 
     class Meta:
         ordering = ("id",)
@@ -149,10 +175,14 @@ class SaleItem(models.Model):
                 & Q(line_total=Round(F("unit_price") * F("quantity"), precision=2)),
                 name="sales_item_line_total_consistent",
             ),
+            models.CheckConstraint(
+                condition=Q(unit_cost__isnull=True) | Q(unit_cost__gte=Decimal("0")),
+                name="sales_item_unit_cost_nonnegative",
+            ),
         ]
 
     def __str__(self) -> str:
-        return f"{self.product_name} × {self.quantity}"
+        return f"{self.product_name} × {format_quantity(self.quantity, self.sale_unit)}"
 
     @property
     def quantity_returned(self) -> Decimal:
@@ -226,7 +256,7 @@ class Payment(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.method} — {self.amount}"
+        return f"{self.get_method_display()} — {format_fcfa(self.amount)}"
 
 
 class SaleReturn(models.Model):
@@ -295,6 +325,9 @@ class SaleReturn(models.Model):
                 ),
                 name="sales_return_method_iff_money_refund",
             ),
+        ]
+        indexes = [
+            models.Index(fields=("created_at",), name="sales_return_created_idx"),
         ]
 
     def save(self, *args, **kwargs):

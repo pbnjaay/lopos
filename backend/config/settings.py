@@ -198,6 +198,23 @@ UNFOLD = {
                             "admin:inventory_inventorymovement_changelist"
                         ),
                     },
+                    # Coût d'achat et marges : réservés à qui en a la permission.
+                    {
+                        "title": _("Valorisation"),
+                        "icon": "account_balance_wallet",
+                        "link": reverse_lazy("admin:inventory_stockvaluation_changelist"),
+                        "permission": lambda request: request.user.has_perm(
+                            "inventory.view_stockvaluation"
+                        ),
+                    },
+                    {
+                        "title": _("Journal des coûts"),
+                        "icon": "history",
+                        "link": reverse_lazy("admin:inventory_stockcostchange_changelist"),
+                        "permission": lambda request: request.user.has_perm(
+                            "inventory.view_stockcostchange"
+                        ),
+                    },
                 ],
             },
             {
@@ -221,7 +238,7 @@ UNFOLD = {
                 "separator": True,
                 "items": [
                     {
-                        "title": _("Ventes"),
+                        "title": _("Tickets de vente"),
                         "icon": "shopping_cart",
                         "link": reverse_lazy("admin:sales_sale_changelist"),
                     },
@@ -260,7 +277,7 @@ UNFOLD = {
                 "separator": True,
                 "items": [
                     {
-                        "title": _("Dépenses"),
+                        "title": _("Dépenses saisies"),
                         "icon": "receipt_long",
                         "link": reverse_lazy("admin:expenses_expense_changelist"),
                     },
@@ -365,6 +382,9 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = "fr-fr"
 TIME_ZONE = "Africa/Dakar"
 USE_I18N = True
+# Unfold ne fournit pas de traduction française : ses chaînes (« Type to
+# search », « Search apps and models… ») le sont dans backend/locale.
+LOCALE_PATHS = [BASE_DIR / "locale"]
 USE_TZ = True
 
 STATIC_URL = "static/"

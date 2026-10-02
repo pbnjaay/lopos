@@ -2,6 +2,7 @@ from typing import Any
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -57,7 +58,13 @@ def _bootstrap_pos(
     assert product_response.status_code == status.HTTP_201_CREATED
     product = product_response.json()
 
-    stock_response = client.post(
+    # L'entrée de stock est réservée au droit de réception (gérant), jamais
+    # au caissier : un client dédié la fait.
+    manager = User.objects.create_user(username="stock-manager")
+    manager.user_permissions.add(Permission.objects.get(codename="change_product"))
+    manager_client = APIClient()
+    manager_client.force_authenticate(manager)
+    stock_response = manager_client.post(
         reverse("inventory-stock-in"),
         {
             "store_id": store["id"],

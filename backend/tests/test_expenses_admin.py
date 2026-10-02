@@ -145,3 +145,16 @@ def test_user_without_cancel_permission_cannot_cancel(client, expense) -> None:
     assert response.status_code in (302, 403)
     expense.refresh_from_db()
     assert expense.status == Expense.Status.POSTED
+
+
+def test_expense_page_shows_the_cancel_button_only_while_its_session_is_open(
+    manager_client, expense, cash_session
+) -> None:
+    change_url = reverse("admin:expenses_expense_change", args=[expense.pk])
+    cancel_url = reverse("admin:expenses_expense_cancel_expense_action", args=[expense.pk])
+
+    assert cancel_url in manager_client.get(change_url).content.decode()
+
+    close_cash_session(cash_session=cash_session, counted_cash=Decimal("0"))
+
+    assert cancel_url not in manager_client.get(change_url).content.decode()

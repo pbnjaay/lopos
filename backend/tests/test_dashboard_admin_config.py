@@ -3,11 +3,10 @@ from decimal import Decimal
 import pytest
 from django.conf import settings
 from django.contrib import admin
-from django.test import RequestFactory
 from django.urls import reverse
 
 from apps.customers.services import create_customer, record_opening_balance
-from apps.sales.admin import PaymentInline, SaleAdmin, SaleItemInline
+from apps.sales.admin import SaleAdmin
 from apps.sales.models import Sale
 from apps.stores.models import Store
 
@@ -53,20 +52,12 @@ def test_dashboard_callback_is_configured() -> None:
     )
 
 
-def test_sale_admin_shows_items_and_payment_as_inlines() -> None:
+def test_sale_page_is_read_as_its_ticket() -> None:
     model_admin = SaleAdmin(Sale, admin.site)
 
-    assert model_admin.inlines == (SaleItemInline, PaymentInline)
-
-
-def test_sale_item_and_payment_inlines_are_read_only() -> None:
-    request = RequestFactory().get("/admin/")
-
-    for inline_class in (SaleItemInline, PaymentInline):
-        inline = inline_class(Sale, admin.site)
-        assert inline.has_add_permission(request) is False
-        assert inline.has_change_permission(request) is False
-        assert inline.has_delete_permission(request) is False
+    # Articles et paiements sont dans le ticket en tête de fiche, pas en tableaux.
+    assert model_admin.change_form_outer_before_template == "admin/sales/sale_summary.html"
+    assert model_admin.inlines == ()
 
 
 def test_admin_index_renders_manager_dashboard(client, django_user_model) -> None:

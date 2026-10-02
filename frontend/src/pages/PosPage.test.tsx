@@ -90,7 +90,6 @@ const coca: Product = {
   name: "Coca 50cl",
   barcode: "123456789",
   selling_price: "500.00",
-  purchase_price: null,
   is_active: true,
   stock: 20,
   created_at: "2026-08-17T00:00:00Z",
@@ -236,7 +235,7 @@ describe("POS sale workflow", () => {
     await waitFor(() => expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("2"))
     await openCashPayment(userEvents)
     await userEvents.type(screen.getByLabelText("Montant reçu"), "2000")
-    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+    await userEvents.click(screen.getByRole("button", { name: "Valider et rendre 1 000 FCFA" }))
 
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
     const changeRow = screen.getByText("Monnaie à rendre").parentElement!
@@ -271,7 +270,7 @@ describe("POS sale workflow", () => {
     await scanCoca(userEvents)
     await openCashPayment(userEvents)
     await userEvents.type(screen.getByLabelText("Montant reçu"), "1000")
-    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+    await userEvents.click(screen.getByRole("button", { name: "Valider et rendre 500 FCFA" }))
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Stock local insuffisant pour Coca 50cl",
@@ -459,7 +458,7 @@ describe("POS sale workflow offline", () => {
     await waitFor(() => expect(screen.getByLabelText(`Quantité de ${coca.name}`)).toHaveTextContent("2"))
     await openCashPayment(userEvents)
     await userEvents.type(screen.getByLabelText("Montant reçu"), "2000")
-    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+    await userEvents.click(screen.getByRole("button", { name: "Valider et rendre 1 000 FCFA" }))
 
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
     expect(screen.getByText(/Référence locale/)).toHaveTextContent("0F9E8D7C")
@@ -534,7 +533,7 @@ describe("POS sale workflow offline", () => {
     await scanCoca(userEvents)
     await openCashPayment(userEvents)
     await userEvents.type(screen.getByLabelText("Montant reçu"), "1000")
-    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+    await userEvents.click(screen.getByRole("button", { name: "Valider et rendre 500 FCFA" }))
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Impossible d’enregistrer la vente sur cet appareil. Réessayez avant de poursuivre.",
@@ -801,7 +800,7 @@ describe("POS credit sale (cahier client)", () => {
     renderPos()
     await scanCoca(userEvents)
     await openCashPayment(userEvents)
-    await userEvents.click(screen.getByRole("button", { name: /Tout mettre au cahier/ }))
+    await userEvents.click(screen.getByRole("button", { name: "Mettre 500 FCFA au cahier" }))
     expect(await screen.findByText("À mettre au cahier")).toBeInTheDocument()
     await pickMoussa(userEvents)
 
@@ -860,7 +859,7 @@ describe("POS credit sale (cahier client)", () => {
     await scanCoca(userEvents)
     await openCashPayment(userEvents)
     await userEvents.type(screen.getByLabelText("Montant reçu"), "300")
-    await userEvents.click(screen.getByRole("button", { name: /Mettre le reste au cahier/ }))
+    await userEvents.click(screen.getByRole("button", { name: "Mettre 200 FCFA au cahier" }))
 
     expect(await screen.findByText("Reste à mettre au cahier")).toBeInTheDocument()
     await pickMoussa(userEvents)
@@ -884,7 +883,7 @@ describe("POS credit sale (cahier client)", () => {
     renderPos()
     await scanCoca(userEvents)
     await openCashPayment(userEvents)
-    expect(screen.getByRole("button", { name: /Tout mettre au cahier/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Mettre 500 FCFA au cahier" })).toBeInTheDocument()
     await userEvents.type(screen.getByLabelText("Montant reçu"), "500")
 
     expect(screen.queryByRole("button", { name: /cahier/i })).not.toBeInTheDocument()
@@ -961,7 +960,7 @@ describe("POS sale success — synchronisation status", () => {
     await scanCoca(userEvents)
     await openCashPayment(userEvents)
     await userEvents.type(screen.getByLabelText("Montant reçu"), "500")
-    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+    await userEvents.click(screen.getByRole("button", { name: "Valider le paiement" }))
     await screen.findByRole("heading", { name: "Vente validée" })
     await waitFor(() =>
       expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/sync/push/"))).toBe(true),
@@ -1007,7 +1006,7 @@ describe("POS sale success — synchronisation status", () => {
     await scanCoca(userEvents)
     await openCashPayment(userEvents)
     await userEvents.type(screen.getByLabelText("Montant reçu"), "500")
-    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+    await userEvents.click(screen.getByRole("button", { name: "Valider le paiement" }))
 
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
     expect(screen.getByText(/synchronisation automatique/)).toBeInTheDocument()

@@ -106,7 +106,6 @@ const coca: Product = {
   name: "Coca 50cl",
   barcode: "6191234567890",
   selling_price: "500.00",
-  purchase_price: null,
   is_active: true,
   stock: 20,
   created_at: "2026-08-17T00:00:00Z",
@@ -119,7 +118,6 @@ const biscuit: Product = {
   name: "Biscuit Choco",
   barcode: "6199876543210",
   selling_price: "300.00",
-  purchase_price: null,
   is_active: true,
   stock: 12,
   created_at: "2026-08-17T00:00:00Z",
@@ -195,7 +193,7 @@ describe("POS résilience hors ligne (reproduction pilote)", () => {
 
     await userEvents.click(screen.getByRole("button", { name: /Espèces/ }))
     await userEvents.type(screen.getByLabelText("Montant reçu"), "500")
-    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+    await userEvents.click(screen.getByRole("button", { name: "Valider le paiement" }))
 
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
 
@@ -264,7 +262,7 @@ describe("POS résilience hors ligne (reproduction pilote)", () => {
 
     await userEvents.click(screen.getByRole("button", { name: /Espèces/ }))
     await userEvents.type(screen.getByLabelText("Montant reçu"), "500")
-    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+    await userEvents.click(screen.getByRole("button", { name: "Valider le paiement" }))
 
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
     expect(await db.localSales.count()).toBe(1)

@@ -3803,8 +3803,8 @@ a.list-row:active {
   font-weight: 700;
 }
 
-/* Le paiement especes empile total, champ, pave, montants rapides et
-   monnaie : il resserre le corps de modale pour tenir sans defilement. */
+/* Le paiement especes empile total, champ, montants rapides, pave (tactile)
+   et etat : il resserre le corps de modale pour tenir sans defilement. */
 .cash-payment-form {
   gap: var(--space-2);
   padding-top: var(--space-2);
@@ -3925,31 +3925,110 @@ a.list-row:active {
   font-weight: 800;
 }
 
-.numeric-keypad {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
-  padding: 0.45rem;
+/* Ecran especes, par ordre d'importance : total, montant recu, etat du
+   paiement, action. Le pave n'est qu'un outil de saisie tactile — au
+   clavier on tape « 2000 » puis Entree, sans lui. */
+.cash-payment-dialog {
+  width: min(100%, 36rem);
+}
+
+.cash-payment-total {
+  justify-items: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.cash-payment-total span {
+  color: var(--color-text-muted);
+  font-size: var(--text-secondary);
+  font-weight: 700;
+}
+
+.cash-payment-total strong {
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.cash-payment-field .payment-money-input input {
+  min-height: var(--control-lg);
+  font-size: var(--text-amount-hero);
+}
+
+/* Un seul etat financier a la fois. Ce qui reste a payer est un etat
+   neutre, pas une erreur ; le vert n'apparait qu'une fois tout couvert. */
+.payment-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: var(--color-surface-subtle);
+  color: #17211c;
+}
+
+.payment-status span {
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+
+.payment-status strong {
+  font-size: var(--text-amount-hero);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.payment-status-change,
+.payment-status-exact {
+  border-color: #a8bdb4;
+  background: var(--color-surface-accent);
+}
+
+.payment-status-change strong,
+.payment-status-exact strong {
+  color: var(--color-primary);
+}
+
+.cash-payment-form .dialog-footer {
+  grid-template-columns: 1fr 1fr;
+}
+
+.cash-payment-form .dialog-footer .button {
+  text-wrap: balance;
+}
+
+/* Pave : absent sur poste a pointeur fin, compact ailleurs. Touches a la
+   cible tactile minimale, typographie plus discrete que les montants. */
+.numeric-keypad {
+  display: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
 }
 
 .numeric-keypad-key {
-  min-height: 2.4rem;
+  min-height: var(--control-md);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: #fff;
   color: inherit;
   font: inherit;
   font-size: var(--text-body);
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .numeric-keypad-key:hover:not(:disabled) {
   border-color: #a8b6af;
   background: #eef1ef;
+}
+
+.numeric-keypad-key:active:not(:disabled) {
+  background: var(--color-surface-muted);
 }
 
 .numeric-keypad-key:focus-visible {
@@ -3968,17 +4047,23 @@ a.list-row:active {
   color: #45534c;
 }
 
-/* Écran de caisse : deux colonnes. Le montant et ce qu'il implique à
-   gauche, le pavé à droite sur toute la hauteur — des touches larges et
-   hautes, frappées au doigt, sans rallonger la fenêtre. En dessous de cette
-   largeur (téléphone), tout reste empilé. */
-@media (min-width: 760px) {
+/* Meme critere que CashPaymentModal (TOUCH_KEYPAD_QUERY). */
+@media (pointer: coarse), (hover: none) {
+  .numeric-keypad {
+    display: grid;
+  }
+}
+
+/* Tablette : le pave se range a droite, a cote du champ, dans une colonne
+   etroite — le montant et son etat gardent la largeur principale. */
+@media (min-width: 760px) and (pointer: coarse),
+  (min-width: 760px) and (hover: none) {
   .cash-payment-dialog {
-    width: min(100%, 48rem);
+    width: min(100%, 46rem);
   }
 
   .cash-payment-form {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    grid-template-columns: minmax(0, 1fr) 13.5rem;
     column-gap: var(--space-5);
     align-items: start;
   }
@@ -3987,38 +4072,31 @@ a.list-row:active {
     grid-column: 1 / -1;
   }
 
-  .cash-payment-form > .payment-total,
-  .cash-payment-form > .field,
+  .cash-payment-form > .cash-payment-total,
+  .cash-payment-form > .cash-payment-field,
   .cash-payment-form > .quick-amounts,
-  .cash-payment-form > .change-preview {
+  .cash-payment-form > .payment-status {
     grid-column: 1;
   }
 
   .cash-payment-form > .numeric-keypad {
     grid-column: 2;
-    grid-row: 1 / span 4;
-    align-self: stretch;
-    grid-auto-rows: 1fr;
-    gap: var(--space-2);
-    padding: var(--space-2);
-  }
-
-  .cash-payment-form .numeric-keypad-key {
-    min-height: 3.75rem;
-    font-size: var(--text-amount);
+    grid-row: 2 / span 3;
+    align-self: center;
   }
 }
 
 .quick-amounts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-2);
 }
 
 .quick-amount {
   min-width: 0;
-  min-height: 2.4rem;
-  padding: 0.4rem 0.9rem;
+  min-height: var(--control-sm);
+  padding: 0.4rem 0.5rem;
+  font-size: var(--text-secondary);
 }
 
 .change-preview {
@@ -4481,11 +4559,28 @@ a.list-row:active {
     width: 100%;
   }
 
-  .quick-amounts,
   .dialog-footer,
+  .cash-payment-form .dialog-footer,
   .closing-result-actions,
   .sale-success-actions {
     grid-template-columns: 1fr;
+  }
+
+  /* Telephone : total sur une ligne et suggestions sur deux colonnes, pour
+     garder pave, etat et actions a l'ecran sans defiler. */
+  .quick-amounts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cash-payment-total {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .cash-payment-total strong {
+    font-size: var(--text-amount-hero);
   }
 
   .toast-viewport {

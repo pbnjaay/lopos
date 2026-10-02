@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 
 from apps.stores.models import CashRegister
 
@@ -90,8 +91,9 @@ class CashSession(models.Model):
         ]
 
     def __str__(self) -> str:
+        # Heure locale de la boutique, pas l'UTC stockée.
         opened_at = (
-            self.opened_at.strftime("%Y-%m-%d %H:%M")
+            timezone.localtime(self.opened_at).strftime("%d/%m/%Y %H:%M")
             if self.opened_at
             else "non ouverte"
         )

@@ -55,6 +55,23 @@ def test_import_creates_products_with_initial_stock(store: Store) -> None:
     movement = InventoryMovement.objects.get(product=product, store=store)
     assert movement.movement_type == InventoryMovement.Type.STOCK_IN
     assert movement.quantity == 24
+    # Le stock importé entre au prix d'achat de la ligne.
+    assert stock.average_unit_cost == Decimal("350.0000")
+    assert movement.unit_cost == Decimal("350.0000")
+
+
+def test_import_without_purchase_price_leaves_the_stock_cost_unknown(store: Store) -> None:
+    content = (
+        "barcode,name,purchase_price,selling_price,store,initial_stock\n"
+        f"5449000000996,Coca 50cl,,500,{store.name},24\n"
+    )
+
+    result = import_products_from_csv(_csv_file(content))
+
+    assert result.errors == []
+    stock = Stock.objects.get(product__barcode="5449000000996", store=store)
+    assert stock.quantity == 24
+    assert stock.average_unit_cost is None
 
 
 def test_import_rejects_duplicate_barcode_already_in_db(store: Store) -> None:
