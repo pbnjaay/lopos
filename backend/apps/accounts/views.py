@@ -8,6 +8,8 @@ from rest_framework.views import APIView
 
 from apps.tenancy.context import TenantDenial, denial_reason, get_tenant, resolve_tenant
 
+from . import login_guard
+
 from .serializers import CurrentUserSerializer, LoginSerializer
 
 
@@ -28,13 +30,23 @@ class LoginView(APIView):
     def post(self, request) -> Response:
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        username = serializer.validated_data["username"]
+
+        blocked = login_guard.check(request, username)
+        if blocked is not None:
+            return Response(
+                {"code": "TOO_MANY_LOGIN_ATTEMPTS", "message": login_guard.BLOCKED_MESSAGE},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={"Retry-After": str(blocked.retry_after)},
+            )
 
         user = authenticate(
             request=request,
-            username=serializer.validated_data["username"],
+            username=username,
             password=serializer.validated_data["password"],
         )
         if user is None:
+            login_guard.record_failure(request, username)
             return Response(
                 {
                     "code": "INVALID_CREDENTIALS",
@@ -42,6 +54,8 @@ class LoginView(APIView):
                 },
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+
+        login_guard.record_success(request, username)
 
         # Pas de session pour un compte qui n'appartient à aucun commerce actif
         # (super-utilisateur de la plateforme compris) : refusé avant `login`.

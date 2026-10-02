@@ -781,7 +781,13 @@ renseigner de chaque côté.
    déploiement dont le domaine n'est pas encore validé, on peut le
    desserrer temporairement (`DJANGO_SECURE_HSTS_SECONDS=3600`, ou
    `DJANGO_SECURE_SSL_REDIRECT=false`) puis retirer ces variables.
-7. `seed_demo` (comptes de démo aux mots de passe connus) refuse de tourner
+7. Connexions : POS et admin freinent les échecs répétés (5 par
+   identifiant et adresse, 30 par adresse, 50 par identifiant, sur
+   15 minutes ; réponse 429, jamais de verrouillage définitif). Les
+   compteurs vivent dans le cache en base (`createcachetable`, lancé par le
+   `Dockerfile`). L'adresse du client est lue dans `X-Forwarded-For` derrière
+   `DJANGO_TRUSTED_PROXY_COUNT` proxys (défaut 1 hors debug, le cas Railway).
+8. `seed_demo` (comptes de démo aux mots de passe connus) refuse de tourner
    hors debug et sur toute base fournie par `DATABASE_URL`.
 
 ### Frontend — Vercel

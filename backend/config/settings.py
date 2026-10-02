@@ -402,6 +402,22 @@ else:
         }
     }
 
+# Cache partagé par les workers gunicorn et persistant aux redémarrages :
+# les compteurs d'échecs de connexion (`apps.accounts.login_guard`) y
+# vivent. La table est créée par `createcachetable` au démarrage.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "lopos_cache",
+    }
+}
+
+# Nombre de proxys de confiance devant Django (Railway : 1). Sert à lire
+# l'adresse du client dans X-Forwarded-For pour le frein de connexion.
+LOGIN_GUARD_TRUSTED_PROXY_COUNT = int(
+    os.getenv("DJANGO_TRUSTED_PROXY_COUNT", "0" if DEBUG else "1")
+)
+
 # Le veto sur les coûts passe avant les permissions de groupe : le membre
 # (« voit les coûts et marges ») a le dernier mot sur le groupe Django.
 AUTHENTICATION_BACKENDS = [
