@@ -2,7 +2,6 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
-from apps.expenses.services import ensure_default_categories
 
 
 class Command(BaseCommand):
@@ -46,12 +45,11 @@ class Command(BaseCommand):
         self.stdout.write("Suppression des données…")
         call_command("flush", interactive=False)
 
-        self.stdout.write("Resynchronisation des groupes Gérant/Caissier…")
+        self.stdout.write("Resynchronisation des groupes de rôle…")
         call_command("create_default_groups")
 
-        # `flush` efface aussi les catégories créées par migration.
-        self.stdout.write("Recréation des catégories de dépenses par défaut…")
-        ensure_default_categories()
+        # Plus aucun commerce : les catégories de dépenses par défaut seront
+        # créées avec chacun d'eux, à son arrivée.
 
         self.stdout.write(
             self.style.SUCCESS(

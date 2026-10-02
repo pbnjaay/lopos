@@ -68,7 +68,8 @@ ALLOWED_HOSTS = [
 ALLOWED_HOSTS.append("healthcheck.railway.app")
 
 INSTALLED_APPS = [
-    "unfold",
+    # Unfold, avec un site d'admin qui exige un commerce actif.
+    "apps.tenancy.admin_config.TenantUnfoldConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -77,6 +78,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "corsheaders",
     "rest_framework",
+    "apps.tenancy",
     "apps.stores",
     "apps.catalog",
     "apps.inventory",
@@ -292,6 +294,14 @@ UNFOLD = {
                 "title": _("Configuration"),
                 "separator": True,
                 "items": [
+                    # Plateforme : un gérant ne doit même pas savoir qu'il
+                    # existe d'autres commerces.
+                    {
+                        "title": _("Organisations"),
+                        "icon": "domain",
+                        "link": reverse_lazy("admin:tenancy_organization_changelist"),
+                        "permission": lambda request: request.user.is_superuser,
+                    },
                     {
                         "title": _("Magasins"),
                         "icon": "store",
@@ -301,6 +311,9 @@ UNFOLD = {
                         "title": _("Utilisateurs"),
                         "icon": "group",
                         "link": reverse_lazy("admin:auth_user_changelist"),
+                        # Propriétaire et plateforme : le gérant ne gère pas
+                        # les comptes.
+                        "permission": lambda request: request.user.has_perm("auth.view_user"),
                     },
                     {
                         "title": _("Groupes"),
@@ -372,6 +385,13 @@ else:
         }
     }
 
+# Le veto sur les coûts passe avant les permissions de groupe : le membre
+# (« voit les coûts et marges ») a le dernier mot sur le groupe Django.
+AUTHENTICATION_BACKENDS = [
+    "apps.tenancy.backends.CostVisibilityBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -409,8 +429,11 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
     ],
+    # Refus par défaut : toute vue exige un compte membre d'un commerce
+    # actif ; seules l'authentification et le jeton CSRF y échappent.
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
+        "apps.tenancy.permissions.HasActiveTenant",
     ],
 }
 

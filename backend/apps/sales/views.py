@@ -17,6 +17,9 @@ from .exceptions import (
     ProductNotFound,
     InvalidReturn,
 )
+from apps.tenancy.context import get_tenant
+from apps.tenancy.scoping import scope
+
 from .access import get_pos_cash_session, returns_for_pos_session, sales_for_pos_session
 from .models import Sale, SaleReturn
 from .serializers import (
@@ -91,7 +94,7 @@ class CompleteSaleView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     def post(self, request) -> Response:
-        serializer = CompleteSaleSerializer(data=request.data)
+        serializer = CompleteSaleSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         cash_session = serializer.validated_data["cash_session"]
         if cash_session.cashier_id != request.user.pk:
@@ -166,13 +169,14 @@ class SaleDetailView(APIView):
 
 class CancelSaleView(APIView):
     def post(self, request, pk=None) -> Response:
+        # Une vente hors des magasins du compte n'existe pas pour lui : même
+        # réponse qu'un identifiant inconnu, jamais un refus qui la trahirait.
+        if not scope(Sale.objects, get_tenant(request)).filter(pk=pk).exists():
+            return _sale_not_found()
         try:
             sale = cancel_sale(sale_id=pk, cancelled_by=request.user)
         except Sale.DoesNotExist:
-            return Response(
-                {"code": "SALE_NOT_FOUND", "message": "Cette vente n'existe pas."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            return _sale_not_found()
         except InvalidCancellation as exc:
             return Response(
                 {"code": "INVALID_CANCELLATION", "message": str(exc)},
@@ -189,9 +193,18 @@ class CancelSaleView(APIView):
         return Response(SaleSerializer(sale).data, status=status.HTTP_200_OK)
 
 
+def _sale_not_found() -> Response:
+    return Response(
+        {"code": "SALE_NOT_FOUND", "message": "Cette vente n'existe pas."},
+        status=status.HTTP_404_NOT_FOUND,
+    )
+
+
 class SaleReturnListCreateView(APIView):
     def post(self, request) -> Response:
-        serializer = CreateSaleReturnSerializer(data=request.data)
+        serializer = CreateSaleReturnSerializer(
+            data=request.data, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
         try:
             sale_return = create_sale_return(**serializer.validated_data, created_by=request.user)

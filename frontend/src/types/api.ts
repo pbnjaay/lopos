@@ -1,3 +1,5 @@
+export type MemberRole = "OWNER" | "MANAGER" | "CASHIER"
+
 export type CurrentUser = {
   id: number
   username: string
@@ -5,6 +7,12 @@ export type CurrentUser = {
   first_name: string
   last_name: string
   is_staff: boolean
+  /** Commerce du compte, calculé par le serveur — jamais choisi par le poste. */
+  organization: { id: string; name: string }
+  role: MemberRole
+  /** Magasins où le compte peut travailler. */
+  store_ids: string[]
+  can_view_costs: boolean
 }
 
 export type Store = {

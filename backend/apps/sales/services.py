@@ -21,6 +21,7 @@ from apps.customers.services import (
 )
 from apps.inventory.models import InventoryMovement, Stock
 from apps.inventory.services import apply_inbound_cost
+from apps.stores.access import user_can_manage_store
 
 from .exceptions import (
     CustomerNotFound,
@@ -466,6 +467,21 @@ def _execute_sale(
     return sale, stock_discrepancy
 
 
+def _catalog_products(session: CashSession, product_ids) -> dict[UUID, Product]:
+    """Les produits du catalogue du commerce de la caisse. Un produit d'un
+    autre commerce est introuvable, exactement comme un produit supprimé."""
+    return {
+        product.id: product
+        # Jointure plutôt que select_related sur la session verrouillée : le
+        # FOR UPDATE verrouillerait aussi la ligne du magasin, et toutes ses
+        # caisses vendraient l'une après l'autre.
+        for product in Product.objects.filter(
+            id__in=product_ids,
+            organization__stores=session.cash_register.store_id,
+        ).order_by("id")
+    }
+
+
 @transaction.atomic
 def complete_sale(
     *,
@@ -486,10 +502,7 @@ def complete_sale(
     if locked_session.status != CashSession.Status.OPEN:
         raise CashSessionClosed("La session de caisse est fermée.")
 
-    products = {
-        product.id: product
-        for product in Product.objects.filter(id__in=product_ids).order_by("id")
-    }
+    products = _catalog_products(locked_session, product_ids)
     for product_id in product_ids:
         product = products.get(product_id)
         if product is None:
@@ -566,10 +579,7 @@ def complete_offline_sale(
             "La session de caisse a été clôturée avant cette vente."
         )
 
-    products = {
-        product.id: product
-        for product in Product.objects.filter(id__in=product_ids).order_by("id")
-    }
+    products = _catalog_products(locked_session, product_ids)
     for product_id in product_ids:
         if product_id not in products:
             raise ProductNotFound(product_id)
@@ -609,8 +619,8 @@ def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
     cas échéant) reste à régler par le caissier lui-même.
 
     Portée : le caissier propriétaire tant que sa session est encore ouverte,
-    ou un membre du staff sans restriction — même logique de délégation que
-    le reste de l'admin (cf. stores/views.py `current_session`).
+    ou un propriétaire / gérant du magasin sans restriction — même logique de
+    délégation que le reste (cf. `user_can_manage_store`).
     """
     sale = (
         Sale.objects.select_for_update()
@@ -628,7 +638,7 @@ def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
             "Cette vente a déjà fait l'objet d'un retour : faites un retour pour le reste."
         )
 
-    if not cancelled_by.is_staff:
+    if not user_can_manage_store(cancelled_by, sale.cash_session.cash_register.store_id):
         if sale.cashier_id != cancelled_by.pk:
             raise InvalidCancellation("Cette vente appartient à un autre caissier.")
         if sale.cash_session.status != CashSession.Status.OPEN:

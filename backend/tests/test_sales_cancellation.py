@@ -12,7 +12,7 @@ from apps.inventory.models import InventoryMovement, Stock
 from apps.sales.exceptions import InvalidCancellation
 from apps.sales.models import Payment, Sale
 from apps.sales.services import cancel_sale, complete_sale
-from apps.stores.models import CashRegister, Store
+from apps.stores.models import CashRegister, Store, StoreAssignment
 
 
 pytestmark = pytest.mark.django_db
@@ -36,6 +36,8 @@ def store() -> Store:
 
 @pytest.fixture
 def cash_session(store: Store, cashier) -> CashSession:
+    # Une caisse ne s'ouvre que dans un magasin où le caissier est affecté.
+    StoreAssignment.objects.get_or_create(user=cashier, store=store)
     register = CashRegister.objects.create(store=store, name="Caisse 01")
     return CashSession.objects.create(
         cash_register=register, cashier=cashier, opening_balance=Decimal("15000.00")
@@ -120,7 +122,10 @@ class TestCancelSaleAPI:
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["status"] == "CANCELLED"
 
-    def test_another_cashier_gets_a_conflict(self, sale: Sale, other_cashier) -> None:
+    def test_a_colleague_of_the_same_store_gets_a_conflict(self, sale: Sale, other_cashier) -> None:
+        StoreAssignment.objects.create(
+            user=other_cashier, store_id=sale.cash_session.cash_register.store_id
+        )
         client = APIClient()
         client.force_authenticate(other_cashier)
 
@@ -128,6 +133,22 @@ class TestCancelSaleAPI:
 
         assert response.status_code == status.HTTP_409_CONFLICT
         assert response.json()["code"] == "INVALID_CANCELLATION"
+
+    def test_a_cashier_outside_the_store_cannot_tell_the_sale_exists(
+        self, sale: Sale, other_cashier
+    ) -> None:
+        client = APIClient()
+        client.force_authenticate(other_cashier)
+
+        response = client.post(reverse("sale-cancel", args=[sale.id]))
+        unknown = client.post(
+            reverse("sale-cancel", args=["11111111-1111-1111-1111-111111111111"])
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.json() == unknown.json()
+        sale.refresh_from_db()
+        assert sale.status == Sale.Status.COMPLETED
 
     def test_unknown_sale_returns_404(self, cashier) -> None:
         client = APIClient()

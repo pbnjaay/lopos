@@ -28,6 +28,17 @@ class ProcessedSyncEvent(models.Model):
         "type d'événement", max_length=32, choices=EventType.choices
     )
     entity_id = models.UUIDField("identifiant de l'entité (ex. sale_id)")
+    # Magasin de la vente produite : rattache l'événement à un commerce sans
+    # passer par `entity_id`, qui n'est pas une clé étrangère. Vide seulement
+    # pour un événement antérieur dont la vente n'existe plus.
+    store = models.ForeignKey(
+        "stores.Store",
+        on_delete=models.PROTECT,
+        related_name="sync_events",
+        verbose_name="magasin",
+        blank=True,
+        null=True,
+    )
     pushed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,

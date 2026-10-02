@@ -21,14 +21,14 @@ def _csv_file(content: str) -> io.BytesIO:
     return io.BytesIO(content.encode("utf-8"))
 
 
-def test_import_creates_products_without_stock() -> None:
+def test_import_creates_products_without_stock(pilot_organization) -> None:
     content = (
         "barcode,name,purchase_price,selling_price,store,initial_stock\n"
         "5449000000996,Coca 50cl,350,500,,0\n"
         "1234567890123,Pain,100,150,,\n"
     )
 
-    result = import_products_from_csv(_csv_file(content))
+    result = import_products_from_csv(_csv_file(content), organization=pilot_organization)
 
     assert result.errors == []
     assert result.created_count == 2
@@ -37,13 +37,13 @@ def test_import_creates_products_without_stock() -> None:
     assert not InventoryMovement.objects.exists()
 
 
-def test_import_creates_products_with_initial_stock(store: Store) -> None:
+def test_import_creates_products_with_initial_stock(store: Store, pilot_organization) -> None:
     content = (
         "barcode,name,purchase_price,selling_price,store,initial_stock\n"
         f"5449000000996,Coca 50cl,350,500,{store.name},24\n"
     )
 
-    result = import_products_from_csv(_csv_file(content))
+    result = import_products_from_csv(_csv_file(content), organization=pilot_organization)
 
     assert result.errors == []
     assert result.created_count == 1
@@ -60,13 +60,13 @@ def test_import_creates_products_with_initial_stock(store: Store) -> None:
     assert movement.unit_cost == Decimal("350.0000")
 
 
-def test_import_without_purchase_price_leaves_the_stock_cost_unknown(store: Store) -> None:
+def test_import_without_purchase_price_leaves_the_stock_cost_unknown(store: Store, pilot_organization) -> None:
     content = (
         "barcode,name,purchase_price,selling_price,store,initial_stock\n"
         f"5449000000996,Coca 50cl,,500,{store.name},24\n"
     )
 
-    result = import_products_from_csv(_csv_file(content))
+    result = import_products_from_csv(_csv_file(content), organization=pilot_organization)
 
     assert result.errors == []
     stock = Stock.objects.get(product__barcode="5449000000996", store=store)
@@ -74,7 +74,7 @@ def test_import_without_purchase_price_leaves_the_stock_cost_unknown(store: Stor
     assert stock.average_unit_cost is None
 
 
-def test_import_rejects_duplicate_barcode_already_in_db(store: Store) -> None:
+def test_import_rejects_duplicate_barcode_already_in_db(store: Store, pilot_organization) -> None:
     Product.objects.create(
         name="Coca existant", barcode="5449000000996", selling_price=Decimal("500")
     )
@@ -83,7 +83,7 @@ def test_import_rejects_duplicate_barcode_already_in_db(store: Store) -> None:
         "5449000000996,Coca 50cl,350,500,,0\n"
     )
 
-    result = import_products_from_csv(_csv_file(content))
+    result = import_products_from_csv(_csv_file(content), organization=pilot_organization)
 
     assert result.created_count == 0
     assert len(result.errors) == 1
@@ -91,53 +91,53 @@ def test_import_rejects_duplicate_barcode_already_in_db(store: Store) -> None:
     assert Product.objects.count() == 1
 
 
-def test_import_rejects_duplicate_barcode_within_file() -> None:
+def test_import_rejects_duplicate_barcode_within_file(pilot_organization) -> None:
     content = (
         "barcode,name,purchase_price,selling_price,store,initial_stock\n"
         "5449000000996,Coca 50cl,350,500,,0\n"
         "5449000000996,Coca 50cl bis,350,500,,0\n"
     )
 
-    result = import_products_from_csv(_csv_file(content))
+    result = import_products_from_csv(_csv_file(content), organization=pilot_organization)
 
     assert result.created_count == 0
     assert any("en double" in error.message for error in result.errors)
     assert Product.objects.count() == 0
 
 
-def test_import_rejects_stock_without_store() -> None:
+def test_import_rejects_stock_without_store(pilot_organization) -> None:
     content = (
         "barcode,name,purchase_price,selling_price,store,initial_stock\n"
         "5449000000996,Coca 50cl,350,500,,24\n"
     )
 
-    result = import_products_from_csv(_csv_file(content))
+    result = import_products_from_csv(_csv_file(content), organization=pilot_organization)
 
     assert result.created_count == 0
     assert any("magasin est requis" in error.message.lower() for error in result.errors)
     assert Product.objects.count() == 0
 
 
-def test_import_rejects_unknown_store() -> None:
+def test_import_rejects_unknown_store(pilot_organization) -> None:
     content = (
         "barcode,name,purchase_price,selling_price,store,initial_stock\n"
         "5449000000996,Coca 50cl,350,500,Inconnu,24\n"
     )
 
-    result = import_products_from_csv(_csv_file(content))
+    result = import_products_from_csv(_csv_file(content), organization=pilot_organization)
 
     assert result.created_count == 0
     assert any("introuvable" in error.message for error in result.errors)
 
 
-def test_import_is_all_or_nothing_when_one_row_is_invalid(store: Store) -> None:
+def test_import_is_all_or_nothing_when_one_row_is_invalid(store: Store, pilot_organization) -> None:
     content = (
         "barcode,name,purchase_price,selling_price,store,initial_stock\n"
         f"5449000000996,Coca 50cl,350,500,{store.name},24\n"
         ",Produit sans prix,,,,\n"
     )
 
-    result = import_products_from_csv(_csv_file(content))
+    result = import_products_from_csv(_csv_file(content), organization=pilot_organization)
 
     assert result.created_count == 0
     assert len(result.errors) == 1
@@ -146,19 +146,19 @@ def test_import_is_all_or_nothing_when_one_row_is_invalid(store: Store) -> None:
     assert not Stock.objects.exists()
 
 
-def test_import_rejects_missing_required_columns() -> None:
+def test_import_rejects_missing_required_columns(pilot_organization) -> None:
     content = "name,price\nCoca,500\n"
 
-    result = import_products_from_csv(_csv_file(content))
+    result = import_products_from_csv(_csv_file(content), organization=pilot_organization)
 
     assert result.created_count == 0
     assert "Colonnes manquantes" in result.errors[0].message
 
 
-def test_import_rejects_empty_file() -> None:
+def test_import_rejects_empty_file(pilot_organization) -> None:
     content = "barcode,name,purchase_price,selling_price,store,initial_stock\n"
 
-    result = import_products_from_csv(_csv_file(content))
+    result = import_products_from_csv(_csv_file(content), organization=pilot_organization)
 
     assert result.created_count == 0
     assert "vide" in result.errors[0].message

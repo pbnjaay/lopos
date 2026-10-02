@@ -5,6 +5,8 @@ from decimal import Decimal
 from django.db import models
 from django.db.models import Q
 
+from apps.tenancy.models import Organization
+
 _WHITESPACE_RE = re.compile(r"\s+")
 
 
@@ -33,6 +35,14 @@ class Product(models.Model):
         KG = "KG", "Kilogramme"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # Le catalogue est celui du commerce, partagé par ses magasins ; chaque
+    # magasin garde son propre stock et son propre coût moyen (`Stock`).
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.PROTECT,
+        related_name="products",
+        verbose_name="organisation",
+    )
     name = models.CharField("nom", max_length=255)
     barcode = models.CharField("code-barres", max_length=64, blank=True, null=True)
     selling_price = models.DecimalField("prix de vente", max_digits=14, decimal_places=2)
@@ -78,10 +88,12 @@ class Product(models.Model):
                 | Q(purchase_price__gte=Decimal("0")),
                 name="catalog_product_purchase_price_nonnegative",
             ),
+            # Unique dans le catalogue d'un commerce, pas dans toute la base :
+            # deux boutiques indépendantes peuvent coder leurs produits pareil.
             models.UniqueConstraint(
-                fields=("barcode",),
+                fields=("organization", "barcode"),
                 condition=Q(barcode__isnull=False),
-                name="catalog_unique_product_barcode_when_set",
+                name="catalog_unique_product_barcode_per_organization",
             ),
         ]
 

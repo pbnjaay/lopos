@@ -9,6 +9,7 @@ import {
   localSessionToCashSession,
   markLocalCashSessionClosed,
   saveLocalCashSession,
+  type SessionCashier,
 } from "../../db/sessions"
 import type { CashRegister, CurrentUser } from "../../types/api"
 import {
@@ -31,7 +32,7 @@ export function resolveCashRegister(
 }
 
 export function usePosSession(
-  cashier: Pick<CurrentUser, "id" | "username" | "first_name">,
+  cashier: SessionCashier,
 ) {
   const preferredRegisterId = getStoredCashRegisterId()
   const localSessionQuery = useQuery({

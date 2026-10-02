@@ -20,7 +20,8 @@ from apps.sales.exceptions import (
 )
 from apps.sales.models import Sale
 from apps.sales.services import complete_offline_sale
-from apps.stores.access import user_can_access_store
+from apps.tenancy.context import TenantContext, resolve_tenant
+from apps.tenancy.scoping import scope_to_organization
 
 from .models import ProcessedSyncEvent
 
@@ -51,12 +52,18 @@ def process_sale_completed_event(
     occurred_at: datetime,
     payload: dict[str, Any],
     cashier,
+    tenant: TenantContext | None = None,
 ) -> EventOutcome:
     """Traite un événement `SALE_COMPLETED` de manière idempotente.
 
     `cashier` est l'utilisateur connecté qui transmet l'événement — pas
     forcément le caissier de la vente (caisse partagée) : il doit seulement
-    avoir accès à la boutique de la session.
+    avoir accès à la boutique de la session. `tenant` est son contexte, déjà
+    résolu par la vue pour tout le lot ; il est recalculé s'il manque.
+
+    Rien d'un autre commerce n'est jamais lu ni écrit : session, produits,
+    client, événement ou vente déjà connus ailleurs reçoivent la même
+    réponse qu'un identifiant inexistant, ou un refus générique.
 
     Invariant central : soit la `Sale` ET son `ProcessedSyncEvent` sont
     committés ensemble (même transaction), soit rien ne l'est. Un retry sur
@@ -74,9 +81,13 @@ def process_sale_completed_event(
     }
 
     tag_sync_scope(sync_event_id=event_id)
+    if tenant is None:
+        tenant = resolve_tenant(cashier)
 
     existing = ProcessedSyncEvent.objects.filter(pk=event_id).first()
     if existing is not None:
+        if not _known_to(tenant, ProcessedSyncEvent, existing.pk):
+            return _conflicting_identifier(event_id, log_context)
         logger.info("sync_event_duplicate", extra=log_context)
         return EventOutcome(
             event_id=event_id,
@@ -85,8 +96,13 @@ def process_sale_completed_event(
         )
 
     try:
-        cash_session = CashSession.objects.select_related("cash_register__store").get(
-            pk=payload["cash_session_id"]
+        # Tout le commerce, pas seulement les magasins du compte : le
+        # caissier d'une session garde le droit de transmettre ses ventes
+        # même retiré du magasin depuis (règle ci-dessous).
+        cash_session = (
+            scope_to_organization(CashSession.objects, tenant)
+            .select_related("cash_register__store")
+            .get(pk=payload["cash_session_id"])
         )
     except CashSession.DoesNotExist:
         logger.warning(
@@ -107,8 +123,8 @@ def process_sale_completed_event(
     # reste celle de la session (son caissier, son rapport Z), et
     # `pushed_by` garde la trace de qui l'a transmise.
     is_session_cashier = cash_session.cashier_id == cashier.pk
-    if not is_session_cashier and not user_can_access_store(
-        cashier, cash_session.cash_register.store
+    if not is_session_cashier and not tenant.can_access_store(
+        cash_session.cash_register.store_id
     ):
         logger.warning(
             "sync_event_rejected", extra={**log_context, "code": "STORE_NOT_ALLOWED"}
@@ -141,12 +157,15 @@ def process_sale_completed_event(
                 terminal_id=terminal_id,
                 event_type=ProcessedSyncEvent.EventType.SALE_COMPLETED,
                 entity_id=sale.id,
+                store_id=cash_session.cash_register.store_id,
                 pushed_by=cashier,
                 stock_discrepancy=stock_discrepancy,
             )
     except IntegrityError:
         winner = ProcessedSyncEvent.objects.filter(pk=event_id).first()
         if winner is not None:
+            if not _known_to(tenant, ProcessedSyncEvent, winner.pk):
+                return _conflicting_identifier(event_id, log_context)
             logger.info("sync_event_duplicate_race", extra=log_context)
             return EventOutcome(
                 event_id=event_id,
@@ -154,6 +173,8 @@ def process_sale_completed_event(
                 entity_id=winner.entity_id,
             )
         if Sale.objects.filter(pk=entity_id).exists():
+            if not _known_to(tenant, Sale, entity_id):
+                return _conflicting_identifier(event_id, log_context)
             # Un event_id différent a déjà produit cette même Sale (même
             # sale_id rejoué sous un autre event_id) : jamais de doublon,
             # mais on ne peut pas prétendre avoir traité CET event_id.
@@ -222,13 +243,31 @@ def process_sale_completed_event(
 PULL_PAGE_SIZE = 1000
 
 
+def _known_to(tenant: TenantContext, model, pk) -> bool:
+    return scope_to_organization(model.objects, tenant).filter(pk=pk).exists()
+
+
+def _conflicting_identifier(event_id: UUID, log_context: dict) -> EventOutcome:
+    """Identifiant déjà pris par un autre commerce. Ni son contenu ni son
+    existence ne sont confirmés : un refus générique, sans `entity_id`."""
+    logger.warning(
+        "sync_event_rejected", extra={**log_context, "code": "EVENT_ID_CONFLICT"}
+    )
+    return EventOutcome(
+        event_id=event_id,
+        status=SyncEventStatus.REJECTED,
+        code="EVENT_ID_CONFLICT",
+        message="Cet événement ne peut pas être traité.",
+    )
+
+
 @dataclass
 class PullPage:
     cursor: str
     changes: list[dict[str, Any]]
 
 
-def pull_catalog_changes(*, since: datetime | None) -> PullPage:
+def pull_catalog_changes(*, since: datetime | None, organization) -> PullPage:
     """Renvoie le delta catalogue (produits) depuis `since`, minimal pour ce MVP.
 
     Pas de change-log dédié : `Product.updated_at` fait office de curseur.
@@ -243,7 +282,7 @@ def pull_catalog_changes(*, since: datetime | None) -> PullPage:
     le traitement.
     """
     now = timezone.now()
-    queryset = Product.objects.order_by("updated_at", "id")
+    queryset = Product.objects.filter(organization=organization).order_by("updated_at", "id")
     if since is not None:
         queryset = queryset.filter(updated_at__gt=since)
     products = list(queryset[:PULL_PAGE_SIZE])

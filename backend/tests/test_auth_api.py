@@ -46,6 +46,7 @@ def _login(client: APIClient, *, username: str, password: str):
 def test_valid_login_returns_user_and_session_cookie(
     csrf_client: APIClient,
     user,
+    pilot_organization,
 ) -> None:
     response = _login(
         csrf_client,
@@ -61,6 +62,13 @@ def test_valid_login_returns_user_and_session_cookie(
         "first_name": "",
         "last_name": "",
         "is_staff": False,
+        "organization": {
+            "id": str(pilot_organization.pk),
+            "name": pilot_organization.name,
+        },
+        "role": "CASHIER",
+        "store_ids": [],
+        "can_view_costs": False,
     }
     assert settings.SESSION_COOKIE_NAME in csrf_client.cookies
     assert "csrftoken" in csrf_client.cookies

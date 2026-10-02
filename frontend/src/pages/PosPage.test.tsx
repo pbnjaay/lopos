@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ToastProvider } from "../components/ui/Toast"
 import { db } from "../db/database"
+import { AUTHENTICATED_USER_KEY } from "../db/tenancy"
 import {
   findLocalProductByBarcode,
   getProductCatalogMetadata,
@@ -196,7 +197,22 @@ async function openCashPayment(userEvents: ReturnType<typeof userEvent.setup>) {
   await userEvents.click(screen.getByRole("button", { name: /Espèces/ }))
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Le caissier connecté en ligne sur ce poste : le sync n'envoie que pour lui.
+  await db.metadata.put({
+    key: AUTHENTICATED_USER_KEY,
+    value: {
+      id: user.id,
+      username: user.username,
+      firstName: user.first_name,
+      organizationId: "org-id",
+      organizationName: "Commerce",
+      role: "CASHIER",
+      storeIds: [store.id],
+      canViewCosts: false,
+    },
+    updatedAt: "2026-08-17T00:00:00Z",
+  })
   vi.mocked(getProductCatalogMetadata).mockResolvedValue({
     storeId: store.id,
     cachedAt: "2026-08-17T00:00:00Z",
@@ -217,6 +233,7 @@ afterEach(async () => {
   await db.cashSessions.clear()
   await db.carts.clear()
   await db.products.clear()
+  await db.metadata.clear()
 })
 
 describe("POS sale workflow", () => {

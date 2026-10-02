@@ -11,7 +11,7 @@ from rest_framework.test import APIClient
 from apps.catalog.models import Product
 from apps.inventory.models import InventoryMovement
 from apps.sales.models import Payment, Sale, SaleItem
-from apps.stores.models import StoreAssignment
+from apps.stores.models import CashRegister, Store, StoreAssignment
 
 
 pytestmark = pytest.mark.django_db
@@ -31,20 +31,24 @@ def api_client(cashier) -> APIClient:
 
 
 def _bootstrap_pos(client: APIClient, *, stock_quantity: int = 20) -> dict[str, Any]:
-    store = client.post(
-        reverse("store-list"), {"name": "Supérette Test"}, format="json"
-    ).json()
+    # Magasin et caisse se créent dans l'administration ; le produit, par un
+    # propriétaire.
+    store_obj = Store.objects.create(name="Supérette Test")
+    store = {"id": str(store_obj.pk), "name": store_obj.name}
     StoreAssignment.objects.create(
         user=User.objects.get(username="cashier"),
-        store_id=store["id"],
+        store=store_obj,
     )
-    product = client.post(
+    owner = User.objects.create_user(username="owner", is_staff=True)
+    owner_client = APIClient()
+    owner_client.force_authenticate(owner)
+    product = owner_client.post(
         reverse("product-list"),
         {"name": "Coca 50cl", "barcode": "123456789", "selling_price": "500.00"},
         format="json",
     ).json()
     # L'entrée de stock est réservée au droit de réception, pas au caissier.
-    manager = User.objects.create_user(username="stock-manager")
+    manager = User.objects.create_user(username="stock-manager", is_staff=True)
     manager.user_permissions.add(Permission.objects.get(codename="change_product"))
     manager_client = APIClient()
     manager_client.force_authenticate(manager)
@@ -53,11 +57,8 @@ def _bootstrap_pos(client: APIClient, *, stock_quantity: int = 20) -> dict[str, 
         {"store_id": store["id"], "product_id": product["id"], "quantity": stock_quantity},
         format="json",
     )
-    cash_register = client.post(
-        reverse("cash-register-list"),
-        {"store_id": store["id"], "name": "Caisse 01"},
-        format="json",
-    ).json()
+    register = CashRegister.objects.create(store=store_obj, name="Caisse 01")
+    cash_register = {"id": str(register.pk), "store_id": store["id"], "name": register.name}
     cash_session = client.post(
         reverse("cash-session-open"),
         {"cash_register_id": cash_register["id"], "opening_balance": "15000.00"},
@@ -274,6 +275,8 @@ def test_current_session_is_forbidden_for_another_cashier(
 def test_summary_and_close_are_forbidden_for_another_cashier(api_client: APIClient) -> None:
     context = _bootstrap_pos(api_client)
     other_cashier = User.objects.create_user(username="other-cashier")
+    # Un collègue du même magasin : la session lui est visible, pas à lui.
+    StoreAssignment.objects.create(user=other_cashier, store_id=context["store"]["id"])
     api_client.force_authenticate(other_cashier)
 
     summary_response = api_client.get(
@@ -363,6 +366,8 @@ def test_sale_detail_is_forbidden_for_another_cashier(api_client: APIClient) -> 
         price=Decimal("500.00"),
     )
     other_cashier = User.objects.create_user(username="other-cashier")
+    # Un collègue du même magasin : la session lui est visible, pas à lui.
+    StoreAssignment.objects.create(user=other_cashier, store_id=context["store"]["id"])
     api_client.force_authenticate(other_cashier)
 
     response = api_client.get(reverse("sale-detail", kwargs={"pk": sale["id"]}))

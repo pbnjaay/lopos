@@ -1,11 +1,13 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 
+from apps.tenancy.admin_mixins import TenantAdminMixin
+
 from .models import ProcessedSyncEvent
 
 
 @admin.register(ProcessedSyncEvent)
-class ProcessedSyncEventAdmin(ModelAdmin):
+class ProcessedSyncEventAdmin(TenantAdminMixin, ModelAdmin):
     list_display = (
         "processed_at",
         "event_id",

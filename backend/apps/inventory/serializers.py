@@ -3,14 +3,15 @@ from rest_framework import serializers
 
 from apps.catalog.models import Product
 from apps.stores.models import Store
+from apps.tenancy.fields import TenantPrimaryKeyRelatedField
 
 
 class StockInSerializer(serializers.Serializer):
-    store_id = serializers.PrimaryKeyRelatedField(
+    store_id = TenantPrimaryKeyRelatedField(
         source="store",
         queryset=Store.objects.all(),
     )
-    product_id = serializers.PrimaryKeyRelatedField(
+    product_id = TenantPrimaryKeyRelatedField(
         source="product",
         queryset=Product.objects.all(),
     )

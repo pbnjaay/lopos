@@ -10,6 +10,7 @@ from unfold.admin import ModelAdmin, TabularInline
 from apps.dashboard.admin_columns import money_column
 from apps.stores.admin_mixins import SingleStoreColumnsMixin
 from apps.dashboard.formatting import format_fcfa
+from apps.tenancy.admin_mixins import TenantAdminMixin
 
 
 def _signed_fcfa(amount: Decimal) -> str:
@@ -68,7 +69,7 @@ class CustomerAdminForm(forms.ModelForm):
             raise forms.ValidationError(str(exc)) from exc
 
 
-class LedgerEntryInline(TabularInline):
+class LedgerEntryInline(TenantAdminMixin, TabularInline):
     model = CustomerLedgerEntry
     fk_name = "customer"
     extra = 0
@@ -95,7 +96,7 @@ class LedgerEntryInline(TabularInline):
 
 
 @admin.register(Customer)
-class CustomerAdmin(SingleStoreColumnsMixin, ModelAdmin):
+class CustomerAdmin(SingleStoreColumnsMixin, TenantAdminMixin, ModelAdmin):
     form = CustomerAdminForm
     list_display = ("name", "phone", "store", "balance_display", "is_active")
     list_filter = ("store", CustomerBalanceFilter, "is_active")
@@ -185,7 +186,7 @@ class ManualLedgerEntryForm(forms.ModelForm):
 
 
 @admin.register(CustomerLedgerEntry)
-class CustomerLedgerEntryAdmin(SingleStoreColumnsMixin, ModelAdmin):
+class CustomerLedgerEntryAdmin(SingleStoreColumnsMixin, TenantAdminMixin, ModelAdmin):
     list_display = (
         "occurred_at",
         "customer",
@@ -265,7 +266,7 @@ class CustomerLedgerEntryAdmin(SingleStoreColumnsMixin, ModelAdmin):
 
 
 @admin.register(CustomerPayment)
-class CustomerPaymentAdmin(ModelAdmin):
+class CustomerPaymentAdmin(TenantAdminMixin, ModelAdmin):
     """Remboursements encaissés en caisse : consultables, jamais modifiables
     (l'argent est déjà dans la caisse et l'écriture du cahier est immuable)."""
 

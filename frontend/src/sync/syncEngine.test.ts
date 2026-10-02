@@ -2,11 +2,12 @@
 
 import "fake-indexeddb/auto"
 
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { NetworkError } from "../api/client"
 import { pushSyncEvents } from "../api/sync"
 import { db } from "../db/database"
+import { AUTHENTICATED_USER_KEY } from "../db/tenancy"
 import { saveProductCatalog } from "../db/products"
 import { repairPendingSoldQuantities } from "../db/recovery"
 import { createLocalSale } from "../db/sales"
@@ -62,6 +63,24 @@ function buildPendingSale(id: string, syncEventId: string): LocalSale {
     total: 1_000,
   }
 }
+
+// Un caissier connecté sur ce poste : sans lui, rien ne quitte le poste.
+beforeEach(async () => {
+  await db.metadata.put({
+    key: AUTHENTICATED_USER_KEY,
+    value: {
+      id: 1,
+      username: "awa",
+      firstName: "Awa",
+      organizationId: "org-id",
+      organizationName: "Boutique",
+      role: "CASHIER",
+      storeIds: ["store-id"],
+      canViewCosts: false,
+    },
+    updatedAt: "2026-08-17T20:00:00Z",
+  })
+})
 
 afterEach(async () => {
   vi.clearAllMocks()
@@ -358,5 +377,74 @@ describe("sales blocked before the shared-register rule", () => {
       status: "CONFLICT",
       conflictCode: "CASH_SESSION_CLOSED",
     })
+  })
+})
+
+describe("sync after a change of account", () => {
+  function pushedSaleIds(): string[] {
+    return vi
+      .mocked(pushSyncEvents)
+      .mock.calls.flatMap(([, events]) => events.map((event) => event.entity_id))
+  }
+
+  function acceptEverything(): void {
+    vi.mocked(pushSyncEvents).mockImplementation(async (_terminalId, events) => ({
+      results: events.map((event) => ({
+        event_id: event.event_id,
+        status: "SYNCED" as const,
+        entity_id: event.entity_id,
+      })),
+    }))
+  }
+
+  it("sends nothing once nobody is logged in on the terminal", async () => {
+    await db.localSales.add(buildPendingSale("sale-1", "event-1"))
+    await db.metadata.delete(AUTHENTICATED_USER_KEY)
+
+    await expect(syncPendingSales()).resolves.toEqual({ attempted: 0, synced: 0, conflicts: 0 })
+
+    expect(pushSyncEvents).not.toHaveBeenCalled()
+    expect((await db.localSales.get("sale-1"))?.status).toBe("PENDING_SYNC")
+  })
+
+  it("never sends a sale of another commerce under the logged-in account", async () => {
+    acceptEverything()
+    await db.localSales.add({ ...buildPendingSale("sale-b", "event-b"), organizationId: "org-b" })
+    await db.localSales.add({ ...buildPendingSale("sale-a", "event-a"), organizationId: "org-id" })
+
+    await syncPendingSales()
+
+    expect(pushedSaleIds()).toEqual(["sale-a"])
+    expect((await db.localSales.get("sale-b"))?.status).toBe("PENDING_SYNC")
+  })
+
+  it("sends a colleague's sale only from a store the account works in", async () => {
+    acceptEverything()
+    await db.localSales.add({
+      ...buildPendingSale("colleague-here", "event-1"),
+      cashierId: 2,
+    })
+    await db.localSales.add({
+      ...buildPendingSale("colleague-elsewhere", "event-2"),
+      cashierId: 2,
+      storeId: "other-store",
+    })
+
+    await syncPendingSales()
+
+    expect(pushedSaleIds()).toEqual(["colleague-here"])
+    expect((await db.localSales.get("colleague-elsewhere"))?.status).toBe("PENDING_SYNC")
+  })
+
+  it("still sends the account's own sale from a store it has since left", async () => {
+    acceptEverything()
+    await db.localSales.add({
+      ...buildPendingSale("own-sale", "event-1"),
+      storeId: "former-store",
+    })
+
+    await syncPendingSales()
+
+    expect(pushedSaleIds()).toEqual(["own-sale"])
   })
 })
