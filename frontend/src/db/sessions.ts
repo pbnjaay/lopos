@@ -139,5 +139,6 @@ export function localSessionToCurrentUser(
     role: user.role,
     store_ids: user.storeIds,
     can_view_costs: user.canViewCosts,
+    ...(user.approvalPolicy ? { approval_policy: user.approvalPolicy } : {}),
   }
 }

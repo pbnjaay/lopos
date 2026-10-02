@@ -1,4 +1,4 @@
-import type { CurrentUser, MemberRole } from "../types/api"
+import type { ApprovalPolicy, CurrentUser, MemberRole } from "../types/api"
 import { UserFacingError } from "../utils/errors"
 import { db, type PosDatabase } from "./database"
 import type { LocalSale } from "./types"
@@ -29,6 +29,7 @@ export type AuthenticatedUser = {
   role: MemberRole
   storeIds: string[]
   canViewCosts: boolean
+  approvalPolicy?: ApprovalPolicy
 }
 
 export class TerminalOwnedByAnotherCommerceError extends UserFacingError {
@@ -52,6 +53,7 @@ function snapshot(user: CurrentUser): AuthenticatedUser {
     role: user.role,
     storeIds: user.store_ids,
     canViewCosts: user.can_view_costs,
+    ...(user.approval_policy ? { approvalPolicy: user.approval_policy } : {}),
   }
 }
 

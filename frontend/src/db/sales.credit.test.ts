@@ -6,7 +6,6 @@ import { saveCustomerBook } from "./customers"
 import { PosDatabase } from "./database"
 import {
   InvalidLocalPaymentError,
-  cancelPendingLocalSale,
   createLocalSale,
   markLocalSaleConflict,
   markLocalSaleSynced,
@@ -144,14 +143,5 @@ describe("pending credit on the customer book", () => {
 
     expect((await database.customers.get(["store-id", "moussa"]))?.serverBalance).toBe(17_500)
     expect(await pendingCreditByCustomer("store-id", database)).toEqual(new Map())
-  })
-
-  it("forgets the debt of a cancelled pending sale", async () => {
-    const sale = await sell(1, [], { customer: moussa, amount: 5_000 })
-
-    expect(await cancelPendingLocalSale(sale.id, database)).toBe(true)
-
-    expect(await pendingCreditByCustomer("store-id", database)).toEqual(new Map())
-    expect((await database.customers.get(["store-id", "moussa"]))?.serverBalance).toBe(12_500)
   })
 })

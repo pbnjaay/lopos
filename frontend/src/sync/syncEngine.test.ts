@@ -448,3 +448,32 @@ describe("sync after a change of account", () => {
     expect(pushedSaleIds()).toEqual(["own-sale"])
   })
 })
+
+describe("sync payload of a discounted sale", () => {
+  it("carries the manager's approval obtained at checkout", async () => {
+    await db.localSales.add({
+      ...buildPendingSale("sale-discount", "event-discount"),
+      approvalToken: "signed-token",
+    })
+    vi.mocked(pushSyncEvents).mockResolvedValue({
+      results: [{ event_id: "event-discount", status: "SYNCED", entity_id: "sale-discount" }],
+    })
+
+    await syncPendingSales()
+
+    const [, events] = vi.mocked(pushSyncEvents).mock.calls[0]!
+    expect(events[0]!.payload.approval_token).toBe("signed-token")
+  })
+
+  it("sends no approval for an ordinary sale", async () => {
+    await db.localSales.add(buildPendingSale("sale-plain", "event-plain"))
+    vi.mocked(pushSyncEvents).mockResolvedValue({
+      results: [{ event_id: "event-plain", status: "SYNCED", entity_id: "sale-plain" }],
+    })
+
+    await syncPendingSales()
+
+    const [, events] = vi.mocked(pushSyncEvents).mock.calls[0]!
+    expect(events[0]!.payload).not.toHaveProperty("approval_token")
+  })
+})
