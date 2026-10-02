@@ -1,4 +1,4 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.db.models import Count, Q, QuerySet
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
@@ -7,6 +7,7 @@ from unfold.admin import ModelAdmin, TabularInline
 from apps.stores.models import Store
 
 from .models import Organization, OrganizationMembership
+from .onboarding import start_commerce
 from .roles import sync_member_access
 
 
@@ -70,6 +71,29 @@ class OrganizationAdmin(PlatformAdminOnlyMixin, ModelAdmin):
         ),
     )
     inlines = (StoreInline, OrganizationMembershipInline)
+    actions = ("suspend", "reactivate")
+
+    def save_model(self, request, obj: Organization, form, change: bool) -> None:
+        super().save_model(request, obj, form, change)
+        if not change:
+            # Comme `create_pilot` : ses catégories de dépenses par défaut.
+            start_commerce(obj)
+
+    @admin.action(description=_("Suspendre (plus d'accès, données conservées)"))
+    def suspend(self, request: HttpRequest, queryset: QuerySet[Organization]) -> None:
+        count = queryset.update(status=Organization.Status.SUSPENDED)
+        self.message_user(
+            request,
+            f"{count} commerce(s) suspendu(s) : caisse, back-office et synchronisation "
+            "leur sont fermés dès la requête suivante. Les ventes hors ligne restent "
+            "sur leurs postes jusqu'à la réactivation.",
+            messages.WARNING,
+        )
+
+    @admin.action(description=_("Réactiver"))
+    def reactivate(self, request: HttpRequest, queryset: QuerySet[Organization]) -> None:
+        count = queryset.update(status=Organization.Status.ACTIVE)
+        self.message_user(request, f"{count} commerce(s) réactivé(s).", messages.SUCCESS)
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Organization]:
         return (

@@ -665,6 +665,68 @@ suit une vente offline est un event technique séparé — jamais un second
 - [ ] `sync_started`/`sync_completed` visibles après une vente offline
 - [ ] `cash_session_closed` visible
 
+## Multi-commerce (SaaS privé)
+
+Un seul déploiement, une seule base, plusieurs commerces pilotes qui ne se
+voient jamais. Pas d'inscription publique : la plateforme (super-utilisateur)
+crée chaque commerce.
+
+- **Commerce** (`Organization`) → ses **magasins** (`Store`), son **catalogue**
+  (`Product`, stock et coût moyen par magasin) et ses **catégories de dépenses**.
+- **Membre** (`OrganizationMembership`) : un compte, un commerce actif, un rôle.
+  - **Propriétaire** : tous les magasins du commerce, les comptes, les magasins
+    et caisses, les coûts.
+  - **Gérant** : back-office de ses magasins affectés ; coûts seulement si
+    « voit les coûts et marges ».
+  - **Caissier** : la caisse, dans ses magasins affectés.
+- Le rôle décide des groupes Django et de l'accès au back-office
+  (`sync_member_access`) ; `is_staff` n'ouvre plus aucun magasin à lui seul.
+- Toute donnée d'un autre commerce se comporte comme si elle n'existait pas
+  (404 dans l'API, introuvable dans l'admin).
+- Un poste de caisse est lié au commerce du premier compte qui s'y connecte ;
+  un autre commerce n'y entre qu'après effacement des données locales, et
+  jamais tant que des ventes du premier attendent d'être synchronisées.
+
+### Commandes
+
+| Commande | Rôle |
+|---|---|
+| `create_pilot --name … --store … --owner …` | Accueille un commerce : magasin, caisse, catégories, propriétaire avec mot de passe temporaire affiché une fois. Tout ou rien. |
+| `create_default_groups` | Crée les groupes Propriétaire/Gérant/Caissier et réaligne chaque compte sur son rôle. |
+| `tenancy_audit` | Lecture seule : commerces, magasins, comptes et points à décider (pas de propriétaire, super-utilisateur qui vend en caisse…). |
+| `tenancy_check` | Lecture seule : échoue si une donnée relie deux commerces. À lancer après chaque migration. |
+
+### Mise en production du multi-commerce (pilote existant)
+
+1. Déployer : `migrate` rattache toutes les données à une « Organisation
+   pilote » (à renommer) et donne à chaque compte un rôle selon son groupe
+   actuel (Gérant → gérant, sinon caissier). Aucun propriétaire n'est deviné.
+2. `tenancy_audit` : si un super-utilisateur vend en caisse, lui créer un
+   compte de commerce — le super-utilisateur n'a plus accès à la caisse.
+3. Admin › Organisations › membres : nommer le propriétaire.
+4. `create_default_groups`, puis `tenancy_check`.
+
+### Accueillir un nouveau pilote
+
+```bash
+python backend/manage.py create_pilot \
+  --name "Boutique Ndiaye" --store "Louga Centre" \
+  --owner ndiaye.awa --owner-first-name Awa
+```
+
+Transmettre en main propre l'identifiant et le mot de passe temporaire ; le
+propriétaire le change dans l'admin, puis crée ses gérants et caissiers
+(Utilisateurs), ses autres magasins et caisses, et importe son catalogue.
+Convention de noms d'utilisateur : `<commerce>.<prénom>` (ils sont uniques sur
+toute la plateforme).
+
+### Suspendre un commerce
+
+Admin › Organisations › action « Suspendre » : caisse, back-office et
+synchronisation lui sont fermés dès la requête suivante, ses données restent
+intactes. Les ventes hors ligne restent sur ses postes et partiront à la
+réactivation.
+
 ## Déploiement
 
 Backend sur Railway (Dockerfile, domaine `api.lopos.app`), frontend sur
