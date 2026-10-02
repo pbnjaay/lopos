@@ -745,7 +745,8 @@ renseigner de chaque côté.
 
 1. Créer un projet Railway à partir de ce repo. Railway détecte le
    `Dockerfile` à la racine (voir `railway.json` : builder explicite +
-   healthcheck sur `/admin/login/`). Railway envoie toujours ce healthcheck
+   healthcheck sur `/healthz/`, une sonde sans base ni session, exemptée de
+   la redirection HTTPS). Railway envoie toujours ce healthcheck
    avec `Host: healthcheck.railway.app` (quel que soit le domaine réel du
    service) — `backend/config/settings.py` l'ajoute automatiquement à
    `ALLOWED_HOSTS`, rien à configurer côté variables d'environnement pour ça.
@@ -765,18 +766,29 @@ renseigner de chaque côté.
    DJANGO_COOKIE_SECURE=true
    DJANGO_CSRF_COOKIE_DOMAIN=.lopos.app
    ```
-   Le démarrage refuse volontairement de tourner avec `DJANGO_DEBUG=false`
-   et la clé par défaut (`ImproperlyConfigured`) — c'est un garde-fou, pas
-   un bug.
+   Les réglages sont sûrs par défaut : sans `DJANGO_DEBUG`, le debug est
+   désactivé, et hors debug les cookies sont `Secure`, la redirection HTTPS
+   et HSTS (1 an) sont actifs. Le démarrage refuse de tourner hors debug sans
+   `DJANGO_SECRET_KEY`, ou avec la clé de développement
+   (`ImproperlyConfigured`) — c'est un garde-fou, pas un bug.
 4. Le `Dockerfile` fait `migrate` + `collectstatic` + `gunicorn` au
    démarrage du conteneur (fichiers statiques servis par WhiteNoise —
    pas de CDN séparé nécessaire pour ce volume).
 5. Créer un compte admin une fois déployé :
    `railway run python backend/manage.py createsuperuser`
    (et éventuellement `railway run python backend/manage.py create_default_groups`).
-6. Une fois le domaine et le certificat confirmés fonctionnels, activer le
-   durcissement HTTPS optionnel : `DJANGO_SECURE_SSL_REDIRECT=true`,
-   `DJANGO_SECURE_HSTS_SECONDS=3600` (à augmenter progressivement).
+6. Durcissement HTTPS : actif par défaut hors debug. Pour un premier
+   déploiement dont le domaine n'est pas encore validé, on peut le
+   desserrer temporairement (`DJANGO_SECURE_HSTS_SECONDS=3600`, ou
+   `DJANGO_SECURE_SSL_REDIRECT=false`) puis retirer ces variables.
+7. Connexions : POS et admin freinent les échecs répétés (5 par
+   identifiant et adresse, 30 par adresse, 50 par identifiant, sur
+   15 minutes ; réponse 429, jamais de verrouillage définitif). Les
+   compteurs vivent dans le cache en base (`createcachetable`, lancé par le
+   `Dockerfile`). L'adresse du client est lue dans `X-Forwarded-For` derrière
+   `DJANGO_TRUSTED_PROXY_COUNT` proxys (défaut 1 hors debug, le cas Railway).
+8. `seed_demo` (comptes de démo aux mots de passe connus) refuse de tourner
+   hors debug et sur toute base fournie par `DATABASE_URL`.
 
 ### Frontend — Vercel
 

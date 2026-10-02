@@ -59,6 +59,17 @@ class MemberChangeForm(UserChangeForm):
     role = _role_field()
     can_view_costs = _costs_field()
 
+    def clean_is_superuser(self):
+        # Champ présent pour la plateforme seulement : un compte membre d'un
+        # commerce ne devient pas super-utilisateur, il faudrait d'abord le
+        # retirer du commerce (un compte distinct est préférable).
+        is_superuser = self.cleaned_data.get("is_superuser")
+        if is_superuser and OrganizationMembership.objects.filter(user=self.instance).exists():
+            raise forms.ValidationError(
+                "Ce compte est membre d'un commerce : créez un compte distinct pour la plateforme."
+            )
+        return is_superuser
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         membership = _active_membership(self.instance)

@@ -150,3 +150,79 @@ def test_movements_show_their_cost_with_valuation_access(
     listing = client.get(reverse("admin:inventory_inventorymovement_changelist"))
 
     assert "350 FCFA" in listing.content.decode()
+
+
+# --- Fiche produit et prix d'achat ----------------------------------------------
+
+
+def test_product_form_hides_the_purchase_price_without_valuation_access(
+    client, store: Store, product: Product
+) -> None:
+    _staff(client, "change_product", "view_product")
+
+    response = client.get(reverse("admin:catalog_product_change", args=[product.pk]))
+
+    content = response.content.decode()
+    assert response.status_code == 200
+    assert 'name="purchase_price"' not in content
+    assert 'value="350' not in content
+
+
+def test_product_form_ignores_a_posted_purchase_price_without_valuation_access(
+    client, store: Store, product: Product
+) -> None:
+    _staff(client, "change_product", "view_product")
+
+    response = client.post(
+        reverse("admin:catalog_product_change", args=[product.pk]),
+        {
+            "name": "Coca 50cl",
+            "sale_unit": "UNIT",
+            "is_active": "on",
+            "selling_price": "550",
+            "purchase_price": "1",
+        },
+    )
+
+    product.refresh_from_db()
+    assert response.status_code == 302
+    assert product.selling_price == Decimal("550")
+    assert product.purchase_price == Decimal("350")
+
+
+def test_product_form_shows_the_purchase_price_with_valuation_access(
+    client, store: Store, product: Product
+) -> None:
+    _staff(client, "change_product", "view_product", "view_stockvaluation")
+
+    response = client.get(reverse("admin:catalog_product_change", args=[product.pk]))
+
+    assert 'name="purchase_price"' in response.content.decode()
+
+
+def test_new_product_form_still_takes_a_purchase_price(client, store: Store) -> None:
+    _staff(client, "add_product", "change_product", "view_product")
+
+    response = client.get(reverse("admin:catalog_product_add"))
+
+    assert 'name="purchase_price"' in response.content.decode()
+
+
+def test_receipt_form_is_not_prefilled_with_the_last_cost_without_valuation_access(
+    client, store: Store, product: Product
+) -> None:
+    _staff(client, "change_product", "view_product")
+
+    response = client.get(reverse("admin:catalog_product_receive_stock", args=[product.pk]))
+
+    assert 'value="350' not in response.content.decode()
+
+
+def test_receipt_form_is_prefilled_with_the_last_cost_with_valuation_access(
+    client, store: Store, product: Product
+) -> None:
+    _staff(client, "change_product", "view_product", "view_stockvaluation")
+
+    response = client.get(reverse("admin:catalog_product_receive_stock", args=[product.pk]))
+
+    assert 'value="350' in response.content.decode()

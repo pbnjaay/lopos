@@ -137,6 +137,21 @@ class SaleItem(models.Model):
     catalog_unit_price = models.DecimalField(
         "prix catalogue", max_digits=14, decimal_places=2, default=Decimal("0")
     )
+    # Vente hors ligne : `catalog_unit_price` est celui que le poste affichait
+    # (le catalogue a pu changer depuis). Le poste n'étant pas une source de
+    # confiance, le prix serveur est gardé ici quand il diffère, pour revue.
+    server_catalog_unit_price = models.DecimalField(
+        "prix catalogue serveur",
+        max_digits=14,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text=(
+            "Vente hors ligne seulement : prix catalogue connu du serveur à la "
+            "synchronisation, renseigné quand il diffère du prix catalogue "
+            "envoyé par le poste."
+        ),
+    )
     unit_price = models.DecimalField("prix unitaire", max_digits=14, decimal_places=2)
     quantity = models.DecimalField("quantité", max_digits=12, decimal_places=3)
     line_total = models.DecimalField("total de la ligne", max_digits=14, decimal_places=2)

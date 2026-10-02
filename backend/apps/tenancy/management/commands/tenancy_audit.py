@@ -167,6 +167,11 @@ class Command(BaseCommand):
                     "créer un compte distinct dans l'organisation (le super-utilisateur "
                     "n'aura plus accès à la caisse)."
                 )
+            if memberships:
+                warnings.append(
+                    f"{user.username} est super-utilisateur et membre d'un commerce : "
+                    "retirer ce rattachement (la plateforme n'est membre d'aucun commerce)."
+                )
             return
         if not active_memberships:
             if user.is_active:

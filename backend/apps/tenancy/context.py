@@ -56,6 +56,10 @@ class TenantDenial:
 def resolve_tenant(user) -> TenantContext | None:
     if user is None or not user.is_authenticated or not user.is_active:
         return None
+    # Le super-utilisateur est la plateforme, jamais un membre : même rattaché
+    # par erreur à un commerce, il n'y travaille pas (ni caisse, ni API).
+    if user.is_superuser:
+        return None
     membership = (
         OrganizationMembership.objects.select_related("organization")
         .filter(

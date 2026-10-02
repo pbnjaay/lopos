@@ -1,6 +1,7 @@
 import uuid
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 
@@ -132,3 +133,12 @@ class OrganizationMembership(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} — {self.organization} ({self.get_role_display()})"
+
+    def clean(self) -> None:
+        # Le super-utilisateur est la plateforme : il ne devient jamais membre
+        # d'un commerce (il y verrait sinon des données d'autres commerces).
+        super().clean()
+        if self.user_id is not None and self.user.is_superuser:
+            raise ValidationError(
+                {"user": "Un super-utilisateur de la plateforme ne peut pas être membre d'un commerce."}
+            )

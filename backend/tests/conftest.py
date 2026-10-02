@@ -77,3 +77,14 @@ def pilot_organization(request):
 def _uses_db(request) -> bool:
     marker = request.node.get_closest_marker("django_db")
     return marker is not None or "db" in request.fixturenames
+
+
+@pytest.fixture(autouse=True)
+def clear_cache():
+    """Les compteurs d'échecs de connexion ne passent jamais d'un test à
+    l'autre."""
+    from django.core.cache import cache
+
+    cache.clear()
+    yield
+    cache.clear()
