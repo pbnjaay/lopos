@@ -27,7 +27,7 @@ from apps.tenancy.models import Organization, OrganizationMembership
 from apps.tenancy.roles import sync_member_access
 from apps.tenancy.scoping import scope
 
-from .tenancy_factories import Commerce, build_commerce
+from .tenancy_factories import Commerce, build_commerce, throwaway_password
 
 pytestmark = [pytest.mark.django_db, pytest.mark.explicit_tenancy]
 
@@ -143,10 +143,11 @@ def test_another_commerce_record_cannot_be_opened(a, b, owner_a, attribute) -> N
 def test_another_commerce_member_cannot_be_opened_or_edited(a, b, owner_a) -> None:
     assert owner_a.get(_change(b.cashier)).status_code == 302
     password_url = reverse("admin:auth_user_password_change", args=[b.cashier.pk])
-    owner_a.post(password_url, {"password1": "Piratage123!", "password2": "Piratage123!"})
+    forged = throwaway_password()
+    owner_a.post(password_url, {"password1": forged, "password2": forged})
 
     b.cashier.refresh_from_db()
-    assert not b.cashier.check_password("Piratage123!")
+    assert not b.cashier.check_password(forged)
 
 
 def test_stock_actions_cannot_target_another_commerce_product(a, b, owner_a) -> None:
@@ -271,13 +272,14 @@ def test_store_created_by_a_commerce_belongs_to_it(a, b, owner_a) -> None:
 
 
 def test_user_created_by_a_commerce_joins_it_as_cashier(a, owner_a) -> None:
+    password = throwaway_password()
     owner_a.post(
         reverse("admin:auth_user_add"),
         {
             "username": "nouvelle",
             "usable_password": "true",
-            "password1": "Passer-1234!",
-            "password2": "Passer-1234!",
+            "password1": password,
+            "password2": password,
             "store_assignments-TOTAL_FORMS": "0",
             "store_assignments-INITIAL_FORMS": "0",
             "store_assignments-MIN_NUM_FORMS": "0",
@@ -401,18 +403,19 @@ def _transfer_to(user, commerce: Commerce) -> None:
 
 def test_former_commerce_loses_a_transferred_account(a, b, owner_a) -> None:
     _transfer_to(a.cashier, b)
+    forged = throwaway_password()
 
     listed = set(owner_a.get(_changelist(User)).context["cl"].queryset)
     opened = owner_a.get(_change(a.cashier))
     owner_a.post(
         reverse("admin:auth_user_password_change", args=[a.cashier.pk]),
-        {"password1": "Piratage123!", "password2": "Piratage123!"},
+        {"password1": forged, "password2": forged},
     )
 
     assert a.cashier not in listed
     assert opened.status_code == 302
     a.cashier.refresh_from_db()
-    assert not a.cashier.check_password("Piratage123!")
+    assert not a.cashier.check_password(forged)
 
 
 def test_deactivated_member_stays_manageable_by_its_commerce(a, owner_a) -> None:

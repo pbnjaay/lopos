@@ -15,7 +15,7 @@ from django.urls import reverse
 from apps.tenancy.models import Organization, OrganizationMembership
 from apps.tenancy.roles import sync_member_access
 
-from .tenancy_factories import Commerce, build_commerce
+from .tenancy_factories import Commerce, build_commerce, throwaway_password
 
 pytestmark = [pytest.mark.django_db, pytest.mark.explicit_tenancy]
 User = get_user_model()
@@ -109,13 +109,14 @@ def test_group_command_realigns_every_account_on_its_role(a) -> None:
 
 
 def _add_member(client, username: str, **member) -> None:
+    password = throwaway_password()
     client.post(
         reverse("admin:auth_user_add"),
         {
             "username": username,
             "usable_password": "true",
-            "password1": "Passer-1234!",
-            "password2": "Passer-1234!",
+            "password1": password,
+            "password2": password,
             "store_assignments-TOTAL_FORMS": "0",
             "store_assignments-INITIAL_FORMS": "0",
             "store_assignments-MIN_NUM_FORMS": "0",

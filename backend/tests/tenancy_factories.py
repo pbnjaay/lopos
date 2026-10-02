@@ -1,5 +1,6 @@
 """Deux commerces complets sur la même base, pour les tests d'isolation."""
 
+import secrets
 from dataclasses import dataclass
 from decimal import Decimal
 from uuid import uuid4
@@ -24,6 +25,12 @@ from apps.tenancy.models import Organization, OrganizationMembership
 
 User = get_user_model()
 Role = OrganizationMembership.Role
+
+
+def throwaway_password() -> str:
+    """Mot de passe factice pour un test, tiré à l'exécution : aucun secret
+    écrit en dur dans le dépôt (et assez fort pour les validateurs Django)."""
+    return f"Test-{secrets.token_urlsafe(12)}"
 
 
 @dataclass
