@@ -3,6 +3,7 @@ from io import StringIO
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import override_settings
 
 from apps.cash.models import CashSession
@@ -69,3 +70,14 @@ def test_seed_demo_reuses_the_existing_commerce() -> None:
 
     assert list(Organization.objects.all()) == [pilot]
     assert Store.objects.get().organization == pilot
+
+
+@override_settings(DEBUG=True)
+def test_seed_demo_refuses_a_hosted_database_even_in_debug(monkeypatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@db.example.com:5432/lopos")
+
+    with pytest.raises(CommandError, match="DATABASE_URL"):
+        call_command("seed_demo", stdout=StringIO())
+
+    assert not User.objects.filter(username="admin").exists()
+    assert not Organization.objects.exists()

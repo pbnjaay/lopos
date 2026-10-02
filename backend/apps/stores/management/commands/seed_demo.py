@@ -1,3 +1,4 @@
+import os
 from decimal import Decimal
 
 from django.conf import settings
@@ -73,6 +74,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options) -> None:
         if not settings.DEBUG:
             raise CommandError("seed_demo est réservé aux environnements DEBUG.")
+        # Deuxième verrou, indépendant de DEBUG : une base hébergée (fournie
+        # par DATABASE_URL, comme sur Railway) ne reçoit jamais les comptes
+        # de démo et leurs mots de passe connus.
+        if os.getenv("DATABASE_URL"):
+            raise CommandError(
+                "seed_demo refuse une base fournie par DATABASE_URL (base hébergée)."
+            )
 
         with transaction.atomic():
             # Le commerce déjà présent (pilote migré, démo précédente) plutôt

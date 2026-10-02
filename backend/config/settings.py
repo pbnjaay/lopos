@@ -15,12 +15,29 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key-change-me")
-DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() in {"1", "true", "yes"}
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    return value.strip().lower() in {"1", "true", "yes"}
 
-if not DEBUG and SECRET_KEY == "unsafe-development-key-change-me":
+
+# Sûr par défaut : une variable oubliée sur l'hébergeur ne doit jamais ouvrir
+# le mode debug. Le développement local l'active via `.env` (voir
+# `.env.example`).
+DEBUG = _env_bool("DJANGO_DEBUG", False)
+
+_DEV_SECRET_KEY = "unsafe-development-key-change-me"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "").strip()
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY doit être défini explicitement lorsque DJANGO_DEBUG=false."
+        )
+    SECRET_KEY = _DEV_SECRET_KEY
+if not DEBUG and SECRET_KEY == _DEV_SECRET_KEY:
     raise ImproperlyConfigured(
-        "DJANGO_SECRET_KEY doit être défini explicitement lorsque DJANGO_DEBUG=false."
+        "DJANGO_SECRET_KEY ne peut pas être la clé de développement lorsque DJANGO_DEBUG=false."
     )
 
 SENTRY_DSN = os.getenv("SENTRY_DSN", "")
@@ -446,11 +463,8 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ]
 CSRF_COOKIE_HTTPONLY = False
-CSRF_COOKIE_SECURE = os.getenv("DJANGO_COOKIE_SECURE", "false").lower() in {
-    "1",
-    "true",
-    "yes",
-}
+# Cookies « Secure » dès qu'on n'est plus en debug, sauf refus explicite.
+CSRF_COOKIE_SECURE = _env_bool("DJANGO_COOKIE_SECURE", not DEBUG)
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE
 CSRF_FAILURE_VIEW = "config.csrf.csrf_failure"
 
@@ -488,16 +502,13 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 
-# Durcissement HTTPS optionnel — désactivé par défaut pour ne pas risquer de
-# casser un healthcheck ou un accès direct par IP avant que le domaine et le
-# certificat soient confirmés fonctionnels. À activer une fois le déploiement
-# validé (voir README, section Déploiement).
-SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "false").lower() in {
-    "1",
-    "true",
-    "yes",
-}
-SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "0"))
+# Durcissement HTTPS actif par défaut hors debug. Le healthcheck Railway
+# arrive en HTTP interne : `/healthz/` est exempté de la redirection.
+SECURE_SSL_REDIRECT = _env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
+SECURE_REDIRECT_EXEMPT = [r"^healthz/$"]
+SECURE_HSTS_SECONDS = int(
+    os.getenv("DJANGO_SECURE_HSTS_SECONDS", "0" if DEBUG else "31536000")
+)
 
 # Sans ceci, les erreurs "Bad Request (400)" (ex. DisallowedHost quand
 # ALLOWED_HOSTS ne correspond pas au Host reçu) ne vont qu'à mail_admins par
