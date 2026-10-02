@@ -22,6 +22,15 @@ from apps.stores.models import CashRegister, Store, StoreAssignment
 
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def no_manager_approval_threshold(settings):
+    """Ce module teste le cahier et le tiroir, pas la validation par un
+    gérant (voir test_cashier_approvals) : seuil hors d'atteinte."""
+    settings.APPROVAL_AMOUNT_THRESHOLD = Decimal("1000000000")
+
+
 User = get_user_model()
 
 

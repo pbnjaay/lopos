@@ -57,6 +57,14 @@ class ProcessedSyncEvent(models.Model):
         default=False,
         help_text="Vrai si cette vente a fait passer un stock sous zéro.",
     )
+    unapproved_discount = models.BooleanField(
+        "remise non validée",
+        default=False,
+        help_text=(
+            "Vrai si la vente porte une remise au-delà de ce qu'un caissier "
+            "accorde seul, sans validation de gérant valable."
+        ),
+    )
     catalog_price_discrepancy = models.BooleanField(
         "prix catalogue à vérifier",
         default=False,

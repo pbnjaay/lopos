@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
@@ -19,6 +20,7 @@ class CurrentUserSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
     store_ids = serializers.SerializerMethodField()
     can_view_costs = serializers.SerializerMethodField()
+    approval_policy = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -33,6 +35,7 @@ class CurrentUserSerializer(serializers.ModelSerializer):
             "role",
             "store_ids",
             "can_view_costs",
+            "approval_policy",
         )
         read_only_fields = fields
 
@@ -48,3 +51,14 @@ class CurrentUserSerializer(serializers.ModelSerializer):
 
     def get_can_view_costs(self, user) -> bool:
         return self.context["tenant"].can_view_costs
+
+    def get_approval_policy(self, user) -> dict:
+        """Ce que le poste doit faire valider par un gérant (le serveur
+        refait toujours le contrôle). Un gérant ou un propriétaire n'en a
+        jamais besoin pour lui-même : `required` est faux."""
+        return {
+            "required": self.context["tenant"].role == "CASHIER",
+            "amount_threshold": f"{settings.APPROVAL_AMOUNT_THRESHOLD:.2f}",
+            "max_discount_rate": f"{settings.APPROVAL_MAX_DISCOUNT_RATE}",
+            "return_window_days": settings.APPROVAL_RETURN_WINDOW_DAYS,
+        }

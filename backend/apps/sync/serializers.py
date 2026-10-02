@@ -48,6 +48,11 @@ class SyncSalePayloadSerializer(serializers.Serializer):
         max_digits=14, decimal_places=2, min_value=Decimal("0"),
         required=False, default=Decimal("0.00"),
     )
+    # Validation d'un gérant pour une remise au-delà de la limite du
+    # caissier, obtenue en ligne au moment de l'encaissement.
+    approval_token = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True, default=None, max_length=1024
+    )
 
 
 class SyncEventSerializer(serializers.Serializer):

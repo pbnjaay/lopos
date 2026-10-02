@@ -155,8 +155,8 @@ def test_me_lists_own_stores_only(a, b) -> None:
 def test_cannot_cancel_another_commerce_sale(a, b) -> None:
     client = _client(a.owner)
 
-    response = client.post(reverse("sale-cancel", kwargs={"pk": b.sale.pk}))
-    unknown = client.post(reverse("sale-cancel", kwargs={"pk": uuid4()}))
+    response = client.post(reverse("sale-cancel", kwargs={"pk": b.sale.pk}), {"reason": "Erreur de saisie"}, format="json")
+    unknown = client.post(reverse("sale-cancel", kwargs={"pk": uuid4()}), {"reason": "Erreur de saisie"}, format="json")
 
     _assert_like_unknown(response, unknown)
     b.sale.refresh_from_db()

@@ -5,6 +5,7 @@ from typing import NamedTuple, TypedDict
 from uuid import UUID, uuid4
 
 from django.db import models, transaction
+from django.utils import timezone
 
 from apps.cash.exceptions import CashSessionClosed
 from apps.observability.sentry_context import tag_sale_scope
@@ -22,6 +23,8 @@ from apps.customers.services import (
 from apps.inventory.models import InventoryMovement, Stock
 from apps.inventory.services import apply_inbound_cost
 from apps.stores.access import user_can_manage_store
+
+from . import approvals
 
 from .exceptions import (
     CustomerNotFound,
@@ -625,8 +628,13 @@ def complete_offline_sale(
     )
 
 
+CANCELLATION_REASON_MAX_LENGTH = 500
+
+
 @transaction.atomic
-def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
+def cancel_sale(
+    *, sale_id: UUID, cancelled_by, reason: str, approval_token: str | None = None
+) -> Sale:
     """Annule une vente terminée et restitue son stock.
 
     Pensé pour l'erreur repérée tout de suite (mauvais article scanné, vente
@@ -635,10 +643,18 @@ def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
     automatiquement : seuls le statut et le stock sont corrigés, l'argent (le
     cas échéant) reste à régler par le caissier lui-même.
 
-    Portée : le caissier propriétaire tant que sa session est encore ouverte,
-    ou un propriétaire / gérant du magasin sans restriction — même logique de
-    délégation que le reste (cf. `user_can_manage_store`).
+    Portée : le caissier de la vente tant que sa session est ouverte, ou un
+    propriétaire / gérant du magasin. Jamais sur une session clôturée, même
+    pour un gérant : son rapport Z est arrêté, c'est un retour qu'il faut.
+    Motif obligatoire ; au-delà du seuil (`approvals`), un caissier doit
+    présenter la validation d'un gérant.
     """
+    reason = (reason or "").strip()
+    if not reason:
+        raise InvalidCancellation("Indiquez le motif de l'annulation.")
+    if len(reason) > CANCELLATION_REASON_MAX_LENGTH:
+        raise InvalidCancellation("Le motif d'annulation est trop long.")
+
     sale = (
         Sale.objects.select_for_update()
         .select_related("cash_session__cash_register", "cashier")
@@ -655,13 +671,21 @@ def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
             "Cette vente a déjà fait l'objet d'un retour : faites un retour pour le reste."
         )
 
+    if sale.cash_session.status != CashSession.Status.OPEN:
+        raise InvalidCancellation(
+            "La session de caisse de cette vente est clôturée : faites un retour."
+        )
     if not user_can_manage_store(cancelled_by, sale.cash_session.cash_register.store_id):
         if sale.cashier_id != cancelled_by.pk:
             raise InvalidCancellation("Cette vente appartient à un autre caissier.")
-        if sale.cash_session.status != CashSession.Status.OPEN:
-            raise InvalidCancellation(
-                "La session de caisse de cette vente est fermée."
-            )
+    approved_by = approvals.require(
+        cancelled_by,
+        cash_session=sale.cash_session,
+        action=approvals.Action.CANCEL_SALE,
+        sale_id=sale.pk,
+        token=approval_token,
+        needed=approvals.cancellation_needs_approval(sale),
+    )
 
     if sale.credit_amount:
         # La dette née de cette vente disparaît avec elle, par une écriture
@@ -712,7 +736,19 @@ def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
     )
 
     sale.status = Sale.Status.CANCELLED
-    sale.save(update_fields=("status",))
+    sale.cancelled_at = timezone.now()
+    sale.cancelled_by = cancelled_by
+    sale.cancellation_reason = reason
+    sale.cancellation_approved_by = approved_by
+    sale.save(
+        update_fields=(
+            "status",
+            "cancelled_at",
+            "cancelled_by",
+            "cancellation_reason",
+            "cancellation_approved_by",
+        )
+    )
     return sale
 
 
@@ -744,7 +780,7 @@ def _validated_idempotent_return(
 def create_sale_return(
     *, original_sale: Sale, cash_session: CashSession, created_by,
     items: Sequence[ReturnItemInput], idempotency_key: UUID,
-    payment_method: str | None = None,
+    payment_method: str | None = None, approval_token: str | None = None,
 ) -> SaleReturn:
     """Retour marchandise : stock remis, montant rendu au client.
 
@@ -826,6 +862,16 @@ def create_sale_return(
     if sale.credit_amount and sale.customer_id is not None:
         customer = Customer.objects.select_for_update().get(pk=sale.customer_id)
         credit_reduction = min(total, reducible_credit(sale, customer=customer))
+    # Au-delà du seuil, ou sur une vente de plus de quelques jours, un
+    # caissier présente la validation d'un gérant.
+    approved_by = approvals.require(
+        created_by,
+        cash_session=locked_session,
+        action=approvals.Action.SALE_RETURN,
+        sale_id=sale.pk,
+        token=approval_token,
+        needed=approvals.return_needs_approval(sale=sale, refund_total=total),
+    )
     money_refund = total - credit_reduction
     if money_refund > 0:
         if payment_method not in Payment.Method.values:
@@ -846,6 +892,7 @@ def create_sale_return(
         original_sale=sale, cash_session=locked_session, created_by=created_by,
         total_refund=total, credit_reduction=credit_reduction,
         payment_method=refund_method, idempotency_key=idempotency_key,
+        approved_by=approved_by,
     )
     if credit_reduction > 0:
         record_return_credit(

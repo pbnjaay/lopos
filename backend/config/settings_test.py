@@ -21,3 +21,7 @@ STORAGES = {
     **STORAGES,  # noqa: F405
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
+
+# Hachage rapide des mots de passe (et des codes PIN) : la sécurité du
+# hachage n'est pas ce que la suite teste, sa lenteur la ralentirait.
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]

@@ -188,7 +188,7 @@ def test_store_manager_cannot_act_on_another_store_of_the_commerce(a, a2, manage
     client = _api(manager_a1)
     movements_before = InventoryMovement.objects.count()
 
-    cancel = client.post(reverse("sale-cancel", kwargs={"pk": a2.sale.pk}))
+    cancel = client.post(reverse("sale-cancel", kwargs={"pk": a2.sale.pk}), {"reason": "Erreur de saisie"}, format="json")
     stock_in = client.post(
         reverse("inventory-stock-in"),
         {"store_id": str(a2.store.pk), "product_id": str(a.product.pk), "quantity": "5"},

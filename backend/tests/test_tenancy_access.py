@@ -181,7 +181,7 @@ def test_assigned_manager_cancels_a_colleague_sale(ndiaye, louga) -> None:
     manager = _member(ndiaye, "moussa", Role.MANAGER, stores=[louga], is_staff=True)
     sale = _open_sale(_session(louga, cashier))
 
-    assert cancel_sale(sale_id=sale.pk, cancelled_by=manager).status == Sale.Status.CANCELLED
+    assert cancel_sale(sale_id=sale.pk, cancelled_by=manager, reason="Erreur de saisie").status == Sale.Status.CANCELLED
 
 
 def test_staff_from_another_store_cannot_cancel_a_colleague_sale(ndiaye, louga, marche) -> None:
@@ -190,7 +190,7 @@ def test_staff_from_another_store_cannot_cancel_a_colleague_sale(ndiaye, louga, 
     sale = _open_sale(_session(louga, cashier))
 
     with pytest.raises(InvalidCancellation):
-        cancel_sale(sale_id=sale.pk, cancelled_by=manager)
+        cancel_sale(sale_id=sale.pk, cancelled_by=manager, reason="Erreur de saisie")
 
 
 def test_cash_session_summary_is_open_to_the_store_manager_only(ndiaye, louga, marche) -> None:

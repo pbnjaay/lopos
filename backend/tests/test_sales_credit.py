@@ -31,6 +31,15 @@ from apps.sync.services import SyncEventStatus, process_sale_completed_event
 
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def no_manager_approval_threshold(settings):
+    """Ce module teste le cahier et le tiroir, pas la validation par un
+    gérant (voir test_cashier_approvals) : seuil hors d'atteinte."""
+    settings.APPROVAL_AMOUNT_THRESHOLD = Decimal("1000000000")
+
+
 User = get_user_model()
 Type = CustomerLedgerEntry.EntryType
 
@@ -398,7 +407,7 @@ def test_sale_without_credit_reports_zero_and_no_customer(cash_session, product,
 def test_cancelling_a_credit_sale_reverses_the_debt(cash_session, product, customer, cashier) -> None:
     sale = _sell(cash_session, product, customer=customer, credit="5000")
 
-    cancel_sale(sale_id=sale.id, cancelled_by=cashier)
+    cancel_sale(sale_id=sale.id, cancelled_by=cashier, reason="Erreur de saisie")
 
     original = CustomerLedgerEntry.objects.get(entry_type=Type.CREDIT_SALE)
     reversal = CustomerLedgerEntry.objects.get(entry_type=Type.REVERSAL)
@@ -417,7 +426,7 @@ def test_cancelling_is_refused_once_the_customer_has_repaid(
     record_adjustment(customer=customer, amount=Decimal("-2000"), reason="Versement", created_by=manager)
 
     with pytest.raises(InvalidCancellation):
-        cancel_sale(sale_id=sale.id, cancelled_by=cashier)
+        cancel_sale(sale_id=sale.id, cancelled_by=cashier, reason="Erreur de saisie")
 
     sale.refresh_from_db()
     assert sale.status == Sale.Status.COMPLETED

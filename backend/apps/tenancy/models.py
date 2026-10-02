@@ -1,6 +1,7 @@
 import uuid
 
 from django.conf import settings
+from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
@@ -97,6 +98,9 @@ class OrganizationMembership(models.Model):
         ),
     )
     is_active = models.BooleanField("actif", default=True)
+    # Code PIN haché (comme un mot de passe) : un gérant ou le propriétaire
+    # le tape sur le poste d'un caissier pour valider une opération sensible.
+    approval_pin = models.CharField("code PIN de validation", max_length=128, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -133,6 +137,12 @@ class OrganizationMembership(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} — {self.organization} ({self.get_role_display()})"
+
+    def set_approval_pin(self, raw_pin: str) -> None:
+        self.approval_pin = make_password(raw_pin)
+
+    def check_approval_pin(self, raw_pin: str) -> bool:
+        return bool(self.approval_pin) and check_password(raw_pin, self.approval_pin)
 
     def clean(self) -> None:
         # Le super-utilisateur est la plateforme : il ne devient jamais membre
