@@ -16,8 +16,9 @@ class ProcessedSyncEventAdmin(TenantAdminMixin, ModelAdmin):
         "entity_id",
         "pushed_by",
         "stock_discrepancy",
+        "catalog_price_discrepancy",
     )
-    list_filter = ("event_type", "stock_discrepancy", "terminal_id")
+    list_filter = ("event_type", "stock_discrepancy", "catalog_price_discrepancy", "terminal_id")
     search_fields = ("event_id", "entity_id", "terminal_id")
     date_hierarchy = "processed_at"
 

@@ -213,24 +213,46 @@ def _stock_alerts(
     return out_alert, low_alert
 
 
-def _sync_conflict_alert(store_ids) -> Alert | None:
+def _sync_alerts(store_ids) -> tuple[Alert | None, Alert | None]:
+    """Ventes hors ligne à revoir, en une requête : celles qui ont fait
+    passer un stock sous zéro, et celles dont le prix catalogue envoyé par le
+    poste ne correspond pas au serveur (changement de prix pendant la
+    coupure, ou poste altéré pour masquer une remise)."""
     cutoff = timezone.now() - timezone.timedelta(days=ALERTS_LOOKBACK_DAYS)
-    count = _within(
-        ProcessedSyncEvent.objects.filter(stock_discrepancy=True, processed_at__gte=cutoff),
-        "store_id",
-        store_ids,
-    ).count()
-    if not count:
-        return None
-    return Alert(
-        severity="warning",
-        text=format_count(
-            count,
-            "vente nécessite une vérification de synchronisation",
-            "ventes nécessitent une vérification de synchronisation",
-        ),
-        url=reverse("admin:sync_processedsyncevent_changelist") + "?stock_discrepancy__exact=1",
+    counts = _within(
+        ProcessedSyncEvent.objects.filter(processed_at__gte=cutoff), "store_id", store_ids
+    ).aggregate(
+        stock=Count("pk", filter=Q(stock_discrepancy=True)),
+        catalog_price=Count("pk", filter=Q(catalog_price_discrepancy=True)),
     )
+    changelist = reverse("admin:sync_processedsyncevent_changelist")
+    stock_alert = (
+        Alert(
+            severity="warning",
+            text=format_count(
+                counts["stock"],
+                "vente nécessite une vérification de synchronisation",
+                "ventes nécessitent une vérification de synchronisation",
+            ),
+            url=changelist + "?stock_discrepancy__exact=1",
+        )
+        if counts["stock"]
+        else None
+    )
+    catalog_price_alert = (
+        Alert(
+            severity="warning",
+            text=format_count(
+                counts["catalog_price"],
+                "vente hors ligne a un prix catalogue à vérifier",
+                "ventes hors ligne ont un prix catalogue à vérifier",
+            ),
+            url=changelist + "?catalog_price_discrepancy__exact=1",
+        )
+        if counts["catalog_price"]
+        else None
+    )
+    return stock_alert, catalog_price_alert
 
 
 def _stale_session_alerts(store_ids) -> list[Alert]:
@@ -263,7 +285,7 @@ def _build_alerts(
 ) -> list[Alert]:
     critical_shortages, other_cash = _cash_session_alerts(store_ids)
     out_alert, low_alert = _stock_alerts(store_id, out_of_stock_count, low_stock_count)
-    sync_alert = _sync_conflict_alert(store_ids)
+    sync_alert, catalog_price_alert = _sync_alerts(store_ids)
     stale_session_alerts = _stale_session_alerts(store_ids)
 
     ordered: list[Alert] = [*critical_shortages]
@@ -272,6 +294,8 @@ def _build_alerts(
     ordered.extend(stale_session_alerts)
     if sync_alert:
         ordered.append(sync_alert)
+    if catalog_price_alert:
+        ordered.append(catalog_price_alert)
     ordered.extend(other_cash)
     if low_alert:
         ordered.append(low_alert)

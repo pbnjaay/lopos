@@ -57,6 +57,15 @@ class ProcessedSyncEvent(models.Model):
         default=False,
         help_text="Vrai si cette vente a fait passer un stock sous zéro.",
     )
+    catalog_price_discrepancy = models.BooleanField(
+        "prix catalogue à vérifier",
+        default=False,
+        help_text=(
+            "Vrai si le prix catalogue envoyé par le poste diffère du prix "
+            "catalogue du serveur pour au moins un article (changement de prix "
+            "pendant la coupure, ou poste altéré)."
+        ),
+    )
     processed_at = models.DateTimeField("traité le", auto_now_add=True)
 
     class Meta:

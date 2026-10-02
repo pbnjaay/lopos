@@ -63,6 +63,8 @@ class _LineSpec(NamedTuple):
     unit_price: Decimal
     catalog_unit_price: Decimal
     product_name: str
+    # Hors ligne : prix serveur quand il diffère du prix catalogue du poste.
+    server_catalog_unit_price: Decimal | None = None
 
 
 def _normalize_quantity(value, *, product: Product | None = None) -> Decimal:
@@ -368,12 +370,8 @@ def _execute_sale(
                 )
             stock_discrepancy = True
 
-    line_values = [
-        (spec.product, spec.quantity, spec.unit_price, spec.catalog_unit_price, spec.product_name)
-        for spec in line_specs
-    ]
     subtotal = sum(
-        (_money(unit_price * quantity) for _, quantity, unit_price, _, _ in line_values),
+        (_money(spec.unit_price * spec.quantity) for spec in line_specs),
         Decimal("0.00"),
     )
     discount = Decimal("0.00")
@@ -410,16 +408,17 @@ def _execute_sale(
         [
             SaleItem(
                 sale=sale,
-                product=product,
-                product_name=product_name,
-                sale_unit=product.sale_unit,
-                catalog_unit_price=catalog_unit_price,
-                unit_price=unit_price,
-                quantity=quantity,
-                line_total=_money(unit_price * quantity),
-                unit_cost=unit_costs[product.id],
+                product=spec.product,
+                product_name=spec.product_name,
+                sale_unit=spec.product.sale_unit,
+                catalog_unit_price=spec.catalog_unit_price,
+                server_catalog_unit_price=spec.server_catalog_unit_price,
+                unit_price=spec.unit_price,
+                quantity=spec.quantity,
+                line_total=_money(spec.unit_price * spec.quantity),
+                unit_cost=unit_costs[spec.product.id],
             )
-            for product, quantity, unit_price, catalog_unit_price, product_name in line_values
+            for spec in line_specs
         ]
     )
 
@@ -535,6 +534,30 @@ def complete_sale(
     return sale
 
 
+def _offline_line_spec(
+    product: Product,
+    quantity: Decimal,
+    unit_price: Decimal,
+    product_name: str,
+    posted_catalog_price: Decimal | None,
+) -> _LineSpec:
+    """Le prix catalogue d'une vente hors ligne reste celui que le poste
+    affichait au moment de la vente (le catalogue a pu changer pendant la
+    coupure). Mais le poste n'est pas une source de confiance : un prix
+    catalogue qui ne correspond pas à celui du serveur est gardé à côté,
+    pour revue, plutôt que cru sur parole."""
+    server_price = product.selling_price
+    catalog_price = posted_catalog_price or server_price
+    return _LineSpec(
+        product=product,
+        quantity=quantity,
+        unit_price=unit_price,
+        catalog_unit_price=catalog_price,
+        product_name=product_name,
+        server_catalog_unit_price=server_price if catalog_price != server_price else None,
+    )
+
+
 @transaction.atomic
 def complete_offline_sale(
     *,
@@ -586,13 +609,7 @@ def complete_offline_sale(
         _normalize_quantity(aggregated[product_id][0], product=products[product_id])
 
     line_specs = [
-        _LineSpec(
-            product=products[product_id],
-            quantity=aggregated[product_id][0],
-            unit_price=aggregated[product_id][1],
-            catalog_unit_price=aggregated[product_id][3] or products[product_id].selling_price,
-            product_name=aggregated[product_id][2],
-        )
+        _offline_line_spec(products[product_id], *aggregated[product_id])
         for product_id in product_ids
     ]
 

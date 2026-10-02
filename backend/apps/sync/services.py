@@ -160,6 +160,9 @@ def process_sale_completed_event(
                 store_id=cash_session.cash_register.store_id,
                 pushed_by=cashier,
                 stock_discrepancy=stock_discrepancy,
+                catalog_price_discrepancy=sale.items.filter(
+                    server_catalog_unit_price__isnull=False
+                ).exists(),
             )
     except IntegrityError:
         winner = ProcessedSyncEvent.objects.filter(pk=event_id).first()
