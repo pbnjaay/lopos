@@ -225,7 +225,7 @@ class ProductAdmin(TenantAdminMixin, ModelAdmin):
                 "Informations générales",
                 {"fields": ("name", "sale_unit", "low_stock_threshold", "is_active")},
             ),
-            ("Prix", {"fields": ("purchase_price", "selling_price")}),
+            ("Prix", {"fields": self._price_fields(request, obj)}),
         ]
         if is_platform_admin(request):
             # Choisi à la création, figé ensuite (un produit ne change pas de
@@ -255,6 +255,16 @@ class ProductAdmin(TenantAdminMixin, ModelAdmin):
             )
         )
         return fieldsets
+
+    @staticmethod
+    def _price_fields(request, obj) -> tuple[str, ...]:
+        """Le prix d'achat se saisit à la création (il valorise le stock
+        initial), mais un produit existant ne le montre — ni ne le laisse
+        modifier — qu'à qui voit les coûts : hors du formulaire, il n'est ni
+        affiché ni accepté en POST."""
+        if obj is None or can_view_stock_costs(request.user):
+            return ("purchase_price", "selling_price")
+        return ("selling_price",)
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
@@ -431,10 +441,14 @@ class ProductAdmin(TenantAdminMixin, ModelAdmin):
                         reverse("admin:catalog_product_change", args=[product.pk])
                     )
         else:
-            form = ReceiveStockForm(
-                initial={"unit_cost": product.purchase_price},
-                stores=self._active_stores(request),
+            # Le dernier prix d'achat ne pré-remplit le coût que pour qui voit
+            # les coûts ; les autres saisissent celui de leur facture.
+            initial = (
+                {"unit_cost": product.purchase_price}
+                if can_view_stock_costs(request.user)
+                else {}
             )
+            form = ReceiveStockForm(initial=initial, stores=self._active_stores(request))
 
         return self._render_stock_action_page(
             request,
