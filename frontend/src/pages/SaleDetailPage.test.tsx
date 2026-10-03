@@ -94,10 +94,9 @@ describe("SaleDetailPage — cancelling a sale", () => {
 
     await actor.click(await screen.findByRole("button", { name: /Annuler la vente/ }))
     expect(screen.getByRole("heading", { name: "Annuler cette vente ?" })).toBeInTheDocument()
-    await actor.type(screen.getByLabelText("Motif (obligatoire)"), "Doublon")
     await actor.click(screen.getByRole("button", { name: "Confirmer l'annulation" }))
 
-    expect(cancelSale).toHaveBeenCalledWith(sale.id, { reason: "Doublon", approvalToken: null })
+    expect(cancelSale).toHaveBeenCalledWith(sale.id)
     expect(await screen.findByText("Annulée")).toBeInTheDocument()
     expect(
       screen.getByText("Cette vente a été annulée — son stock a été restitué."),

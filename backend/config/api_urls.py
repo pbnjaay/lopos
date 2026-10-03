@@ -22,8 +22,6 @@ from apps.expenses.views import (
 )
 from apps.inventory.views import StockInView
 from apps.sales.views import (
-    ApprovalApproversView,
-    ApprovalCreateView,
     CancelSaleView,
     CompleteSaleView,
     SaleDetailView,
@@ -86,8 +84,6 @@ urlpatterns = [
     path("expenses/", ExpenseListCreateView.as_view(), name="expense-list"),
     path("expenses/<uuid:pk>/", ExpenseDetailView.as_view(), name="expense-detail"),
     path("expenses/<uuid:pk>/cancel/", ExpenseCancelView.as_view(), name="expense-cancel"),
-    path("approvals/", ApprovalCreateView.as_view(), name="approval-create"),
-    path("approvals/approvers/", ApprovalApproversView.as_view(), name="approval-approvers"),
     path("sync/push/", SyncPushView.as_view(), name="sync-push"),
     path("sync/pull/", SyncPullView.as_view(), name="sync-pull"),
 ]

@@ -18,8 +18,6 @@ export type LocalProduct = {
 
 export type LocalCashSession = {
   id: string
-  /** Commerce de la session ; absent sur les sessions mises en cache avant le multi-commerce. */
-  organizationId?: string
   cashRegisterId: string
   cashRegisterName: string
   storeId: string
@@ -75,8 +73,6 @@ export type LocalSaleCustomer = {
 
 export type LocalSale = {
   id: string
-  /** Commerce de la vente ; absent sur les ventes antérieures au multi-commerce. */
-  organizationId?: string
   serverId: string | null
   /** Sync message identity, distinct from `id`; never regenerated on retry so server idempotency holds. */
   syncEventId: string
@@ -101,8 +97,6 @@ export type LocalSale = {
   subtotal: number
   discount: number
   total: number
-  /** Validation d'un gérant obtenue à l'encaissement pour une remise. */
-  approvalToken?: string
 }
 
 export type LocalMetadata = {

@@ -1,5 +1,4 @@
 import { ApiError, NetworkError } from "../api/client"
-import { UserFacingError } from "./errors"
 
 /**
  * Contexte métier de l'écran qui a échoué. Il décide de la formulation :
@@ -66,10 +65,6 @@ export function describeError(
   error: unknown,
   context: ErrorContext = "generique",
 ): ErrorCopy {
-  if (error instanceof UserFacingError) {
-    return { title: error.title, description: error.message, canRetry: error.canRetry }
-  }
-
   if (error instanceof NetworkError) {
     return {
       title: "Mode hors ligne",

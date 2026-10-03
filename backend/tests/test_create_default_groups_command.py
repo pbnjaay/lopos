@@ -6,10 +6,9 @@ from django.core.management import call_command
 pytestmark = pytest.mark.django_db
 
 
-def test_creates_owner_manager_and_cashier_groups() -> None:
+def test_creates_manager_and_cashier_groups() -> None:
     call_command("create_default_groups")
 
-    assert Group.objects.filter(name="Propriétaire").exists()
     assert Group.objects.filter(name="Gérant").exists()
     assert Group.objects.filter(name="Caissier").exists()
 
@@ -24,38 +23,21 @@ def test_manager_group_can_manage_catalog_but_only_view_audit_models() -> None:
     assert "change_cashsession" not in codenames
     assert "view_sale" in codenames
     assert "view_cashsession" in codenames
-    # Magasins et caisses : consultés, jamais créés ni modifiés ; comptes et
-    # affectations : réservés au propriétaire.
-    assert {"view_store", "view_cashregister"} <= codenames
-    assert not codenames & {
-        "add_store", "change_store", "add_cashregister", "change_cashregister",
-        "add_storeassignment", "change_storeassignment", "delete_storeassignment",
-        "view_storeassignment", "add_user", "change_user", "view_user",
-    }
-
-
-def test_owner_group_manages_the_commerce_on_top_of_the_manager() -> None:
-    call_command("create_default_groups")
-    owner = set(Group.objects.get(name="Propriétaire").permissions.values_list("codename", flat=True))
-    manager = set(Group.objects.get(name="Gérant").permissions.values_list("codename", flat=True))
-
-    assert manager < owner
     assert {
-        "add_store", "change_store", "add_cashregister", "change_cashregister",
-        "add_storeassignment", "change_storeassignment", "delete_storeassignment",
+        "add_storeassignment",
+        "change_storeassignment",
+        "delete_storeassignment",
         "view_storeassignment",
-    } <= owner
+    } <= codenames
 
 
-def test_owner_group_can_manage_users_but_never_delete_them() -> None:
+def test_manager_group_can_manage_users_but_never_delete_them() -> None:
     call_command("create_default_groups")
-    codenames = set(
-        Group.objects.get(name="Propriétaire").permissions.values_list("codename", flat=True)
-    )
+    manager_group = Group.objects.get(name="Gérant")
+    codenames = set(manager_group.permissions.values_list("codename", flat=True))
 
     assert {"add_user", "change_user", "view_user"} <= codenames
     assert "delete_user" not in codenames
-    assert not codenames & {"add_group", "change_group", "add_permission"}
 
 
 def test_manager_group_can_adjust_customer_books_but_never_rewrite_them() -> None:

@@ -8,9 +8,8 @@ from rest_framework.views import APIView
 from apps.cash.exceptions import CashSessionClosed
 from apps.sales.access import get_pos_cash_session
 from apps.sales.serializers import SaleListQuerySerializer
+from apps.stores.access import user_can_access_store
 from apps.stores.models import Store
-from apps.tenancy.context import get_tenant
-from apps.tenancy.scoping import scope
 
 from .exceptions import (
     CustomerOverpayment,
@@ -32,13 +31,19 @@ from .services import create_customer, record_customer_payment, with_book_summar
 
 
 def _accessible_store_or_error(request, store_id) -> tuple[Store | None, Response | None]:
-    """Un magasin du compte ; sinon 404, qu'il n'existe pas ou appartienne à
-    un autre commerce — rien ne doit permettre de distinguer les deux."""
-    store = scope(Store.objects, get_tenant(request)).filter(pk=store_id).first()
+    store = Store.objects.filter(pk=store_id).first()
     if store is None:
         return None, Response(
             {"code": "STORE_NOT_FOUND", "message": "Ce magasin n'existe pas."},
             status=status.HTTP_404_NOT_FOUND,
+        )
+    if not user_can_access_store(request.user, store):
+        return None, Response(
+            {
+                "code": "STORE_NOT_ALLOWED",
+                "message": "Vous n’êtes pas autorisé à travailler dans cette boutique.",
+            },
+            status=status.HTTP_403_FORBIDDEN,
         )
     return store, None
 
@@ -118,9 +123,10 @@ class CustomerDetailView(APIView):
     """
 
     def get(self, request, pk=None) -> Response:
-        customer = get_object_or_404(
-            scope(Customer.objects, get_tenant(request)).select_related("store"), pk=pk
-        )
+        customer = get_object_or_404(Customer.objects.select_related("store"), pk=pk)
+        _, error = _accessible_store_or_error(request, customer.store_id)
+        if error is not None:
+            return error
 
         entries = list(
             CustomerLedgerEntry.objects.filter(customer=customer)
@@ -149,9 +155,7 @@ class CustomerPaymentCreateView(APIView):
     """
 
     def post(self, request) -> Response:
-        serializer = CreateCustomerPaymentSerializer(
-            data=request.data, context={"request": request}
-        )
+        serializer = CreateCustomerPaymentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         if data["cash_session"].cashier_id != request.user.pk:

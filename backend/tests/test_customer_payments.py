@@ -26,7 +26,7 @@ from apps.customers.services import (
 from apps.inventory.models import Stock
 from apps.sales.models import Payment
 from apps.sales.services import complete_sale
-from apps.stores.models import CashRegister, Store, StoreAssignment
+from apps.stores.models import CashRegister, Store
 
 
 pytestmark = pytest.mark.django_db
@@ -45,8 +45,6 @@ def store() -> Store:
 
 @pytest.fixture
 def cash_session(store: Store, cashier) -> CashSession:
-    # Une caisse ne s'ouvre que dans un magasin où le caissier est affecté.
-    StoreAssignment.objects.get_or_create(user=cashier, store=store)
     register = CashRegister.objects.create(store=store, name="Caisse 01")
     return CashSession.objects.create(
         cash_register=register, cashier=cashier, opening_balance=Decimal("15000.00")
@@ -329,29 +327,14 @@ def test_payment_api_refuses_overpayment(api_client, customer, cash_session) -> 
     assert response.data["balance"] == "10000.00"
 
 
-def test_payment_api_refuses_a_colleagues_session(customer, cash_session, store) -> None:
-    colleague = User.objects.create_user(username="colleague")
-    StoreAssignment.objects.create(user=colleague, store=store)
-    client = APIClient()
-    client.force_authenticate(colleague)
-
-    response = _post_payment(client, customer, cash_session)
-
-    assert response.status_code == status.HTTP_403_FORBIDDEN
-    assert response.data["code"] == "CASH_SESSION_NOT_OWNED"
-
-
-def test_payment_api_treats_another_stores_customer_and_session_as_unknown(
-    customer, cash_session
-) -> None:
+def test_payment_api_refuses_another_cashiers_session(customer, cash_session) -> None:
     client = APIClient()
     client.force_authenticate(User.objects.create_user(username="intruder"))
 
     response = _post_payment(client, customer, cash_session)
 
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert set(response.data) == {"customer_id", "cash_session_id"}
-    assert not CustomerPayment.objects.exists()
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.data["code"] == "CASH_SESSION_NOT_OWNED"
 
 
 def test_payment_api_rejects_invalid_details(api_client, customer, cash_session) -> None:
@@ -368,9 +351,9 @@ def test_payment_detail_is_scoped_to_the_store(api_client, customer, cash_sessio
     assert api_client.get(url).status_code == status.HTTP_200_OK
 
     other_cashier = User.objects.create_user(username="other")
-    other_store = Store.objects.create(name="Autre boutique")
-    StoreAssignment.objects.create(user=other_cashier, store=other_store)
-    other_register = CashRegister.objects.create(store=other_store, name="Caisse 01")
+    other_register = CashRegister.objects.create(
+        store=Store.objects.create(name="Autre boutique"), name="Caisse 01"
+    )
     CashSession.objects.create(
         cash_register=other_register, cashier=other_cashier, opening_balance=Decimal("0")
     )

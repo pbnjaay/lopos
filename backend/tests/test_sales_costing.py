@@ -199,7 +199,7 @@ def test_cancellation_returns_units_at_their_frozen_cost(
     # (17 × 300 + 10 × 400) / 27 = 337,0370
     assert _stock(store, product).average_unit_cost == Decimal("337.0370")
 
-    cancel_sale(sale_id=sale.id, cancelled_by=cashier, reason="Erreur de saisie")
+    cancel_sale(sale_id=sale.id, cancelled_by=cashier)
 
     stock = _stock(store, product)
     assert stock.quantity == Decimal("30.000")
@@ -215,7 +215,7 @@ def test_cancellation_right_after_the_sale_leaves_the_cost_unchanged(
 ) -> None:
     sale = _sell(cash_session, product, 3)
 
-    cancel_sale(sale_id=sale.id, cancelled_by=cashier, reason="Erreur de saisie")
+    cancel_sale(sale_id=sale.id, cancelled_by=cashier)
 
     stock = _stock(store, product)
     assert stock.quantity == Decimal("20.000")
@@ -229,7 +229,7 @@ def test_cancelling_an_unknown_cost_line_keeps_the_current_average(
     sale = _sell(cash_session, product, 3)
     receive_stock(store=store, product=product, quantity=10, unit_cost=Decimal("400"))
 
-    cancel_sale(sale_id=sale.id, cancelled_by=cashier, reason="Erreur de saisie")
+    cancel_sale(sale_id=sale.id, cancelled_by=cashier)
 
     assert _stock(store, product).average_unit_cost == Decimal("400.0000")
 
@@ -242,7 +242,7 @@ def test_cancellation_into_a_negative_stock_takes_the_frozen_cost(
         quantity=Decimal("-5"), average_unit_cost=Decimal("380")
     )
 
-    cancel_sale(sale_id=sale.id, cancelled_by=cashier, reason="Erreur de saisie")
+    cancel_sale(sale_id=sale.id, cancelled_by=cashier)
 
     stock = _stock(store, product)
     assert stock.quantity == Decimal("-2.000")

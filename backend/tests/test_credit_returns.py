@@ -25,19 +25,10 @@ from apps.inventory.models import Stock
 from apps.sales.exceptions import InvalidCancellation, InvalidReturn
 from apps.sales.models import Sale, SaleReturn
 from apps.sales.services import cancel_sale, complete_sale, create_sale_return
-from apps.stores.models import CashRegister, Store, StoreAssignment
+from apps.stores.models import CashRegister, Store
 
 
 pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture(autouse=True)
-def no_manager_approval_threshold(settings):
-    """Ce module teste le cahier et le tiroir, pas la validation par un
-    gérant (voir test_cashier_approvals) : seuil hors d'atteinte."""
-    settings.APPROVAL_AMOUNT_THRESHOLD = Decimal("1000000000")
-
-
 User = get_user_model()
 Type = CustomerLedgerEntry.EntryType
 
@@ -54,8 +45,6 @@ def store() -> Store:
 
 @pytest.fixture
 def cash_session(store: Store, cashier) -> CashSession:
-    # Une caisse ne s'ouvre que dans un magasin où le caissier est affecté.
-    StoreAssignment.objects.get_or_create(user=cashier, store=store)
     register = CashRegister.objects.create(store=store, name="Caisse 01")
     return CashSession.objects.create(
         cash_register=register, cashier=cashier, opening_balance=Decimal("15000.00")
@@ -227,7 +216,7 @@ def test_a_returned_sale_can_no_longer_be_cancelled(credit_sale, cash_session, c
     _return(credit_sale, cash_session, cashier, 1)
 
     with pytest.raises(InvalidCancellation):
-        cancel_sale(sale_id=credit_sale.id, cancelled_by=cashier, reason="Erreur de saisie")
+        cancel_sale(sale_id=credit_sale.id, cancelled_by=cashier)
 
     assert customer_balance(customer) == Decimal("1000.00")
     assert Stock.objects.get(product=credit_sale.items.get().product).quantity == 19

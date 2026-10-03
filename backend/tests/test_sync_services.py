@@ -91,7 +91,7 @@ def test_sale_completed_event_creates_sale_once(
     assert InventoryMovement.objects.filter(
         movement_type=InventoryMovement.Type.SALE
     ).count() == 1
-    assert ProcessedSyncEvent.objects.get(pk=event_id).store_id == cash_session.cash_register.store_id
+    assert ProcessedSyncEvent.objects.filter(pk=event_id).exists()
 
 
 def test_offline_price_snapshot_is_trusted_over_current_catalog_price(

@@ -4,7 +4,6 @@ from rest_framework import serializers
 
 from apps.cash.models import CashSession
 from apps.sales.models import Payment
-from apps.tenancy.fields import TenantPrimaryKeyRelatedField
 
 from .models import Customer, CustomerLedgerEntry, CustomerPayment
 
@@ -86,10 +85,10 @@ class CreateCustomerSerializer(serializers.Serializer):
 
 class CreateCustomerPaymentSerializer(serializers.Serializer):
     idempotency_key = serializers.UUIDField()
-    customer_id = TenantPrimaryKeyRelatedField(
+    customer_id = serializers.PrimaryKeyRelatedField(
         source="customer", queryset=Customer.objects.all()
     )
-    cash_session_id = TenantPrimaryKeyRelatedField(
+    cash_session_id = serializers.PrimaryKeyRelatedField(
         source="cash_session", queryset=CashSession.objects.all()
     )
     method = serializers.ChoiceField(choices=Payment.Method.choices)

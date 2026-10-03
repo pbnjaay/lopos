@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
-from uuid import UUID
 
 from django.conf import settings
 from django.db.models import Count, F, Q, QuerySet, Sum
@@ -114,13 +113,6 @@ class ManagerDashboard:
     recent_sales: list[Sale] = field(default_factory=list)
 
 
-def _within(queryset: QuerySet, path: str, store_ids) -> QuerySet:
-    """Restreint aux magasins du périmètre ; `None` = tous (plateforme)."""
-    if store_ids is None:
-        return queryset
-    return queryset.filter(**{f"{path}__in": store_ids})
-
-
 def _sales_changelist_url(period: DashboardPeriod, store_id: str | None) -> str:
     if period.is_custom:
         # Filtre de dates de la hiérarchie (jours locaux), bornes incluses.
@@ -143,20 +135,25 @@ def _open_sessions_url(store_id: str | None) -> str:
     return url
 
 
-def _completed_sales(start, end, store_ids) -> QuerySet[Sale]:
+def _completed_sales(start, end, store_id: str | None) -> QuerySet[Sale]:
     qs = Sale.objects.filter(
         status=Sale.Status.COMPLETED,
         occurred_at__gte=start,
         occurred_at__lt=end,
     )
-    return _within(qs, "cash_session__cash_register__store_id", store_ids)
+    if store_id:
+        qs = qs.filter(cash_session__cash_register__store_id=store_id)
+    return qs
 
 
-def _stock_queryset(store_ids) -> QuerySet[Stock]:
-    return _within(Stock.objects.all(), "store_id", store_ids)
+def _stock_queryset(store_id: str | None) -> QuerySet[Stock]:
+    qs = Stock.objects.all()
+    if store_id:
+        qs = qs.filter(store_id=store_id)
+    return qs
 
 
-def _cash_session_alerts(store_ids) -> tuple[list[Alert], list[Alert]]:
+def _cash_session_alerts(store_id: str | None) -> tuple[list[Alert], list[Alert]]:
     """Returns (critical_shortages, other_significant_discrepancies)."""
     cutoff = timezone.now() - timezone.timedelta(days=ALERTS_LOOKBACK_DAYS)
     qs = (
@@ -167,7 +164,8 @@ def _cash_session_alerts(store_ids) -> tuple[list[Alert], list[Alert]]:
         .annotate(abs_difference=Abs("difference"))
         .order_by("-abs_difference")
     )
-    qs = _within(qs, "cash_register__store_id", store_ids)
+    if store_id:
+        qs = qs.filter(cash_register__store_id=store_id)
 
     critical_shortages: list[Alert] = []
     other: list[Alert] = []
@@ -213,63 +211,25 @@ def _stock_alerts(
     return out_alert, low_alert
 
 
-def _sync_alerts(store_ids) -> tuple[Alert | None, Alert | None, Alert | None]:
-    """Ventes hors ligne à revoir, en une requête : celles qui ont fait
-    passer un stock sous zéro, et celles dont le prix catalogue envoyé par le
-    poste ne correspond pas au serveur (changement de prix pendant la
-    coupure, ou poste altéré pour masquer une remise)."""
+def _sync_conflict_alert() -> Alert | None:
     cutoff = timezone.now() - timezone.timedelta(days=ALERTS_LOOKBACK_DAYS)
-    counts = _within(
-        ProcessedSyncEvent.objects.filter(processed_at__gte=cutoff), "store_id", store_ids
-    ).aggregate(
-        stock=Count("pk", filter=Q(stock_discrepancy=True)),
-        catalog_price=Count("pk", filter=Q(catalog_price_discrepancy=True)),
-        discount=Count("pk", filter=Q(unapproved_discount=True)),
+    count = ProcessedSyncEvent.objects.filter(
+        stock_discrepancy=True, processed_at__gte=cutoff
+    ).count()
+    if not count:
+        return None
+    return Alert(
+        severity="warning",
+        text=format_count(
+            count,
+            "vente nécessite une vérification de synchronisation",
+            "ventes nécessitent une vérification de synchronisation",
+        ),
+        url=reverse("admin:sync_processedsyncevent_changelist") + "?stock_discrepancy__exact=1",
     )
-    changelist = reverse("admin:sync_processedsyncevent_changelist")
-    stock_alert = (
-        Alert(
-            severity="warning",
-            text=format_count(
-                counts["stock"],
-                "vente nécessite une vérification de synchronisation",
-                "ventes nécessitent une vérification de synchronisation",
-            ),
-            url=changelist + "?stock_discrepancy__exact=1",
-        )
-        if counts["stock"]
-        else None
-    )
-    catalog_price_alert = (
-        Alert(
-            severity="warning",
-            text=format_count(
-                counts["catalog_price"],
-                "vente hors ligne a un prix catalogue à vérifier",
-                "ventes hors ligne ont un prix catalogue à vérifier",
-            ),
-            url=changelist + "?catalog_price_discrepancy__exact=1",
-        )
-        if counts["catalog_price"]
-        else None
-    )
-    discount_alert = (
-        Alert(
-            severity="warning",
-            text=format_count(
-                counts["discount"],
-                "vente porte une remise non validée par un gérant",
-                "ventes portent une remise non validée par un gérant",
-            ),
-            url=changelist + "?unapproved_discount__exact=1",
-        )
-        if counts["discount"]
-        else None
-    )
-    return stock_alert, catalog_price_alert, discount_alert
 
 
-def _stale_session_alerts(store_ids) -> list[Alert]:
+def _stale_session_alerts(store_id: str | None) -> list[Alert]:
     """Sessions encore ouvertes au-delà du seuil — probable oubli de clôture."""
     threshold_hours = settings.STALE_CASH_SESSION_HOURS_THRESHOLD
     cutoff = timezone.now() - timezone.timedelta(hours=threshold_hours)
@@ -278,7 +238,8 @@ def _stale_session_alerts(store_ids) -> list[Alert]:
         .select_related("cash_register", "cash_register__store")
         .order_by("opened_at")
     )
-    qs = _within(qs, "cash_register__store_id", store_ids)
+    if store_id:
+        qs = qs.filter(cash_register__store_id=store_id)
 
     now = timezone.now()
     return [
@@ -295,12 +256,12 @@ def _stale_session_alerts(store_ids) -> list[Alert]:
 
 
 def _build_alerts(
-    *, store_id: str | None, store_ids, out_of_stock_count: int, low_stock_count: int
+    *, store_id: str | None, out_of_stock_count: int, low_stock_count: int
 ) -> list[Alert]:
-    critical_shortages, other_cash = _cash_session_alerts(store_ids)
+    critical_shortages, other_cash = _cash_session_alerts(store_id)
     out_alert, low_alert = _stock_alerts(store_id, out_of_stock_count, low_stock_count)
-    sync_alert, catalog_price_alert, discount_alert = _sync_alerts(store_ids)
-    stale_session_alerts = _stale_session_alerts(store_ids)
+    sync_alert = _sync_conflict_alert()
+    stale_session_alerts = _stale_session_alerts(store_id)
 
     ordered: list[Alert] = [*critical_shortages]
     if out_alert:
@@ -308,10 +269,6 @@ def _build_alerts(
     ordered.extend(stale_session_alerts)
     if sync_alert:
         ordered.append(sync_alert)
-    if catalog_price_alert:
-        ordered.append(catalog_price_alert)
-    if discount_alert:
-        ordered.append(discount_alert)
     ordered.extend(other_cash)
     if low_alert:
         ordered.append(low_alert)
@@ -329,15 +286,12 @@ def _build_alerts(
     return ordered
 
 
-def _book_summary(
-    *, start, end, store_id: str | None, store_ids, credit_granted: Decimal
-) -> BookSummary:
-    ledger = _within(CustomerLedgerEntry.objects.all(), "store_id", store_ids)
-    payments = _within(
-        CustomerPayment.objects.filter(created_at__gte=start, created_at__lt=end),
-        "store_id",
-        store_ids,
-    )
+def _book_summary(*, start, end, store_id: str | None, credit_granted: Decimal) -> BookSummary:
+    ledger = CustomerLedgerEntry.objects.all()
+    payments = CustomerPayment.objects.filter(created_at__gte=start, created_at__lt=end)
+    if store_id:
+        ledger = ledger.filter(store_id=store_id)
+        payments = payments.filter(store_id=store_id)
     ledger_totals = ledger.aggregate(outstanding=Sum("amount"), entries=Count("id"))
     url = f"{reverse('admin:customers_customer_changelist')}?balance=due"
     if store_id:
@@ -351,8 +305,10 @@ def _book_summary(
     )
 
 
-def _expense_summary(*, start, end, store_id: str | None, store_ids) -> ExpenseSummary:
-    scope = _within(Expense.objects.all(), "store_id", store_ids)
+def _expense_summary(*, start, end, store_id: str | None) -> ExpenseSummary:
+    scope = Expense.objects.all()
+    if store_id:
+        scope = scope.filter(store_id=store_id)
     in_period = Q(status=Expense.Status.POSTED, occurred_at__gte=start, occurred_at__lt=end)
     # Une seule requête : les totaux de la période, et si la boutique a déjà
     # saisi des dépenses (sinon la carte reste masquée).
@@ -388,18 +344,6 @@ def _expense_summary(*, start, end, store_id: str | None, store_ids) -> ExpenseS
     )
 
 
-def _selected_store(store_id, allowed_store_ids) -> Store | None:
-    try:
-        store_uuid = UUID(str(store_id)) if store_id else None
-    except ValueError:
-        return None
-    if store_uuid is None:
-        return None
-    if allowed_store_ids is not None and store_uuid not in allowed_store_ids:
-        return None
-    return Store.objects.filter(pk=store_uuid).first()
-
-
 def get_manager_dashboard(
     *,
     period: str = DEFAULT_PERIOD,
@@ -407,31 +351,21 @@ def get_manager_dashboard(
     date_from: str | None = None,
     date_to: str | None = None,
     include_profitability: bool = False,
-    allowed_store_ids=None,
 ) -> ManagerDashboard:
-    """Tableau de bord sur les magasins `allowed_store_ids` (ceux du compte ;
-    `None` pour la plateforme, qui les voit tous), ou sur le seul magasin
-    `store_id` s'il en fait partie. Un magasin hors périmètre est ignoré,
-    comme un magasin inconnu."""
-    store = _selected_store(store_id, allowed_store_ids)
+    store = Store.objects.filter(pk=store_id).first() if store_id else None
     store_id = str(store.pk) if store else None
-    store_ids = [store.pk] if store else allowed_store_ids
     dashboard_period = resolve_dashboard_period(period, date_from, date_to)
     start, end = dashboard_period.start, dashboard_period.end
 
-    sales = _completed_sales(start, end, store_ids)
+    sales = _completed_sales(start, end, store_id)
 
     totals = sales.aggregate(
         gross_sales=Sum("total"), sales_count=Count("id"), credit_granted=Sum("credit_amount")
     )
     gross_sales = totals["gross_sales"] or ZERO
-    returns_qs = _within(
-        SaleReturn.objects.filter(
-            status=SaleReturn.Status.COMPLETED, created_at__gte=start, created_at__lt=end
-        ),
-        "cash_session__cash_register__store_id",
-        store_ids,
-    )
+    returns_qs = SaleReturn.objects.filter(status=SaleReturn.Status.COMPLETED, created_at__gte=start, created_at__lt=end)
+    if store_id:
+        returns_qs = returns_qs.filter(cash_session__cash_register__store_id=store_id)
     return_totals = returns_qs.aggregate(total=Sum("total_refund"), credit=Sum("credit_reduction"))
     returns_total = return_totals["total"] or ZERO
     net_sales = gross_sales - returns_total
@@ -463,13 +397,11 @@ def get_manager_dashboard(
     credit_granted = totals["credit_granted"] or ZERO
     credit_total = credit_granted - (return_totals["credit"] or ZERO)
     credit_percentage = round(credit_total / net_sales * 100) if net_sales else 0
-    book = _book_summary(
-        start=start, end=end, store_id=store_id, store_ids=store_ids, credit_granted=credit_granted
-    )
-    expenses = _expense_summary(start=start, end=end, store_id=store_id, store_ids=store_ids)
+    book = _book_summary(start=start, end=end, store_id=store_id, credit_granted=credit_granted)
+    expenses = _expense_summary(start=start, end=end, store_id=store_id)
     profitability = (
         get_profitability_summary(
-            start=start, end=end, store_ids=store_ids, expenses_total=expenses.total
+            start=start, end=end, store_id=store_id, expenses_total=expenses.total
         )
         if include_profitability
         else None
@@ -478,13 +410,14 @@ def get_manager_dashboard(
     open_sessions_qs = CashSession.objects.filter(status=CashSession.Status.OPEN).select_related(
         "cash_register", "cash_register__store", "cashier"
     )
-    open_sessions_qs = _within(open_sessions_qs, "cash_register__store_id", store_ids)
+    if store_id:
+        open_sessions_qs = open_sessions_qs.filter(cash_register__store_id=store_id)
     open_sessions = list(open_sessions_qs.order_by("cash_register__name"))
 
     threshold = getattr(settings, "LOW_STOCK_THRESHOLD_DEFAULT", 5)
     # Un produit peut définir son propre seuil (sac de riz vs canette) ; à
     # défaut, on retombe sur le seuil global du commerce.
-    stock_qs = _stock_queryset(store_ids).annotate(
+    stock_qs = _stock_queryset(store_id).annotate(
         effective_threshold=Coalesce("product__low_stock_threshold", threshold)
     )
     out_of_stock_count = stock_qs.filter(quantity__lte=0).count()
@@ -519,7 +452,6 @@ def get_manager_dashboard(
 
     alerts = _build_alerts(
         store_id=store_id,
-        store_ids=store_ids,
         out_of_stock_count=out_of_stock_count,
         low_stock_count=low_stock_count,
     )

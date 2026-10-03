@@ -8,8 +8,6 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { requestApproval } from "../api/approvals"
-import { ApiError } from "../api/client"
 import { createSaleReturn, getSaleReceipt } from "../api/sales"
 import { saleReceiptQueryKey } from "../features/sales/queries"
 import type { CashSession, CurrentUser, SaleReceipt, SaleReturn } from "../types/api"
@@ -18,14 +16,6 @@ import { SaleReturnPage } from "./SaleReturnPage"
 vi.mock("../api/sales", () => ({
   createSaleReturn: vi.fn(),
   getSaleReceipt: vi.fn(),
-}))
-
-vi.mock("../api/approvals", () => ({
-  listApprovers: vi.fn().mockResolvedValue([{ id: 3, name: "Awa Gérante" }]),
-  requestApproval: vi.fn().mockResolvedValue({
-    approval_token: "signed-token",
-    approver: { id: 3, name: "Awa Gérante" },
-  }),
 }))
 
 const user: CurrentUser = {
@@ -112,33 +102,6 @@ afterEach(() => {
 })
 
 describe("SaleReturnPage", () => {
-  it("asks a manager's PIN when the server requires it, then retries the same return", async () => {
-    const actor = userEvent.setup()
-    vi.mocked(createSaleReturn)
-      .mockRejectedValueOnce(
-        new ApiError(403, { code: "MANAGER_APPROVAL_REQUIRED", message: "Validation requise." }),
-      )
-      .mockResolvedValueOnce(completedReturn)
-    renderPage()
-
-    await screen.findByRole("heading", { name: "Ticket A12F0000" })
-    await actor.click(screen.getByRole("button", { name: "Tout sélectionner" }))
-    await actor.click(screen.getByRole("button", { name: "Rembourser 1 500 FCFA par Wave" }))
-
-    expect(await screen.findByRole("heading", { name: "Un gérant doit valider" })).toBeInTheDocument()
-    await screen.findByRole("option", { name: "Awa Gérante" })
-    await actor.type(screen.getByLabelText("Code PIN du gérant"), "4821")
-    await actor.click(screen.getByRole("button", { name: "Valider" }))
-
-    expect(await screen.findByRole("heading", { name: "Remboursement effectué" })).toBeInTheDocument()
-    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({
-      action: "SALE_RETURN", saleId: sale.id, approverId: 3, pin: "4821",
-    }))
-    const [first, second] = vi.mocked(createSaleReturn).mock.calls.map(([input]) => input)
-    expect(second?.approval_token).toBe("signed-token")
-    expect(second?.idempotency_key).toBe(first?.idempotency_key)
-  })
-
   it("uses the shared navigation and blocks unavailable or excessive quantities", async () => {
     const actor = userEvent.setup()
     renderPage()

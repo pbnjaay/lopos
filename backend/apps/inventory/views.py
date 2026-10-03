@@ -3,8 +3,6 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.tenancy.permissions import HasActiveTenant
-
 from .exceptions import InvalidStockCost, InvalidStockQuantity
 from .serializers import StockInResultSerializer, StockInSerializer
 from .services import receive_stock
@@ -22,10 +20,10 @@ class CanReceiveStock(BasePermission):
 
 
 class StockInView(APIView):
-    permission_classes = (IsAuthenticated, HasActiveTenant, CanReceiveStock)
+    permission_classes = (IsAuthenticated, CanReceiveStock)
 
     def post(self, request) -> Response:
-        serializer = StockInSerializer(data=request.data, context={"request": request})
+        serializer = StockInSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         try:

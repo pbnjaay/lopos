@@ -59,20 +59,11 @@ def _status(stock: Stock, product: Product) -> tuple[str, str]:
     return "success", "OK"
 
 
-def build_product_card(
-    product: Product, *, can_view_costs: bool, store_ids=None
-) -> ProductCard:
-    """Fiche d'un produit, limitée aux magasins `store_ids` (ceux du compte ;
-    `None` pour la plateforme) : stock, ventes et mouvements d'autres
-    magasins n'y apparaissent pas."""
-
-    def within(queryset, path):
-        return queryset if store_ids is None else queryset.filter(**{f"{path}__in": store_ids})
-
+def build_product_card(product: Product, *, can_view_costs: bool) -> ProductCard:
     stocks = []
-    for stock in within(Stock.objects.filter(product=product), "store_id").select_related(
-        "store"
-    ).order_by("store__name"):
+    for stock in Stock.objects.filter(product=product).select_related("store").order_by(
+        "store__name"
+    ):
         known_cost = can_view_costs and stock.average_unit_cost is not None
         stocks.append(
             StoreStock(
@@ -89,11 +80,8 @@ def build_product_card(
         )
 
     since = timezone.now() - timedelta(days=SALES_WINDOW_DAYS)
-    sold = within(
-        SaleItem.objects.filter(
-            product=product, sale__status=Sale.Status.COMPLETED, sale__occurred_at__gte=since
-        ),
-        "sale__cash_session__cash_register__store_id",
+    sold = SaleItem.objects.filter(
+        product=product, sale__status=Sale.Status.COMPLETED, sale__occurred_at__gte=since
     ).aggregate(quantity=Sum("quantity"), revenue=Sum("line_total"))
 
     movements = [
@@ -106,7 +94,7 @@ def build_product_card(
             ),
             store=movement.store.name,
         )
-        for movement in within(InventoryMovement.objects.filter(product=product), "store_id")
+        for movement in InventoryMovement.objects.filter(product=product)
         .select_related("store")
         .order_by("-created_at")[:RECENT_MOVEMENTS]
     ]

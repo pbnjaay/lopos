@@ -6,33 +6,14 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import mixins, serializers, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 
 from apps.inventory.models import Stock
 from apps.sales.models import SaleItem
-from apps.tenancy.context import get_tenant
-from apps.tenancy.models import OrganizationMembership
-from apps.tenancy.scoping import scope
+from apps.stores.models import Store
 
 from .models import Product
 from .serializers import ProductSerializer
-
-
-class CanEditCatalogOrReadOnly(BasePermission):
-    """Tout membre consulte le catalogue de son commerce ; seuls le
-    propriétaire et le gérant y ajoutent un produit."""
-
-    message = "Seul un propriétaire ou un gérant peut ajouter un produit."
-
-    def has_permission(self, request, view) -> bool:
-        if request.method in ("GET", "HEAD", "OPTIONS"):
-            return True
-        tenant = get_tenant(request)
-        return tenant is not None and tenant.role in (
-            OrganizationMembership.Role.OWNER,
-            OrganizationMembership.Role.MANAGER,
-        )
 
 
 class ProductViewSet(
@@ -43,33 +24,8 @@ class ProductViewSet(
 ):
     serializer_class = ProductSerializer
 
-    def get_permissions(self):
-        return [*super().get_permissions(), CanEditCatalogOrReadOnly()]
-
-    def get_serializer_context(self):
-        return {**super().get_serializer_context(), "organization": self._tenant().organization}
-
-    def perform_create(self, serializer) -> None:
-        serializer.save(organization=self._tenant().organization)
-
-    def _tenant(self):
-        return get_tenant(self.request)
-
-    def _accessible_store_id(self, raw: str) -> UUID:
-        """Un magasin du compte, sinon la même erreur qu'un magasin
-        inexistant : rien ne dit qu'il existe ailleurs."""
-        try:
-            store_id = UUID(raw)
-        except ValueError as exc:
-            raise serializers.ValidationError(
-                {"store_id": "Identifiant de magasin invalide."}
-            ) from exc
-        if not self._tenant().can_access_store(store_id):
-            raise serializers.ValidationError({"store_id": "Ce magasin n'existe pas."})
-        return store_id
-
     def get_queryset(self):
-        queryset = scope(Product.objects.filter(is_active=True), self._tenant())
+        queryset = Product.objects.filter(is_active=True)
 
         search = self.request.query_params.get("search")
         if search:
@@ -83,7 +39,16 @@ class ProductViewSet(
 
         store_id = self.request.query_params.get("store_id")
         if store_id:
-            parsed_store_id = self._accessible_store_id(store_id)
+            try:
+                parsed_store_id = UUID(store_id)
+            except ValueError as exc:
+                raise serializers.ValidationError(
+                    {"store_id": "Identifiant de magasin invalide."}
+                ) from exc
+            if not Store.objects.filter(pk=parsed_store_id).exists():
+                raise serializers.ValidationError(
+                    {"store_id": "Ce magasin n'existe pas."}
+                )
             stock_quantity = Stock.objects.filter(
                 store_id=parsed_store_id,
                 product_id=OuterRef("pk"),
@@ -120,7 +85,6 @@ class ProductViewSet(
                 {"store_id": "Ce parametre est obligatoire."}
             )
 
-        store_id = self._accessible_store_id(store_id)
         limit = self._parse_limit(request.query_params.get("limit"))
         queryset = self.get_queryset()
         since = timezone.now() - timedelta(days=self.TOP_PRODUCTS_WINDOW_DAYS)

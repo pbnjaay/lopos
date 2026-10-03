@@ -665,106 +665,6 @@ suit une vente offline est un event technique séparé — jamais un second
 - [ ] `sync_started`/`sync_completed` visibles après une vente offline
 - [ ] `cash_session_closed` visible
 
-## Multi-commerce (SaaS privé)
-
-Un seul déploiement, une seule base, plusieurs commerces pilotes qui ne se
-voient jamais. Pas d'inscription publique : la plateforme (super-utilisateur)
-crée chaque commerce.
-
-- **Commerce** (`Organization`) → ses **magasins** (`Store`), son **catalogue**
-  (`Product`, stock et coût moyen par magasin) et ses **catégories de dépenses**.
-- **Membre** (`OrganizationMembership`) : un compte, un commerce actif, un rôle.
-  - **Propriétaire** : tous les magasins du commerce, les comptes, les magasins
-    et caisses, les coûts.
-  - **Gérant** : back-office de ses magasins affectés ; coûts seulement si
-    « voit les coûts et marges ».
-  - **Caissier** : la caisse, dans ses magasins affectés.
-- Le rôle décide des groupes Django et de l'accès au back-office
-  (`sync_member_access`) ; `is_staff` n'ouvre plus aucun magasin à lui seul.
-- Toute donnée d'un autre commerce se comporte comme si elle n'existait pas
-  (404 dans l'API, introuvable dans l'admin).
-- Un poste de caisse est lié au commerce du premier compte qui s'y connecte ;
-  un autre commerce n'y entre qu'après effacement des données locales, et
-  jamais tant que des ventes du premier attendent d'être synchronisées.
-
-### Commandes
-
-| Commande | Rôle |
-|---|---|
-| `create_pilot --name … --store … --owner …` | Accueille un commerce : magasin, caisse, catégories, propriétaire avec mot de passe temporaire affiché une fois. Tout ou rien. |
-| `create_default_groups` | Crée les groupes Propriétaire/Gérant/Caissier et réaligne chaque compte sur son rôle. |
-| `tenancy_audit` | Lecture seule : commerces, magasins, comptes et points à décider (pas de propriétaire, super-utilisateur qui vend en caisse…). |
-| `tenancy_check` | Lecture seule : échoue si une donnée relie deux commerces. À lancer après chaque migration. |
-
-### Mise en production du multi-commerce (pilote existant)
-
-1. Déployer : `migrate` rattache toutes les données à une « Organisation
-   pilote » (à renommer) et donne à chaque compte un rôle selon son groupe
-   actuel (Gérant → gérant, sinon caissier). Aucun propriétaire n'est deviné.
-2. `tenancy_audit` : si un super-utilisateur vend en caisse, lui créer un
-   compte de commerce — le super-utilisateur n'a plus accès à la caisse.
-3. Admin › Organisations › membres : nommer le propriétaire.
-4. `create_default_groups`, puis `tenancy_check`.
-
-### Accueillir un nouveau pilote
-
-```bash
-python backend/manage.py create_pilot \
-  --name "Boutique Ndiaye" --store "Louga Centre" \
-  --owner ndiaye.awa --owner-first-name Awa
-```
-
-Transmettre en main propre l'identifiant et le mot de passe temporaire ; le
-propriétaire le change dans l'admin, puis crée ses gérants et caissiers
-(Utilisateurs), ses autres magasins et caisses, et importe son catalogue.
-Convention de noms d'utilisateur : `<commerce>.<prénom>` (ils sont uniques sur
-toute la plateforme).
-
-### Suspendre un commerce
-
-Admin › Organisations › action « Suspendre » : caisse, back-office et
-synchronisation lui sont fermés dès la requête suivante, ses données restent
-intactes. Les ventes hors ligne restent sur ses postes et partiront à la
-réactivation.
-
-### Recette avant un nouveau pilote
-
-Dérouler [docs/recette-multi-commerce.md](docs/recette-multi-commerce.md) :
-deux navigateurs, deux commerces, identifiants croisés, déconnexion hors
-ligne, vente en attente puis changement de commerce, suspension.
-
-## Validation par un gérant (contrôles anti-fraude)
-
-Un caissier ne fait pas seul les opérations qui font sortir de l'argent du
-tiroir sans que l'écart de caisse le voie. Au-delà des seuils
-(`backend/config/settings.py`, `APPROVAL_*`), un gérant du magasin ou le
-propriétaire tape **son code PIN** sur le poste du caissier :
-
-| Opération | Validation exigée |
-|---|---|
-| Annulation de vente | à partir de 5 000 FCFA ; **motif toujours obligatoire** |
-| Retour | à partir de 5 000 FCFA, ou sur une vente de plus de 7 jours |
-| Remise (prix modifié) | au-delà de 10 % sur une ligne, ou 5 000 FCFA de remise au total |
-
-- Chaque gérant et le propriétaire choisissent leur PIN eux-mêmes dans le
-  back-office (**Mon code PIN**, mot de passe demandé). Il est haché comme un
-  mot de passe ; 5 erreurs en 15 minutes suspendent ses validations.
-- Le serveur rend une validation signée, liée à la session, à l'opération et
-  à la vente, valable 10 minutes. L'annulation, le retour ou la vente la
-  présentent ; qui a validé est enregistré (`cancellation_approved_by`,
-  `approved_by`, `discount_approved_by`).
-- Une vente est enregistrée sur le poste avant la synchronisation : la remise
-  est donc validée **en ligne** à l'encaissement. Hors ligne, le POS refuse une
-  remise au-delà de la limite. Une vente reçue sans validation valable est
-  gardée mais signalée (`unapproved_discount`, alerte du tableau de bord).
-- Une vente ne s'annule plus que **sur le serveur** : une vente encore en
-  attente sur le poste y est d'abord envoyée (jamais effacée localement), et
-  l'annulation demande la connexion.
-- Personne n'annule une vente d'une session clôturée (on fait un retour).
-  Réduire une dette client de 5 000 FCFA ou plus est réservé au propriétaire.
-
-Un gérant ou le propriétaire connecté au POS n'a jamais besoin de validation.
-
 ## Déploiement
 
 Backend sur Railway (Dockerfile, domaine `api.lopos.app`), frontend sur
@@ -777,8 +677,7 @@ renseigner de chaque côté.
 
 1. Créer un projet Railway à partir de ce repo. Railway détecte le
    `Dockerfile` à la racine (voir `railway.json` : builder explicite +
-   healthcheck sur `/healthz/`, une sonde sans base ni session, exemptée de
-   la redirection HTTPS). Railway envoie toujours ce healthcheck
+   healthcheck sur `/admin/login/`). Railway envoie toujours ce healthcheck
    avec `Host: healthcheck.railway.app` (quel que soit le domaine réel du
    service) — `backend/config/settings.py` l'ajoute automatiquement à
    `ALLOWED_HOSTS`, rien à configurer côté variables d'environnement pour ça.
@@ -798,29 +697,18 @@ renseigner de chaque côté.
    DJANGO_COOKIE_SECURE=true
    DJANGO_CSRF_COOKIE_DOMAIN=.lopos.app
    ```
-   Les réglages sont sûrs par défaut : sans `DJANGO_DEBUG`, le debug est
-   désactivé, et hors debug les cookies sont `Secure`, la redirection HTTPS
-   et HSTS (1 an) sont actifs. Le démarrage refuse de tourner hors debug sans
-   `DJANGO_SECRET_KEY`, ou avec la clé de développement
-   (`ImproperlyConfigured`) — c'est un garde-fou, pas un bug.
+   Le démarrage refuse volontairement de tourner avec `DJANGO_DEBUG=false`
+   et la clé par défaut (`ImproperlyConfigured`) — c'est un garde-fou, pas
+   un bug.
 4. Le `Dockerfile` fait `migrate` + `collectstatic` + `gunicorn` au
    démarrage du conteneur (fichiers statiques servis par WhiteNoise —
    pas de CDN séparé nécessaire pour ce volume).
 5. Créer un compte admin une fois déployé :
    `railway run python backend/manage.py createsuperuser`
    (et éventuellement `railway run python backend/manage.py create_default_groups`).
-6. Durcissement HTTPS : actif par défaut hors debug. Pour un premier
-   déploiement dont le domaine n'est pas encore validé, on peut le
-   desserrer temporairement (`DJANGO_SECURE_HSTS_SECONDS=3600`, ou
-   `DJANGO_SECURE_SSL_REDIRECT=false`) puis retirer ces variables.
-7. Connexions : POS et admin freinent les échecs répétés (5 par
-   identifiant et adresse, 30 par adresse, 50 par identifiant, sur
-   15 minutes ; réponse 429, jamais de verrouillage définitif). Les
-   compteurs vivent dans le cache en base (`createcachetable`, lancé par le
-   `Dockerfile`). L'adresse du client est lue dans `X-Forwarded-For` derrière
-   `DJANGO_TRUSTED_PROXY_COUNT` proxys (défaut 1 hors debug, le cas Railway).
-8. `seed_demo` (comptes de démo aux mots de passe connus) refuse de tourner
-   hors debug et sur toute base fournie par `DATABASE_URL`.
+6. Une fois le domaine et le certificat confirmés fonctionnels, activer le
+   durcissement HTTPS optionnel : `DJANGO_SECURE_SSL_REDIRECT=true`,
+   `DJANGO_SECURE_HSTS_SECONDS=3600` (à augmenter progressivement).
 
 ### Frontend — Vercel
 

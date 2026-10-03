@@ -1,12 +1,6 @@
 import type { CashRegister, CashSession, CurrentUser } from "../types/api"
 import { db, type PosDatabase } from "./database"
-import type { AuthenticatedUser } from "./tenancy"
 import type { LocalCashSession } from "./types"
-
-/** Le caissier de la session ; son commerce, quand il est connu, est noté
- *  sur la session locale. */
-export type SessionCashier = Pick<CurrentUser, "id" | "username" | "first_name"> &
-  Partial<Pick<CurrentUser, "organization">>
 
 function toIntegerAmount(value: string): number {
   const amount = Number(value)
@@ -19,12 +13,11 @@ function toIntegerAmount(value: string): number {
 export function buildLocalCashSession(
   session: CashSession,
   register: CashRegister,
-  cashier: SessionCashier,
+  cashier: Pick<CurrentUser, "id" | "username" | "first_name">,
   cachedAt = new Date().toISOString(),
 ): LocalCashSession {
   return {
     id: session.id,
-    ...(cashier.organization ? { organizationId: cashier.organization.id } : {}),
     cashRegisterId: register.id,
     cashRegisterName: register.name,
     storeId: register.store_id,
@@ -40,7 +33,7 @@ export function buildLocalCashSession(
 export async function saveLocalCashSession(
   session: CashSession,
   register: CashRegister,
-  cashier: SessionCashier,
+  cashier: Pick<CurrentUser, "id" | "username" | "first_name">,
   database: PosDatabase = db,
 ): Promise<LocalCashSession> {
   const existing = await database.cashSessions.get(session.id)
@@ -122,23 +115,13 @@ export function localSessionToCashSession(session: LocalCashSession): CashSessio
   }
 }
 
-/** Le compte du poste, hors ligne : celui de la session, tel que le serveur
- *  l'a décrit à sa dernière connexion en ligne (`AuthenticatedUser`). */
-export function localSessionToCurrentUser(
-  session: LocalCashSession,
-  user: AuthenticatedUser,
-): CurrentUser {
+export function localSessionToCurrentUser(session: LocalCashSession): CurrentUser {
   return {
     id: session.cashierId,
-    username: user.username,
-    first_name: user.firstName || session.cashierName,
+    username: session.cashierName,
+    first_name: session.cashierName,
     last_name: "",
     email: "",
-    is_staff: user.role !== "CASHIER",
-    organization: { id: user.organizationId, name: user.organizationName },
-    role: user.role,
-    store_ids: user.storeIds,
-    can_view_costs: user.canViewCosts,
-    ...(user.approvalPolicy ? { approval_policy: user.approvalPolicy } : {}),
+    is_staff: false,
   }
 }

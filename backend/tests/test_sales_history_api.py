@@ -9,7 +9,7 @@ from rest_framework.test import APIClient
 
 from apps.cash.models import CashSession
 from apps.sales.models import Payment, Sale
-from apps.stores.models import CashRegister, Store, StoreAssignment
+from apps.stores.models import CashRegister, Store
 
 
 pytestmark = pytest.mark.django_db
@@ -43,14 +43,14 @@ def _sale(*, session: CashSession, cashier=None, total: str = "1000.00") -> Sale
     return sale
 
 
-def test_owner_sales_history_is_scoped_to_the_store_of_selected_session() -> None:
-    owner = User.objects.create_user(username="owner", is_staff=True)
-    session_a = _session(user=owner, store_name="Boutique A", register_name="Caisse A")
-    session_b = _session(user=owner, store_name="Boutique B", register_name="Caisse B")
+def test_admin_sales_history_is_scoped_to_the_store_of_selected_session() -> None:
+    admin = User.objects.create_user(username="admin", is_staff=True, is_superuser=True)
+    session_a = _session(user=admin, store_name="Boutique A", register_name="Caisse A")
+    session_b = _session(user=admin, store_name="Boutique B", register_name="Caisse B")
     sale_a = _sale(session=session_a, total="1000.00")
     sale_b = _sale(session=session_b, total="2000.00")
     client = APIClient()
-    client.force_authenticate(owner)
+    client.force_authenticate(admin)
 
     response_a = client.get(reverse("sale-complete"), {"cash_session_id": session_a.id})
     response_b = client.get(reverse("sale-complete"), {"cash_session_id": session_b.id})
@@ -62,13 +62,13 @@ def test_owner_sales_history_is_scoped_to_the_store_of_selected_session() -> Non
     assert response_b.json()["results"][0]["store"]["name"] == "Boutique B"
 
 
-def test_sale_detail_cannot_cross_the_store_boundary_even_for_an_owner() -> None:
-    owner = User.objects.create_user(username="owner", is_staff=True)
-    session_a = _session(user=owner, store_name="Boutique A", register_name="Caisse A")
-    session_b = _session(user=owner, store_name="Boutique B", register_name="Caisse B")
+def test_sale_detail_cannot_cross_the_store_boundary_even_for_admin() -> None:
+    admin = User.objects.create_user(username="admin", is_staff=True, is_superuser=True)
+    session_a = _session(user=admin, store_name="Boutique A", register_name="Caisse A")
+    session_b = _session(user=admin, store_name="Boutique B", register_name="Caisse B")
     sale_b = _sale(session=session_b)
     client = APIClient()
-    client.force_authenticate(owner)
+    client.force_authenticate(admin)
 
     response = client.get(
         reverse("sale-detail", kwargs={"pk": sale_b.id}),
@@ -94,7 +94,6 @@ def test_cashier_can_see_a_colleagues_sale_in_the_same_store() -> None:
         cashier=second_cashier,
         opening_balance=Decimal("0.00"),
     )
-    StoreAssignment.objects.create(user=second_cashier, store=store)
     colleague_sale = _sale(session=first_session)
     client = APIClient()
     client.force_authenticate(second_cashier)
@@ -109,7 +108,7 @@ def test_cashier_can_see_a_colleagues_sale_in_the_same_store() -> None:
 
 
 def test_staff_cannot_use_another_users_open_session_as_pos_context() -> None:
-    owner = User.objects.create_user(username="owner", is_staff=True)
+    admin = User.objects.create_user(username="admin", is_staff=True, is_superuser=True)
     cashier = User.objects.create_user(username="cashier")
     cashier_session = _session(
         user=cashier,
@@ -118,7 +117,7 @@ def test_staff_cannot_use_another_users_open_session_as_pos_context() -> None:
     )
     _sale(session=cashier_session)
     client = APIClient()
-    client.force_authenticate(owner)
+    client.force_authenticate(admin)
 
     response = client.get(
         reverse("sale-complete"),
@@ -130,11 +129,11 @@ def test_staff_cannot_use_another_users_open_session_as_pos_context() -> None:
 
 
 def test_sales_history_requires_an_unambiguous_open_session() -> None:
-    owner = User.objects.create_user(username="owner", is_staff=True)
-    _session(user=owner, store_name="Boutique A", register_name="Caisse A")
-    _session(user=owner, store_name="Boutique B", register_name="Caisse B")
+    admin = User.objects.create_user(username="admin", is_staff=True, is_superuser=True)
+    _session(user=admin, store_name="Boutique A", register_name="Caisse A")
+    _session(user=admin, store_name="Boutique B", register_name="Caisse B")
     client = APIClient()
-    client.force_authenticate(owner)
+    client.force_authenticate(admin)
 
     response = client.get(reverse("sale-complete"))
 
@@ -142,13 +141,13 @@ def test_sales_history_requires_an_unambiguous_open_session() -> None:
     assert response.json()["code"] == "OPEN_CASH_SESSION_REQUIRED"
 
 
-def test_owner_cannot_return_a_sale_from_another_store_session() -> None:
-    owner = User.objects.create_user(username="owner", is_staff=True)
-    session_a = _session(user=owner, store_name="Boutique A", register_name="Caisse A")
-    session_b = _session(user=owner, store_name="Boutique B", register_name="Caisse B")
+def test_admin_cannot_return_a_sale_from_another_store_session() -> None:
+    admin = User.objects.create_user(username="admin", is_staff=True, is_superuser=True)
+    session_a = _session(user=admin, store_name="Boutique A", register_name="Caisse A")
+    session_b = _session(user=admin, store_name="Boutique B", register_name="Caisse B")
     sale_b = _sale(session=session_b)
     client = APIClient()
-    client.force_authenticate(owner)
+    client.force_authenticate(admin)
 
     response = client.post(
         reverse("sale-return-list"),

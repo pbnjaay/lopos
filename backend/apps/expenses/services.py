@@ -8,8 +8,6 @@ from apps.cash.exceptions import CashSessionClosed
 from apps.cash.models import CashSession
 from apps.cash.services import expected_cash_for
 from apps.sales.models import Payment
-from apps.stores.access import user_can_manage_store
-from apps.tenancy.models import Organization
 
 from .defaults import DEFAULT_CATEGORIES
 from .exceptions import (
@@ -26,22 +24,12 @@ ZERO = Decimal("0.00")
 DOCUMENT_REFERENCE_MAX_LENGTH = Expense._meta.get_field("document_reference").max_length
 
 
-def ensure_default_categories(organization: Organization | None = None) -> int:
-    """Crée les catégories par défaut absentes du commerce, sans toucher aux
-    existantes (un gérant a pu les renommer ou les désactiver). Renvoie le
-    nombre créé.
-
-    Sans commerce précisé : celui de la base s'il n'y en a qu'un. Sans aucun
-    commerce, rien n'est créé — une catégorie appartient toujours à un
-    commerce."""
-    if organization is None:
-        organization = Organization.objects.sole()
-    if organization is None:
-        return 0
+def ensure_default_categories() -> int:
+    """Crée les catégories par défaut absentes, sans toucher aux existantes
+    (un gérant a pu les renommer ou les désactiver). Renvoie le nombre créé."""
     created_count = 0
     for position, (name, requires_description) in enumerate(DEFAULT_CATEGORIES):
         _category, created = ExpenseCategory.objects.get_or_create(
-            organization=organization,
             name=name,
             defaults={
                 "requires_description": requires_description,
@@ -146,13 +134,7 @@ def create_expense(
     if locked_session.cashier_id != created_by.pk:
         raise ExpenseSessionNotOwned("Cette session appartient à un autre caissier.")
 
-    # Une catégorie d'un autre commerce est refusée comme une catégorie
-    # retirée : rien ne dit qu'elle existe ailleurs.
-    if not ExpenseCategory.objects.filter(
-        pk=category.pk,
-        is_active=True,
-        organization__stores=locked_session.cash_register.store_id,
-    ).exists():
+    if not ExpenseCategory.objects.filter(pk=category.pk, is_active=True).exists():
         raise InvalidExpense("Cette catégorie de dépense n’est plus utilisée.")
     description = (description or "").strip()
     if category.requires_description and not description:
@@ -196,7 +178,7 @@ def cancel_expense(*, expense: Expense, cancelled_by, reason: str) -> Expense:
 
     Possible seulement tant que sa session est ouverte : le rapport Z d'une
     session clôturée ne change jamais après coup. Le caissier annule ses
-    propres dépenses, un propriétaire ou un gérant du magasin toutes.
+    propres dépenses, le staff toutes.
 
     Ordre des verrous : session → dépense.
     """
@@ -214,9 +196,7 @@ def cancel_expense(*, expense: Expense, cancelled_by, reason: str) -> Expense:
 
     if locked.status == Expense.Status.CANCELLED:
         raise ExpenseAlreadyCancelled("Cette dépense est déjà annulée.")
-    if locked.created_by_id != cancelled_by.pk and not user_can_manage_store(
-        cancelled_by, locked.store_id
-    ):
+    if not cancelled_by.is_staff and locked.created_by_id != cancelled_by.pk:
         raise ExpenseCancellationNotAllowed(
             "Cette dépense a été saisie par un autre utilisateur."
         )

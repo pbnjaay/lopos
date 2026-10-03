@@ -3,8 +3,6 @@ import logging
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.tenancy.context import get_tenant
-
 from .models import ProcessedSyncEvent
 from .serializers import SyncPullQuerySerializer, SyncPushRequestSerializer
 from .services import EventOutcome, process_sale_completed_event, pull_catalog_changes
@@ -44,7 +42,6 @@ class SyncPushView(APIView):
             extra={"terminal_id": str(terminal_id), "event_count": len(events)},
         )
 
-        tenant = get_tenant(request)
         results = []
         for event in events:
             if event["type"] != ProcessedSyncEvent.EventType.SALE_COMPLETED:
@@ -65,7 +62,6 @@ class SyncPushView(APIView):
                 occurred_at=event["occurred_at"],
                 payload=event["payload"],
                 cashier=request.user,
-                tenant=tenant,
             )
             results.append(_serialize_outcome(outcome))
 
@@ -84,5 +80,5 @@ class SyncPullView(APIView):
         query_serializer.is_valid(raise_exception=True)
         since = query_serializer.validated_data["cursor"]
 
-        page = pull_catalog_changes(since=since, organization=get_tenant(request).organization)
+        page = pull_catalog_changes(since=since)
         return Response({"cursor": page.cursor, "changes": page.changes}, status=200)

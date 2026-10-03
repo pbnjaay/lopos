@@ -18,8 +18,6 @@ export type SyncEventPayload = {
   /** Vente mise (en partie) au cahier : client obligatoire côté serveur. */
   customer_id?: string
   credit_amount?: string
-  /** Validation d'un gérant pour une remise au-delà de la limite du caissier. */
-  approval_token?: string
 }
 
 export type SyncEvent = {
