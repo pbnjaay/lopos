@@ -101,6 +101,8 @@ export type LocalSale = {
   subtotal: number
   discount: number
   total: number
+  /** Validation d'un gérant obtenue à l'encaissement pour une remise. */
+  approvalToken?: string
 }
 
 export type LocalMetadata = {

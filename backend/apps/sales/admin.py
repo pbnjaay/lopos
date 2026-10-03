@@ -100,11 +100,36 @@ class SaleAdmin(ReadOnlySalesAdmin):
     # Fiche lue comme le ticket du POS (voir admin_summary) ; le reste, rarement
     # utile, est replié.
     change_form_outer_before_template = "admin/sales/sale_summary.html"
-    readonly_fields = ("cash_session", "customer", "occurred_at", "created_at")
+    readonly_fields = (
+        "cash_session",
+        "customer",
+        "occurred_at",
+        "created_at",
+        "discount_approved_by",
+        "cancelled_at",
+        "cancelled_by",
+        "cancellation_reason",
+        "cancellation_approved_by",
+    )
     fieldsets = (
         (
             _("Détails"),
-            {"fields": readonly_fields, "classes": ("collapse",)},
+            {
+                "fields": ("cash_session", "customer", "occurred_at", "created_at"),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            _("Contrôles"),
+            {
+                "fields": (
+                    "discount_approved_by",
+                    "cancelled_at",
+                    "cancelled_by",
+                    "cancellation_reason",
+                    "cancellation_approved_by",
+                ),
+            },
         ),
     )
 
@@ -201,6 +226,7 @@ class SaleReturnAdmin(ReadOnlySalesAdmin):
         "money_refund_display",
         "payment_method",
         "status",
+        "approved_by",
     )
     readonly_fields = fields
     inlines = (SaleReturnItemInline,)

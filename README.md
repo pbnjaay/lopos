@@ -733,6 +733,38 @@ Dérouler [docs/recette-multi-commerce.md](docs/recette-multi-commerce.md) :
 deux navigateurs, deux commerces, identifiants croisés, déconnexion hors
 ligne, vente en attente puis changement de commerce, suspension.
 
+## Validation par un gérant (contrôles anti-fraude)
+
+Un caissier ne fait pas seul les opérations qui font sortir de l'argent du
+tiroir sans que l'écart de caisse le voie. Au-delà des seuils
+(`backend/config/settings.py`, `APPROVAL_*`), un gérant du magasin ou le
+propriétaire tape **son code PIN** sur le poste du caissier :
+
+| Opération | Validation exigée |
+|---|---|
+| Annulation de vente | à partir de 5 000 FCFA ; **motif toujours obligatoire** |
+| Retour | à partir de 5 000 FCFA, ou sur une vente de plus de 7 jours |
+| Remise (prix modifié) | au-delà de 10 % sur une ligne, ou 5 000 FCFA de remise au total |
+
+- Chaque gérant et le propriétaire choisissent leur PIN eux-mêmes dans le
+  back-office (**Mon code PIN**, mot de passe demandé). Il est haché comme un
+  mot de passe ; 5 erreurs en 15 minutes suspendent ses validations.
+- Le serveur rend une validation signée, liée à la session, à l'opération et
+  à la vente, valable 10 minutes. L'annulation, le retour ou la vente la
+  présentent ; qui a validé est enregistré (`cancellation_approved_by`,
+  `approved_by`, `discount_approved_by`).
+- Une vente est enregistrée sur le poste avant la synchronisation : la remise
+  est donc validée **en ligne** à l'encaissement. Hors ligne, le POS refuse une
+  remise au-delà de la limite. Une vente reçue sans validation valable est
+  gardée mais signalée (`unapproved_discount`, alerte du tableau de bord).
+- Une vente ne s'annule plus que **sur le serveur** : une vente encore en
+  attente sur le poste y est d'abord envoyée (jamais effacée localement), et
+  l'annulation demande la connexion.
+- Personne n'annule une vente d'une session clôturée (on fait un retour).
+  Réduire une dette client de 5 000 FCFA ou plus est réservé au propriétaire.
+
+Un gérant ou le propriétaire connecté au POS n'a jamais besoin de validation.
+
 ## Déploiement
 
 Backend sur Railway (Dockerfile, domaine `api.lopos.app`), frontend sur

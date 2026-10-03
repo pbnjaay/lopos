@@ -69,6 +69,12 @@ def test_valid_login_returns_user_and_session_cookie(
         "role": "CASHIER",
         "store_ids": [],
         "can_view_costs": False,
+        "approval_policy": {
+            "required": True,
+            "amount_threshold": "5000.00",
+            "max_discount_rate": "0.10",
+            "return_window_days": 7,
+        },
     }
     assert settings.SESSION_COOKIE_NAME in csrf_client.cookies
     assert "csrftoken" in csrf_client.cookies

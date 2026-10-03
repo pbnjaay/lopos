@@ -213,7 +213,7 @@ def _stock_alerts(
     return out_alert, low_alert
 
 
-def _sync_alerts(store_ids) -> tuple[Alert | None, Alert | None]:
+def _sync_alerts(store_ids) -> tuple[Alert | None, Alert | None, Alert | None]:
     """Ventes hors ligne à revoir, en une requête : celles qui ont fait
     passer un stock sous zéro, et celles dont le prix catalogue envoyé par le
     poste ne correspond pas au serveur (changement de prix pendant la
@@ -224,6 +224,7 @@ def _sync_alerts(store_ids) -> tuple[Alert | None, Alert | None]:
     ).aggregate(
         stock=Count("pk", filter=Q(stock_discrepancy=True)),
         catalog_price=Count("pk", filter=Q(catalog_price_discrepancy=True)),
+        discount=Count("pk", filter=Q(unapproved_discount=True)),
     )
     changelist = reverse("admin:sync_processedsyncevent_changelist")
     stock_alert = (
@@ -252,7 +253,20 @@ def _sync_alerts(store_ids) -> tuple[Alert | None, Alert | None]:
         if counts["catalog_price"]
         else None
     )
-    return stock_alert, catalog_price_alert
+    discount_alert = (
+        Alert(
+            severity="warning",
+            text=format_count(
+                counts["discount"],
+                "vente porte une remise non validée par un gérant",
+                "ventes portent une remise non validée par un gérant",
+            ),
+            url=changelist + "?unapproved_discount__exact=1",
+        )
+        if counts["discount"]
+        else None
+    )
+    return stock_alert, catalog_price_alert, discount_alert
 
 
 def _stale_session_alerts(store_ids) -> list[Alert]:
@@ -285,7 +299,7 @@ def _build_alerts(
 ) -> list[Alert]:
     critical_shortages, other_cash = _cash_session_alerts(store_ids)
     out_alert, low_alert = _stock_alerts(store_id, out_of_stock_count, low_stock_count)
-    sync_alert, catalog_price_alert = _sync_alerts(store_ids)
+    sync_alert, catalog_price_alert, discount_alert = _sync_alerts(store_ids)
     stale_session_alerts = _stale_session_alerts(store_ids)
 
     ordered: list[Alert] = [*critical_shortages]
@@ -296,6 +310,8 @@ def _build_alerts(
         ordered.append(sync_alert)
     if catalog_price_alert:
         ordered.append(catalog_price_alert)
+    if discount_alert:
+        ordered.append(discount_alert)
     ordered.extend(other_cash)
     if low_alert:
         ordered.append(low_alert)

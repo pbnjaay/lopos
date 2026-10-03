@@ -18,6 +18,7 @@ from apps.sales.exceptions import (
     InvalidSaleItems,
     ProductNotFound,
 )
+from apps.sales import approvals
 from apps.sales.models import Sale
 from apps.sales.services import complete_offline_sale
 from apps.tenancy.context import TenantContext, resolve_tenant
@@ -152,6 +153,9 @@ def process_sale_completed_event(
                 customer_id=payload.get("customer_id"),
                 credit_amount=payload.get("credit_amount", Decimal("0.00")),
             )
+            unapproved_discount = _review_discount(
+                sale, cash_session, payload.get("approval_token"), occurred_at
+            )
             ProcessedSyncEvent.objects.create(
                 event_id=event_id,
                 terminal_id=terminal_id,
@@ -160,6 +164,7 @@ def process_sale_completed_event(
                 store_id=cash_session.cash_register.store_id,
                 pushed_by=cashier,
                 stock_discrepancy=stock_discrepancy,
+                unapproved_discount=unapproved_discount,
                 catalog_price_discrepancy=sale.items.filter(
                     server_catalog_unit_price__isnull=False
                 ).exists(),
@@ -241,6 +246,33 @@ def process_sale_completed_event(
     return EventOutcome(
         event_id=event_id, status=SyncEventStatus.SYNCED, entity_id=sale.id
     )
+
+
+def _review_discount(sale, cash_session, approval_token, occurred_at) -> bool:
+    """Vrai si la vente porte une remise que son caissier ne peut pas
+    accorder seul, sans validation de gérant valable. La vente est gardée
+    (elle a eu lieu) ; seul le signalement en dépend. Une validation valable
+    est notée sur la vente."""
+    lines = [
+        (item.catalog_unit_price, item.unit_price, item.quantity)
+        for item in sale.items.all()
+    ]
+    if not approvals.discount_needs_approval(lines):
+        return False
+    if not approvals.needs_approval(sale.cashier, cash_session.cash_register.store_id):
+        return False
+    approver = approvals.verify(
+        approval_token,
+        cash_session=cash_session,
+        action=approvals.Action.DISCOUNT,
+        sale_id=sale.pk,
+        at=occurred_at,
+    )
+    if approver is None:
+        return True
+    sale.discount_approved_by = approver
+    sale.save(update_fields=("discount_approved_by",))
+    return False
 
 
 PULL_PAGE_SIZE = 1000

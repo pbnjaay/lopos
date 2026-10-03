@@ -1,4 +1,5 @@
 from django.http import HttpResponse
+from django.urls import path
 from unfold.sites import UnfoldAdminSite
 
 from apps.accounts import login_guard
@@ -15,6 +16,18 @@ class TenantAdminSite(UnfoldAdminSite):
         if not super().has_permission(request):
             return False
         return request.user.is_superuser or get_tenant(request) is not None
+
+    def get_urls(self):
+        from .approval_pin import approval_pin_view
+
+        return [
+            path(
+                "code-pin/",
+                self.admin_view(lambda request: approval_pin_view(request, self)),
+                name="approval_pin",
+            ),
+            *super().get_urls(),
+        ]
 
     def login(self, request, extra_context=None):
         """Même frein que la connexion du POS (`login_guard`) : un échec

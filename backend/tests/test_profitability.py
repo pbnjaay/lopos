@@ -20,6 +20,15 @@ from apps.stores.models import CashRegister, Store
 
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def no_manager_approval_threshold(settings):
+    """Ce module teste le cahier et le tiroir, pas la validation par un
+    gérant (voir test_cashier_approvals) : seuil hors d'atteinte."""
+    settings.APPROVAL_AMOUNT_THRESHOLD = Decimal("1000000000")
+
+
 User = get_user_model()
 
 
@@ -321,7 +330,7 @@ def test_cancelled_sale_counts_nowhere(session, store, cashier) -> None:
     coca = _product(store, "Coca 50cl", "500", "300")
     sale = _sell(session, coca, 2)
 
-    cancel_sale(sale_id=sale.id, cancelled_by=cashier)
+    cancel_sale(sale_id=sale.id, cancelled_by=cashier, reason="Erreur de saisie")
 
     summary = _today()
     assert summary.revenue == Decimal("0.00")

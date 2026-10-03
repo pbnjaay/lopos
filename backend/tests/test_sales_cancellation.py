@@ -65,7 +65,7 @@ def sale(cash_session: CashSession, product: Product) -> Sale:
 def test_cancel_sale_restores_stock_and_creates_audit_record(
     sale: Sale, product: Product, store: Store
 ) -> None:
-    cancel_sale(sale_id=sale.id, cancelled_by=sale.cashier)
+    cancel_sale(sale_id=sale.id, cancelled_by=sale.cashier, reason="Erreur de saisie")
 
     sale.refresh_from_db()
     assert sale.status == Sale.Status.CANCELLED
@@ -78,15 +78,15 @@ def test_cancel_sale_restores_stock_and_creates_audit_record(
 
 
 def test_cannot_cancel_an_already_cancelled_sale(sale: Sale) -> None:
-    cancel_sale(sale_id=sale.id, cancelled_by=sale.cashier)
+    cancel_sale(sale_id=sale.id, cancelled_by=sale.cashier, reason="Erreur de saisie")
 
     with pytest.raises(InvalidCancellation):
-        cancel_sale(sale_id=sale.id, cancelled_by=sale.cashier)
+        cancel_sale(sale_id=sale.id, cancelled_by=sale.cashier, reason="Erreur de saisie")
 
 
 def test_another_cashier_cannot_cancel_the_sale(sale: Sale, other_cashier) -> None:
     with pytest.raises(InvalidCancellation):
-        cancel_sale(sale_id=sale.id, cancelled_by=other_cashier)
+        cancel_sale(sale_id=sale.id, cancelled_by=other_cashier, reason="Erreur de saisie")
 
 
 def test_owner_cannot_cancel_once_their_session_is_closed(
@@ -96,20 +96,22 @@ def test_owner_cannot_cancel_once_their_session_is_closed(
     cash_session.save(update_fields=["status"])
 
     with pytest.raises(InvalidCancellation):
-        cancel_sale(sale_id=sale.id, cancelled_by=sale.cashier)
+        cancel_sale(sale_id=sale.id, cancelled_by=sale.cashier, reason="Erreur de saisie")
 
 
-def test_staff_can_cancel_any_sale_regardless_of_session_state(
+def test_even_a_manager_cannot_cancel_once_the_session_is_closed(
     sale: Sale, cash_session: CashSession
 ) -> None:
+    # Le rapport Z de la session est arrêté : on corrige par un retour.
     cash_session.status = CashSession.Status.CLOSED
     cash_session.save(update_fields=["status"])
     manager = User.objects.create_user(username="gerant", is_staff=True)
 
-    cancel_sale(sale_id=sale.id, cancelled_by=manager)
+    with pytest.raises(InvalidCancellation, match="clôturée"):
+        cancel_sale(sale_id=sale.id, cancelled_by=manager, reason="Erreur de saisie")
 
     sale.refresh_from_db()
-    assert sale.status == Sale.Status.CANCELLED
+    assert sale.status == Sale.Status.COMPLETED
 
 
 class TestCancelSaleAPI:
@@ -117,7 +119,7 @@ class TestCancelSaleAPI:
         client = APIClient()
         client.force_authenticate(sale.cashier)
 
-        response = client.post(reverse("sale-cancel", args=[sale.id]))
+        response = client.post(reverse("sale-cancel", args=[sale.id]), {"reason": "Erreur de saisie"}, format="json")
 
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["status"] == "CANCELLED"
@@ -129,7 +131,7 @@ class TestCancelSaleAPI:
         client = APIClient()
         client.force_authenticate(other_cashier)
 
-        response = client.post(reverse("sale-cancel", args=[sale.id]))
+        response = client.post(reverse("sale-cancel", args=[sale.id]), {"reason": "Erreur de saisie"}, format="json")
 
         assert response.status_code == status.HTTP_409_CONFLICT
         assert response.json()["code"] == "INVALID_CANCELLATION"
@@ -140,7 +142,7 @@ class TestCancelSaleAPI:
         client = APIClient()
         client.force_authenticate(other_cashier)
 
-        response = client.post(reverse("sale-cancel", args=[sale.id]))
+        response = client.post(reverse("sale-cancel", args=[sale.id]), {"reason": "Erreur de saisie"}, format="json")
         unknown = client.post(
             reverse("sale-cancel", args=["11111111-1111-1111-1111-111111111111"])
         )

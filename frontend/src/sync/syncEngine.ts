@@ -65,6 +65,7 @@ function toSyncEvent(sale: LocalSale): SyncEvent {
             credit_amount: toBackendMoney(sale.creditAmount ?? 0),
           }
         : {}),
+      ...(sale.approvalToken ? { approval_token: sale.approvalToken } : {}),
     },
   }
 }

@@ -123,6 +123,18 @@ CASH_DISCREPANCY_CRITICAL_THRESHOLD = Decimal("5000")
 # clôture en fin de service plutôt que d'un service anormalement long.
 STALE_CASH_SESSION_HOURS_THRESHOLD = 12
 
+# Contrôles anti-fraude du caissier (validation par PIN d'un gérant ou du
+# propriétaire). Un gérant ou un propriétaire n'en a jamais besoin pour
+# lui-même.
+# - annulation, retour : dès ce montant ;
+# - retour : au-delà de ce nombre de jours après la vente ;
+# - remise : au-delà de ce taux sur une ligne, ou dès ce montant total.
+APPROVAL_AMOUNT_THRESHOLD = Decimal("5000")
+APPROVAL_RETURN_WINDOW_DAYS = 7
+APPROVAL_MAX_DISCOUNT_RATE = Decimal("0.10")
+# Durée de validité d'une validation, entre le PIN et l'opération.
+APPROVAL_TOKEN_MAX_AGE_SECONDS = 10 * 60
+
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 
 UNFOLD = {
@@ -331,6 +343,15 @@ UNFOLD = {
                         # Propriétaire et plateforme : le gérant ne gère pas
                         # les comptes.
                         "permission": lambda request: request.user.has_perm("auth.view_user"),
+                    },
+                    {
+                        "title": _("Mon code PIN"),
+                        "icon": "pin",
+                        "link": reverse_lazy("admin:approval_pin"),
+                        # Propriétaire et gérant : ils valident sur le poste
+                        # des caissiers (la plateforme ne valide rien).
+                        "permission": lambda request: request.user.is_staff
+                        and not request.user.is_superuser,
                     },
                     {
                         "title": _("Groupes"),
