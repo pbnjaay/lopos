@@ -21,6 +21,12 @@ def some_data() -> None:
     Store.objects.create(name="Supérette Louga")
     Product.objects.create(name="Coca 50cl", selling_price=Decimal("500.00"))
     User.objects.create_user(username="caissier", password="password123")
+    # Le test tient tout dans une transaction : les contrôles de clés
+    # étrangères différés de ces insertions y restent en attente, et
+    # PostgreSQL refuse alors le TRUNCATE de `flush`. En production la
+    # commande tourne hors transaction, sans rien en attente.
+    with connection.cursor() as cursor:
+        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
 
 
 def _db_name() -> str:
@@ -46,23 +52,26 @@ def test_typing_the_db_name_flushes_everything(some_data) -> None:
     assert User.objects.count() == 0
 
 
-def test_flush_recreates_the_manager_and_cashier_groups(some_data) -> None:
+def test_flush_recreates_the_role_groups(some_data) -> None:
     with patch("builtins.input", return_value=_db_name()):
         call_command("reset_for_launch")
 
-    assert set(Group.objects.values_list("name", flat=True)) == {"Gérant", "Caissier"}
+    assert set(Group.objects.values_list("name", flat=True)) == {
+        "Propriétaire",
+        "Gérant",
+        "Caissier",
+    }
 
 
 
-def test_flush_recreates_the_default_expense_categories(some_data) -> None:
-    ExpenseCategory.objects.create(name="Catégorie de démo")
-
+def test_flush_leaves_no_expense_category_without_a_commerce(some_data) -> None:
+    """Une catégorie appartient toujours à un commerce : après un vidage, il
+    n'en existe plus aucune, chaque commerce reçoit les siennes à son arrivée."""
     with patch("builtins.input", return_value=_db_name()):
         call_command("reset_for_launch")
 
-    names = set(ExpenseCategory.objects.values_list("name", flat=True))
-    assert "Catégorie de démo" not in names
-    assert {"Électricité", "Eau", "Autre"} <= names
+    assert not ExpenseCategory.objects.exists()
+
 
 def test_yes_flag_skips_the_interactive_prompt(some_data) -> None:
     with patch("builtins.input") as mocked_input:

@@ -15,12 +15,29 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key-change-me")
-DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() in {"1", "true", "yes"}
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    return value.strip().lower() in {"1", "true", "yes"}
 
-if not DEBUG and SECRET_KEY == "unsafe-development-key-change-me":
+
+# Sûr par défaut : une variable oubliée sur l'hébergeur ne doit jamais ouvrir
+# le mode debug. Le développement local l'active via `.env` (voir
+# `.env.example`).
+DEBUG = _env_bool("DJANGO_DEBUG", False)
+
+_DEV_SECRET_KEY = "unsafe-development-key-change-me"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "").strip()
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY doit être défini explicitement lorsque DJANGO_DEBUG=false."
+        )
+    SECRET_KEY = _DEV_SECRET_KEY
+if not DEBUG and SECRET_KEY == _DEV_SECRET_KEY:
     raise ImproperlyConfigured(
-        "DJANGO_SECRET_KEY doit être défini explicitement lorsque DJANGO_DEBUG=false."
+        "DJANGO_SECRET_KEY ne peut pas être la clé de développement lorsque DJANGO_DEBUG=false."
     )
 
 SENTRY_DSN = os.getenv("SENTRY_DSN", "")
@@ -68,7 +85,8 @@ ALLOWED_HOSTS = [
 ALLOWED_HOSTS.append("healthcheck.railway.app")
 
 INSTALLED_APPS = [
-    "unfold",
+    # Unfold, avec un site d'admin qui exige un commerce actif.
+    "apps.tenancy.admin_config.TenantUnfoldConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -77,6 +95,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "corsheaders",
     "rest_framework",
+    "apps.tenancy",
     "apps.stores",
     "apps.catalog",
     "apps.inventory",
@@ -103,6 +122,18 @@ CASH_DISCREPANCY_CRITICAL_THRESHOLD = Decimal("5000")
 # comme alerte dans le dashboard gérant — signe probable d'un oubli de
 # clôture en fin de service plutôt que d'un service anormalement long.
 STALE_CASH_SESSION_HOURS_THRESHOLD = 12
+
+# Contrôles anti-fraude du caissier (validation par PIN d'un gérant ou du
+# propriétaire). Un gérant ou un propriétaire n'en a jamais besoin pour
+# lui-même.
+# - annulation, retour : dès ce montant ;
+# - retour : au-delà de ce nombre de jours après la vente ;
+# - remise : au-delà de ce taux sur une ligne, ou dès ce montant total.
+APPROVAL_AMOUNT_THRESHOLD = Decimal("5000")
+APPROVAL_RETURN_WINDOW_DAYS = 7
+APPROVAL_MAX_DISCOUNT_RATE = Decimal("0.10")
+# Durée de validité d'une validation, entre le PIN et l'opération.
+APPROVAL_TOKEN_MAX_AGE_SECONDS = 10 * 60
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 
@@ -292,6 +323,14 @@ UNFOLD = {
                 "title": _("Configuration"),
                 "separator": True,
                 "items": [
+                    # Plateforme : un gérant ne doit même pas savoir qu'il
+                    # existe d'autres commerces.
+                    {
+                        "title": _("Organisations"),
+                        "icon": "domain",
+                        "link": reverse_lazy("admin:tenancy_organization_changelist"),
+                        "permission": lambda request: request.user.is_superuser,
+                    },
                     {
                         "title": _("Magasins"),
                         "icon": "store",
@@ -301,6 +340,18 @@ UNFOLD = {
                         "title": _("Utilisateurs"),
                         "icon": "group",
                         "link": reverse_lazy("admin:auth_user_changelist"),
+                        # Propriétaire et plateforme : le gérant ne gère pas
+                        # les comptes.
+                        "permission": lambda request: request.user.has_perm("auth.view_user"),
+                    },
+                    {
+                        "title": _("Mon code PIN"),
+                        "icon": "pin",
+                        "link": reverse_lazy("admin:approval_pin"),
+                        # Propriétaire et gérant : ils valident sur le poste
+                        # des caissiers (la plateforme ne valide rien).
+                        "permission": lambda request: request.user.is_staff
+                        and not request.user.is_superuser,
                     },
                     {
                         "title": _("Groupes"),
@@ -372,6 +423,29 @@ else:
         }
     }
 
+# Cache partagé par les workers gunicorn et persistant aux redémarrages :
+# les compteurs d'échecs de connexion (`apps.accounts.login_guard`) y
+# vivent. La table est créée par `createcachetable` au démarrage.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "lopos_cache",
+    }
+}
+
+# Nombre de proxys de confiance devant Django (Railway : 1). Sert à lire
+# l'adresse du client dans X-Forwarded-For pour le frein de connexion.
+LOGIN_GUARD_TRUSTED_PROXY_COUNT = int(
+    os.getenv("DJANGO_TRUSTED_PROXY_COUNT", "0" if DEBUG else "1")
+)
+
+# Le veto sur les coûts passe avant les permissions de groupe : le membre
+# (« voit les coûts et marges ») a le dernier mot sur le groupe Django.
+AUTHENTICATION_BACKENDS = [
+    "apps.tenancy.backends.CostVisibilityBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -409,8 +483,11 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
     ],
+    # Refus par défaut : toute vue exige un compte membre d'un commerce
+    # actif ; seules l'authentification et le jeton CSRF y échappent.
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
+        "apps.tenancy.permissions.HasActiveTenant",
     ],
 }
 
@@ -423,11 +500,8 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ]
 CSRF_COOKIE_HTTPONLY = False
-CSRF_COOKIE_SECURE = os.getenv("DJANGO_COOKIE_SECURE", "false").lower() in {
-    "1",
-    "true",
-    "yes",
-}
+# Cookies « Secure » dès qu'on n'est plus en debug, sauf refus explicite.
+CSRF_COOKIE_SECURE = _env_bool("DJANGO_COOKIE_SECURE", not DEBUG)
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE
 CSRF_FAILURE_VIEW = "config.csrf.csrf_failure"
 
@@ -465,16 +539,13 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 
-# Durcissement HTTPS optionnel — désactivé par défaut pour ne pas risquer de
-# casser un healthcheck ou un accès direct par IP avant que le domaine et le
-# certificat soient confirmés fonctionnels. À activer une fois le déploiement
-# validé (voir README, section Déploiement).
-SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "false").lower() in {
-    "1",
-    "true",
-    "yes",
-}
-SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "0"))
+# Durcissement HTTPS actif par défaut hors debug. Le healthcheck Railway
+# arrive en HTTP interne : `/healthz/` est exempté de la redirection.
+SECURE_SSL_REDIRECT = _env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
+SECURE_REDIRECT_EXEMPT = [r"^healthz/$"]
+SECURE_HSTS_SECONDS = int(
+    os.getenv("DJANGO_SECURE_HSTS_SECONDS", "0" if DEBUG else "31536000")
+)
 
 # Sans ceci, les erreurs "Bad Request (400)" (ex. DisallowedHost quand
 # ALLOWED_HOSTS ne correspond pas au Host reçu) ne vont qu'à mail_admins par

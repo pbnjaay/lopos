@@ -2,14 +2,13 @@ import { type FormEvent, useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Navigate, useLocation, useNavigate } from "react-router-dom"
 
-import { login } from "../api/auth"
 import { identifyUser } from "../analytics/posthog"
 import { setSentryUser } from "../analytics/sentry"
 import { Button } from "../components/ui/Button"
 import { InlineAlert } from "../components/ui/InlineAlert"
 import { Logo } from "../components/ui/Logo"
 import { RouteLoading } from "../components/ui/RouteState"
-import { currentUserQueryKey, useCurrentUser } from "../features/auth/queries"
+import { currentUserQueryKey, signIn, useCurrentUser } from "../features/auth/queries"
 import { describeErrorShort } from "../utils/errorCopy"
 
 type LocationState = {
@@ -24,7 +23,8 @@ export function LoginPage() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const loginMutation = useMutation({
-    mutationFn: login,
+    // Connexion puis liaison du poste au commerce du compte.
+    mutationFn: signIn,
     onSuccess: (user) => {
       queryClient.setQueryData(currentUserQueryKey, user)
       identifyUser(user)

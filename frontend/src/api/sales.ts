@@ -1,10 +1,13 @@
 import type { PaginatedSales, SaleReceipt, SaleReturn, PaymentMethod } from "../types/api"
 import { apiRequest, buildApiUrl } from "./client"
 
-export function cancelSale(id: string): Promise<SaleReceipt> {
+export function cancelSale(
+  id: string,
+  input: { reason: string; approvalToken?: string | null },
+): Promise<SaleReceipt> {
   return apiRequest<SaleReceipt>(`sales/${encodeURIComponent(id)}/cancel/`, {
     method: "POST",
-    body: {},
+    body: { reason: input.reason, approval_token: input.approvalToken ?? null },
   })
 }
 
@@ -39,6 +42,8 @@ export function createSaleReturn(input: {
   /** Null quand tout le retour est déduit du cahier (aucun argent rendu). */
   payment_method: PaymentMethod | null;
   items: Array<{ sale_item_id: string; quantity: string; restock: boolean }>
+  /** Validation d'un gérant, quand le retour l'exige. */
+  approval_token?: string | null
 }): Promise<SaleReturn> {
   return apiRequest<SaleReturn>("returns/", { method: "POST", body: input })
 }

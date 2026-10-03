@@ -25,6 +25,7 @@ services:
       POSTGRES_PORT: 5432
     command: >-
       sh -c "python backend/manage.py migrate &&
+      python backend/manage.py createcachetable &&
       python backend/manage.py runserver 0.0.0.0:8000"
     volumes:
       - ./backend:/app/backend

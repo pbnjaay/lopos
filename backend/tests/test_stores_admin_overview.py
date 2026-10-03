@@ -1,6 +1,8 @@
 from decimal import Decimal
 
 import pytest
+from django.contrib.auth import get_user_model
+from django.test import RequestFactory
 from django.contrib import admin
 
 from apps.catalog.models import Product
@@ -10,6 +12,7 @@ from apps.stores.models import CashRegister, Store
 
 
 pytestmark = pytest.mark.django_db
+User = get_user_model()
 
 
 def test_store_overview_counts_registers_and_stocked_products() -> None:
@@ -25,7 +28,9 @@ def test_store_overview_counts_registers_and_stocked_products() -> None:
     Stock.objects.create(store=store, product=out_of_stock, quantity=0)
 
     model_admin = StoreAdmin(Store, admin.site)
-    obj = model_admin.get_queryset(request=None).get(pk=store.pk)
+    request = RequestFactory().get("/")
+    request.user = User.objects.create_superuser(username="plateforme")
+    obj = model_admin.get_queryset(request).get(pk=store.pk)
 
     assert model_admin.cash_register_count(obj) == 2
     assert model_admin.stocked_product_count(obj) == 2

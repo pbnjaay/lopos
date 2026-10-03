@@ -3,6 +3,8 @@ from uuid import UUID
 from django.db.models import QuerySet
 
 from apps.cash.models import CashSession
+from apps.tenancy.context import resolve_tenant
+from apps.tenancy.scoping import scope
 
 from .models import Sale, SaleReturn
 
@@ -10,10 +12,12 @@ from .models import Sale, SaleReturn
 def get_pos_cash_session(
     *, user, cash_session_id: UUID | None = None
 ) -> CashSession | None:
-    """Return the caller's open POS session, without any staff bypass."""
+    """Return the caller's open POS session, without any staff bypass, in a
+    store the caller still has access to."""
 
     queryset = (
-        CashSession.objects.select_related("cash_register__store")
+        scope(CashSession.objects, resolve_tenant(user))
+        .select_related("cash_register__store")
         .filter(
             cashier=user,
             status=CashSession.Status.OPEN,

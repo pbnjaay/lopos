@@ -5,6 +5,7 @@ from typing import NamedTuple, TypedDict
 from uuid import UUID, uuid4
 
 from django.db import models, transaction
+from django.utils import timezone
 
 from apps.cash.exceptions import CashSessionClosed
 from apps.observability.sentry_context import tag_sale_scope
@@ -21,6 +22,9 @@ from apps.customers.services import (
 )
 from apps.inventory.models import InventoryMovement, Stock
 from apps.inventory.services import apply_inbound_cost
+from apps.stores.access import user_can_manage_store
+
+from . import approvals
 
 from .exceptions import (
     CustomerNotFound,
@@ -62,6 +66,8 @@ class _LineSpec(NamedTuple):
     unit_price: Decimal
     catalog_unit_price: Decimal
     product_name: str
+    # Hors ligne : prix serveur quand il diffère du prix catalogue du poste.
+    server_catalog_unit_price: Decimal | None = None
 
 
 def _normalize_quantity(value, *, product: Product | None = None) -> Decimal:
@@ -367,12 +373,8 @@ def _execute_sale(
                 )
             stock_discrepancy = True
 
-    line_values = [
-        (spec.product, spec.quantity, spec.unit_price, spec.catalog_unit_price, spec.product_name)
-        for spec in line_specs
-    ]
     subtotal = sum(
-        (_money(unit_price * quantity) for _, quantity, unit_price, _, _ in line_values),
+        (_money(spec.unit_price * spec.quantity) for spec in line_specs),
         Decimal("0.00"),
     )
     discount = Decimal("0.00")
@@ -409,16 +411,17 @@ def _execute_sale(
         [
             SaleItem(
                 sale=sale,
-                product=product,
-                product_name=product_name,
-                sale_unit=product.sale_unit,
-                catalog_unit_price=catalog_unit_price,
-                unit_price=unit_price,
-                quantity=quantity,
-                line_total=_money(unit_price * quantity),
-                unit_cost=unit_costs[product.id],
+                product=spec.product,
+                product_name=spec.product_name,
+                sale_unit=spec.product.sale_unit,
+                catalog_unit_price=spec.catalog_unit_price,
+                server_catalog_unit_price=spec.server_catalog_unit_price,
+                unit_price=spec.unit_price,
+                quantity=spec.quantity,
+                line_total=_money(spec.unit_price * spec.quantity),
+                unit_cost=unit_costs[spec.product.id],
             )
-            for product, quantity, unit_price, catalog_unit_price, product_name in line_values
+            for spec in line_specs
         ]
     )
 
@@ -466,6 +469,21 @@ def _execute_sale(
     return sale, stock_discrepancy
 
 
+def _catalog_products(session: CashSession, product_ids) -> dict[UUID, Product]:
+    """Les produits du catalogue du commerce de la caisse. Un produit d'un
+    autre commerce est introuvable, exactement comme un produit supprimé."""
+    return {
+        product.id: product
+        # Jointure plutôt que select_related sur la session verrouillée : le
+        # FOR UPDATE verrouillerait aussi la ligne du magasin, et toutes ses
+        # caisses vendraient l'une après l'autre.
+        for product in Product.objects.filter(
+            id__in=product_ids,
+            organization__stores=session.cash_register.store_id,
+        ).order_by("id")
+    }
+
+
 @transaction.atomic
 def complete_sale(
     *,
@@ -486,10 +504,7 @@ def complete_sale(
     if locked_session.status != CashSession.Status.OPEN:
         raise CashSessionClosed("La session de caisse est fermée.")
 
-    products = {
-        product.id: product
-        for product in Product.objects.filter(id__in=product_ids).order_by("id")
-    }
+    products = _catalog_products(locked_session, product_ids)
     for product_id in product_ids:
         product = products.get(product_id)
         if product is None:
@@ -520,6 +535,30 @@ def complete_sale(
         allow_negative_stock=False,
     )
     return sale
+
+
+def _offline_line_spec(
+    product: Product,
+    quantity: Decimal,
+    unit_price: Decimal,
+    product_name: str,
+    posted_catalog_price: Decimal | None,
+) -> _LineSpec:
+    """Le prix catalogue d'une vente hors ligne reste celui que le poste
+    affichait au moment de la vente (le catalogue a pu changer pendant la
+    coupure). Mais le poste n'est pas une source de confiance : un prix
+    catalogue qui ne correspond pas à celui du serveur est gardé à côté,
+    pour revue, plutôt que cru sur parole."""
+    server_price = product.selling_price
+    catalog_price = posted_catalog_price or server_price
+    return _LineSpec(
+        product=product,
+        quantity=quantity,
+        unit_price=unit_price,
+        catalog_unit_price=catalog_price,
+        product_name=product_name,
+        server_catalog_unit_price=server_price if catalog_price != server_price else None,
+    )
 
 
 @transaction.atomic
@@ -566,23 +605,14 @@ def complete_offline_sale(
             "La session de caisse a été clôturée avant cette vente."
         )
 
-    products = {
-        product.id: product
-        for product in Product.objects.filter(id__in=product_ids).order_by("id")
-    }
+    products = _catalog_products(locked_session, product_ids)
     for product_id in product_ids:
         if product_id not in products:
             raise ProductNotFound(product_id)
         _normalize_quantity(aggregated[product_id][0], product=products[product_id])
 
     line_specs = [
-        _LineSpec(
-            product=products[product_id],
-            quantity=aggregated[product_id][0],
-            unit_price=aggregated[product_id][1],
-            catalog_unit_price=aggregated[product_id][3] or products[product_id].selling_price,
-            product_name=aggregated[product_id][2],
-        )
+        _offline_line_spec(products[product_id], *aggregated[product_id])
         for product_id in product_ids
     ]
 
@@ -598,8 +628,13 @@ def complete_offline_sale(
     )
 
 
+CANCELLATION_REASON_MAX_LENGTH = 500
+
+
 @transaction.atomic
-def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
+def cancel_sale(
+    *, sale_id: UUID, cancelled_by, reason: str, approval_token: str | None = None
+) -> Sale:
     """Annule une vente terminée et restitue son stock.
 
     Pensé pour l'erreur repérée tout de suite (mauvais article scanné, vente
@@ -608,10 +643,18 @@ def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
     automatiquement : seuls le statut et le stock sont corrigés, l'argent (le
     cas échéant) reste à régler par le caissier lui-même.
 
-    Portée : le caissier propriétaire tant que sa session est encore ouverte,
-    ou un membre du staff sans restriction — même logique de délégation que
-    le reste de l'admin (cf. stores/views.py `current_session`).
+    Portée : le caissier de la vente tant que sa session est ouverte, ou un
+    propriétaire / gérant du magasin. Jamais sur une session clôturée, même
+    pour un gérant : son rapport Z est arrêté, c'est un retour qu'il faut.
+    Motif obligatoire ; au-delà du seuil (`approvals`), un caissier doit
+    présenter la validation d'un gérant.
     """
+    reason = (reason or "").strip()
+    if not reason:
+        raise InvalidCancellation("Indiquez le motif de l'annulation.")
+    if len(reason) > CANCELLATION_REASON_MAX_LENGTH:
+        raise InvalidCancellation("Le motif d'annulation est trop long.")
+
     sale = (
         Sale.objects.select_for_update()
         .select_related("cash_session__cash_register", "cashier")
@@ -628,13 +671,21 @@ def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
             "Cette vente a déjà fait l'objet d'un retour : faites un retour pour le reste."
         )
 
-    if not cancelled_by.is_staff:
+    if sale.cash_session.status != CashSession.Status.OPEN:
+        raise InvalidCancellation(
+            "La session de caisse de cette vente est clôturée : faites un retour."
+        )
+    if not user_can_manage_store(cancelled_by, sale.cash_session.cash_register.store_id):
         if sale.cashier_id != cancelled_by.pk:
             raise InvalidCancellation("Cette vente appartient à un autre caissier.")
-        if sale.cash_session.status != CashSession.Status.OPEN:
-            raise InvalidCancellation(
-                "La session de caisse de cette vente est fermée."
-            )
+    approved_by = approvals.require(
+        cancelled_by,
+        cash_session=sale.cash_session,
+        action=approvals.Action.CANCEL_SALE,
+        sale_id=sale.pk,
+        token=approval_token,
+        needed=approvals.cancellation_needs_approval(sale),
+    )
 
     if sale.credit_amount:
         # La dette née de cette vente disparaît avec elle, par une écriture
@@ -685,7 +736,19 @@ def cancel_sale(*, sale_id: UUID, cancelled_by) -> Sale:
     )
 
     sale.status = Sale.Status.CANCELLED
-    sale.save(update_fields=("status",))
+    sale.cancelled_at = timezone.now()
+    sale.cancelled_by = cancelled_by
+    sale.cancellation_reason = reason
+    sale.cancellation_approved_by = approved_by
+    sale.save(
+        update_fields=(
+            "status",
+            "cancelled_at",
+            "cancelled_by",
+            "cancellation_reason",
+            "cancellation_approved_by",
+        )
+    )
     return sale
 
 
@@ -717,7 +780,7 @@ def _validated_idempotent_return(
 def create_sale_return(
     *, original_sale: Sale, cash_session: CashSession, created_by,
     items: Sequence[ReturnItemInput], idempotency_key: UUID,
-    payment_method: str | None = None,
+    payment_method: str | None = None, approval_token: str | None = None,
 ) -> SaleReturn:
     """Retour marchandise : stock remis, montant rendu au client.
 
@@ -799,6 +862,16 @@ def create_sale_return(
     if sale.credit_amount and sale.customer_id is not None:
         customer = Customer.objects.select_for_update().get(pk=sale.customer_id)
         credit_reduction = min(total, reducible_credit(sale, customer=customer))
+    # Au-delà du seuil, ou sur une vente de plus de quelques jours, un
+    # caissier présente la validation d'un gérant.
+    approved_by = approvals.require(
+        created_by,
+        cash_session=locked_session,
+        action=approvals.Action.SALE_RETURN,
+        sale_id=sale.pk,
+        token=approval_token,
+        needed=approvals.return_needs_approval(sale=sale, refund_total=total),
+    )
     money_refund = total - credit_reduction
     if money_refund > 0:
         if payment_method not in Payment.Method.values:
@@ -819,6 +892,7 @@ def create_sale_return(
         original_sale=sale, cash_session=locked_session, created_by=created_by,
         total_refund=total, credit_reduction=credit_reduction,
         payment_method=refund_method, idempotency_key=idempotency_key,
+        approved_by=approved_by,
     )
     if credit_reduction > 0:
         record_return_credit(

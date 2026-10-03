@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django import forms
+from django.conf import settings
 from django.contrib import admin
 from django.db.models import QuerySet
 from django.http import HttpRequest
@@ -10,6 +11,9 @@ from unfold.admin import ModelAdmin, TabularInline
 from apps.dashboard.admin_columns import money_column
 from apps.stores.admin_mixins import SingleStoreColumnsMixin
 from apps.dashboard.formatting import format_fcfa
+from apps.tenancy.admin_mixins import TenantAdminMixin, is_platform_admin
+from apps.tenancy.context import get_tenant
+from apps.tenancy.models import OrganizationMembership
 
 
 def _signed_fcfa(amount: Decimal) -> str:
@@ -68,7 +72,7 @@ class CustomerAdminForm(forms.ModelForm):
             raise forms.ValidationError(str(exc)) from exc
 
 
-class LedgerEntryInline(TabularInline):
+class LedgerEntryInline(TenantAdminMixin, TabularInline):
     model = CustomerLedgerEntry
     fk_name = "customer"
     extra = 0
@@ -95,7 +99,7 @@ class LedgerEntryInline(TabularInline):
 
 
 @admin.register(Customer)
-class CustomerAdmin(SingleStoreColumnsMixin, ModelAdmin):
+class CustomerAdmin(SingleStoreColumnsMixin, TenantAdminMixin, ModelAdmin):
     form = CustomerAdminForm
     list_display = ("name", "phone", "store", "balance_display", "is_active")
     list_filter = ("store", CustomerBalanceFilter, "is_active")
@@ -139,6 +143,9 @@ class ManualLedgerEntryForm(forms.ModelForm):
     appelé à l'enregistrement refait les mêmes contrôles sous verrou.
     """
 
+    # Posé par l'admin selon le compte (propriétaire ou plateforme).
+    can_reduce_large_debts = False
+
     entry_type = forms.ChoiceField(
         label="type",
         choices=(
@@ -174,6 +181,17 @@ class ManualLedgerEntryForm(forms.ModelForm):
         elif entry_type == CustomerLedgerEntry.EntryType.ADJUSTMENT:
             if not reason:
                 self.add_error("reason", "Le motif de l’ajustement est obligatoire.")
+            # Effacer une grosse dette est réservé au propriétaire : un gérant
+            # ne peut pas faire disparaître seul l'argent qu'on doit au commerce.
+            if (
+                amount <= -settings.APPROVAL_AMOUNT_THRESHOLD
+                and not self.can_reduce_large_debts
+            ):
+                self.add_error(
+                    "amount",
+                    f"Réduire une dette de {format_fcfa(settings.APPROVAL_AMOUNT_THRESHOLD)} "
+                    "ou plus est réservé au propriétaire.",
+                )
             balance = customer_balance(customer)
             if balance + amount < 0:
                 self.add_error(
@@ -185,7 +203,7 @@ class ManualLedgerEntryForm(forms.ModelForm):
 
 
 @admin.register(CustomerLedgerEntry)
-class CustomerLedgerEntryAdmin(SingleStoreColumnsMixin, ModelAdmin):
+class CustomerLedgerEntryAdmin(SingleStoreColumnsMixin, TenantAdminMixin, ModelAdmin):
     list_display = (
         "occurred_at",
         "customer",
@@ -222,7 +240,15 @@ class CustomerLedgerEntryAdmin(SingleStoreColumnsMixin, ModelAdmin):
 
     def get_form(self, request, obj=None, change=False, **kwargs):
         if obj is None:
-            kwargs["form"] = ManualLedgerEntryForm
+            tenant = get_tenant(request)
+            allowed = is_platform_admin(request) or (
+                tenant is not None and tenant.role == OrganizationMembership.Role.OWNER
+            )
+            kwargs["form"] = type(
+                "ManualLedgerEntryForm",
+                (ManualLedgerEntryForm,),
+                {"can_reduce_large_debts": allowed},
+            )
         return super().get_form(request, obj, change=change, **kwargs)
 
     def get_readonly_fields(self, request, obj=None):
@@ -265,7 +291,7 @@ class CustomerLedgerEntryAdmin(SingleStoreColumnsMixin, ModelAdmin):
 
 
 @admin.register(CustomerPayment)
-class CustomerPaymentAdmin(ModelAdmin):
+class CustomerPaymentAdmin(TenantAdminMixin, ModelAdmin):
     """Remboursements encaissés en caisse : consultables, jamais modifiables
     (l'argent est déjà dans la caisse et l'écriture du cahier est immuable)."""
 

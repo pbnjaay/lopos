@@ -1,3 +1,4 @@
+import os
 from decimal import Decimal
 
 from django.conf import settings
@@ -12,6 +13,8 @@ from apps.catalog.models import Product, format_product_name
 from apps.inventory.models import Stock
 from apps.inventory.services import receive_stock
 from apps.stores.models import CashRegister, Store, StoreAssignment
+from apps.tenancy.models import Organization, OrganizationMembership
+from apps.tenancy.roles import sync_member_access
 
 
 User = get_user_model()
@@ -58,7 +61,7 @@ DEMO_PRODUCTS = [
 class Command(BaseCommand):
     help = (
         "Peuple la base avec des données de démonstration "
-        "(magasin, caisse, produits, stock, caissier)."
+        "(commerce, magasin, caisse, produits, stock, propriétaire, caissier)."
     )
 
     def add_arguments(self, parser) -> None:
@@ -71,11 +74,31 @@ class Command(BaseCommand):
     def handle(self, *args, **options) -> None:
         if not settings.DEBUG:
             raise CommandError("seed_demo est réservé aux environnements DEBUG.")
+        # Deuxième verrou, indépendant de DEBUG : une base hébergée (fournie
+        # par DATABASE_URL, comme sur Railway) ne reçoit jamais les comptes
+        # de démo et leurs mots de passe connus.
+        if os.getenv("DATABASE_URL"):
+            raise CommandError(
+                "seed_demo refuse une base fournie par DATABASE_URL (base hébergée)."
+            )
 
         with transaction.atomic():
+            # Le commerce déjà présent (pilote migré, démo précédente) plutôt
+            # qu'un second : la démo doit rester à un seul commerce.
+            organization = Organization.objects.sole()
+            organization_created = False
+            if organization is None:
+                organization, organization_created = Organization.objects.get_or_create(
+                    slug="demo", defaults={"name": "Commerce démo"}
+                )
+            self._report("Commerce", organization.name, organization_created)
+
             store, store_created = Store.objects.get_or_create(
                 name="Supérette Louga Centre",
-                defaults={"address": "Avenue Léopold Sédar Senghor, Louga"},
+                defaults={
+                    "address": "Avenue Léopold Sédar Senghor, Louga",
+                    "organization": organization,
+                },
             )
             self._report("Magasin", store.name, store_created)
 
@@ -107,6 +130,24 @@ class Command(BaseCommand):
                 assignment.is_active = True
                 assignment.save(update_fields=("is_active", "updated_at"))
             self._report("Affectation", f"{cashier.username} → {store.name}", assignment_created)
+            self._ensure_member(organization, cashier, OrganizationMembership.Role.CASHIER)
+
+            # Le super-utilisateur administre la plateforme mais ne vend pas :
+            # la caisse se teste avec ce compte propriétaire.
+            owner, owner_created = User.objects.get_or_create(
+                username="proprietaire",
+                defaults={"first_name": "Propriétaire", "last_name": "Démo", "is_staff": True},
+            )
+            if owner_created:
+                owner.set_password("password123")
+                owner.save(update_fields=["password"])
+            self._report_user(
+                "Propriétaire",
+                owner.username,
+                owner_created,
+                initial_password="password123",
+            )
+            self._ensure_member(organization, owner, OrganizationMembership.Role.OWNER)
 
             admin, admin_created = User.objects.get_or_create(
                 username="admin",
@@ -143,6 +184,7 @@ class Command(BaseCommand):
                 product, product_created = Product.objects.get_or_create(
                     name=expected_name,
                     defaults={
+                        "organization": organization,
                         "barcode": item["barcode"],
                         "selling_price": item["selling_price"],
                         # Dernier prix d'achat : le stock de démo entre à ce
@@ -183,6 +225,15 @@ class Command(BaseCommand):
                     self.stdout.write("  = Une session est déjà ouverte sur cette caisse.")
 
         self.stdout.write(self.style.SUCCESS("\nSeed terminé."))
+
+    def _ensure_member(self, organization, user, role: str) -> None:
+        membership, created = OrganizationMembership.objects.get_or_create(
+            user=user,
+            organization=organization,
+            defaults={"role": role},
+        )
+        self._report("Membre", f"{user.username} ({membership.get_role_display()})", created)
+        sync_member_access(user)
 
     def _report(self, label: str, name: str, created: bool) -> None:
         marker = "+" if created else "="

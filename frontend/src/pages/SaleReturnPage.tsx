@@ -19,11 +19,14 @@ import {
   saleReceiptQueryKey,
   saleReturnReceiptQueryKey,
 } from "../features/sales/queries";
+import { ManagerApprovalDialog } from "../features/approvals/ManagerApprovalDialog";
+import { isApprovalRequiredError } from "../features/approvals/policy";
 import { readSaleOrigin, withSaleOrigin } from "../features/sales/origin";
 import { describeSettlement } from "../features/sales/paymentLabels";
 import type { PaymentMethod, SaleReceipt, SaleReturn } from "../types/api";
+import { formatDateTime } from "../utils/date";
 import { describeErrorShort } from "../utils/errorCopy";
-import { formatBackendMoney } from "../utils/money";
+import { formatBackendMoney, formatMoney } from "../utils/money";
 import {
   backendQuantityToMilli,
   formatQuantity,
@@ -58,6 +61,7 @@ export function SaleReturnPage() {
   );
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [needsApproval, setNeedsApproval] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [completedReturn, setCompletedReturn] = useState<SaleReturn | null>(
     null,
@@ -150,7 +154,7 @@ export function SaleReturnPage() {
     );
   }
 
-  async function submit() {
+  async function submit(approvalToken?: string) {
     if (
       !sale ||
       !ownSession ||
@@ -176,6 +180,7 @@ export function SaleReturnPage() {
           quantity: milliToBackendQuantity(milli),
           restock: restocks[item.id] ?? true,
         })),
+        approval_token: approvalToken ?? null,
       });
 
       queryClient.setQueryData(
@@ -199,7 +204,14 @@ export function SaleReturnPage() {
         void queryClient.invalidateQueries({ queryKey: ["customers"] });
       }
     } catch (caught) {
-      setError(describeErrorShort(caught, "retour"));
+      // Au-delà du seuil, ou sur une vente ancienne : un gérant valide sur
+      // ce poste, puis le même retour (même clé d'idempotence) repart.
+      if (!approvalToken && isApprovalRequiredError(caught)) {
+        setIsConfirming(false);
+        setNeedsApproval(true);
+      } else {
+        setError(describeErrorShort(caught, "retour"));
+      }
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -526,6 +538,19 @@ export function SaleReturnPage() {
             </DialogFooter>
           </DialogBody>
         </Dialog>
+      ) : null}
+      {needsApproval && sale && ownSession ? (
+        <ManagerApprovalDialog
+          cashSessionId={ownSession.id}
+          action="SALE_RETURN"
+          saleId={sale.id}
+          summary={`Retour de ${formatMoney(total)} sur la vente du ${formatDateTime(sale.created_at)}.`}
+          onApproved={(token) => {
+            setNeedsApproval(false);
+            void submit(token);
+          }}
+          onClose={() => setNeedsApproval(false)}
+        />
       ) : null}
     </main>
   );

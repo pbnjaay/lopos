@@ -22,6 +22,7 @@ from apps.dashboard.admin_columns import quantity_column, status_badge
 from apps.dashboard.formatting import format_fcfa, format_quantity
 from apps.stores.admin_mixins import SingleStoreColumnsMixin
 from apps.stores.models import Store
+from apps.tenancy.admin_mixins import TenantAdminMixin, visible_queryset
 
 from .exceptions import InvalidStockCost
 from .models import InventoryMovement, Stock, StockCostChange, StockValuation
@@ -68,7 +69,7 @@ class StockStatusFilter(admin.SimpleListFilter):
 
 
 @admin.register(Stock)
-class StockAdmin(SingleStoreColumnsMixin, ModelAdmin):
+class StockAdmin(SingleStoreColumnsMixin, TenantAdminMixin, ModelAdmin):
     list_display = ("product", "store", "quantity_display", "status_label", "updated_at")
     list_filter = ("store", StockStatusFilter)
     list_select_related = ("product", "store")
@@ -101,7 +102,7 @@ class StockAdmin(SingleStoreColumnsMixin, ModelAdmin):
 
 
 @admin.register(InventoryMovement)
-class InventoryMovementAdmin(SingleStoreColumnsMixin, ModelAdmin):
+class InventoryMovementAdmin(SingleStoreColumnsMixin, TenantAdminMixin, ModelAdmin):
     list_display = (
         "created_at",
         "movement_type",
@@ -232,7 +233,7 @@ class SetStockCostForm(forms.Form):
 
 
 @admin.register(StockValuation)
-class StockValuationAdmin(SingleStoreColumnsMixin, ModelAdmin):
+class StockValuationAdmin(SingleStoreColumnsMixin, TenantAdminMixin, ModelAdmin):
     """Ce que vaut la marchandise en rayon, produit par produit.
 
     Lecture seule : le coût moyen ne change que par une réception ou par
@@ -307,7 +308,9 @@ class StockValuationAdmin(SingleStoreColumnsMixin, ModelAdmin):
         # Les indicateurs suivent exactement la liste filtrée (magasin,
         # recherche, état) — une seule agrégation.
         store_id = request.GET.get("store__id__exact")
-        store = Store.objects.filter(pk=store_id).first() if store_id else None
+        store = (
+            visible_queryset(Store, request).filter(pk=store_id).first() if store_id else None
+        )
         base_url = reverse("admin:inventory_stockvaluation_changelist")
         store_query = {"store__id__exact": store.pk} if store else {}
         context.update(
@@ -363,7 +366,9 @@ class StockValuationAdmin(SingleStoreColumnsMixin, ModelAdmin):
     def set_cost_action(self, request: HttpRequest, object_id: str) -> HttpResponse:
         if not request.user.has_perm(SET_STOCK_COST_PERMISSION):
             raise PermissionDenied
-        stock = get_object_or_404(Stock.objects.select_related("product", "store"), pk=object_id)
+        stock = get_object_or_404(
+            visible_queryset(Stock, request).select_related("product", "store"), pk=object_id
+        )
         back_url = reverse("admin:inventory_stockvaluation_changelist")
 
         initial_cost = stock.average_unit_cost or stock.product.purchase_price or None
@@ -414,7 +419,7 @@ class StockValuationAdmin(SingleStoreColumnsMixin, ModelAdmin):
 
 
 @admin.register(StockCostChange)
-class StockCostChangeAdmin(SingleStoreColumnsMixin, ModelAdmin):
+class StockCostChangeAdmin(SingleStoreColumnsMixin, TenantAdminMixin, ModelAdmin):
     """Journal des coûts définis à la main : consultable, jamais modifiable."""
 
     list_display = (

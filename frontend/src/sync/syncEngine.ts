@@ -13,6 +13,7 @@ import {
   markLocalSaleSynced,
   requeueRetryableConflicts,
 } from "../db/sales"
+import { canPushSale, getAuthenticatedUser } from "../db/tenancy"
 import { getOrCreateTerminalId } from "../db/terminal"
 import type { LocalSale } from "../db/types"
 import { withInterTabSyncLock } from "../db/syncLock"
@@ -64,6 +65,7 @@ function toSyncEvent(sale: LocalSale): SyncEvent {
             credit_amount: toBackendMoney(sale.creditAmount ?? 0),
           }
         : {}),
+      ...(sale.approvalToken ? { approval_token: sale.approvalToken } : {}),
     },
   }
 }
@@ -123,9 +125,14 @@ async function runSync(): Promise<SyncOutcome> {
   // deux sens. Si le réseau est réellement mort, le push échoue vite en
   // NetworkError et le backoff s'en charge ; s'il est vivant malgré un
   // navigateur qui se croit hors ligne, la synchronisation progresse.
+  // Personne de connecté (déconnexion, session refusée) : rien ne quitte le
+  // poste. Sinon, seules les ventes que ce compte peut envoyer partent — les
+  // autres attendent un compte de leur commerce et de leur magasin.
+  const user = await getAuthenticatedUser()
+  if (!user) return EMPTY_OUTCOME
   // Conflits d'avant la règle de caisse partagée : ils repartent avec ce passage.
   await requeueRetryableConflicts()
-  const pending = await listPendingLocalSales()
+  const pending = (await listPendingLocalSales()).filter((sale) => canPushSale(sale, user))
   if (pending.length === 0) {
     consecutiveFailures = 0
     return EMPTY_OUTCOME

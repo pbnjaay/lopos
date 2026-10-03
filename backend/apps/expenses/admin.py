@@ -14,6 +14,8 @@ from apps.cash.models import CashSession
 from apps.dashboard.admin_columns import status_badge
 from apps.dashboard.formatting import format_fcfa
 from apps.stores.admin_mixins import SingleStoreColumnsMixin
+from apps.tenancy.admin_mixins import TenantAdminMixin, is_platform_admin, visible_queryset
+from apps.tenancy.context import get_tenant
 
 from .exceptions import (
     ExpenseAlreadyCancelled,
@@ -65,13 +67,65 @@ def _expense_card(expense: Expense) -> dict:
     }
 
 
+class ExpenseCategoryAdminForm(forms.ModelForm):
+    # Commerce de la catégorie, posé par l'admin quand le champ n'est pas
+    # dans le formulaire : le nom n'est unique que dans ce commerce.
+    organization_scope = None
+
+    class Meta:
+        model = ExpenseCategory
+        fields = "__all__"
+
+    def clean_name(self):
+        name = self.cleaned_data.get("name")
+        organization = self.cleaned_data.get("organization") or self.organization_scope
+        if (
+            name
+            and organization is not None
+            and ExpenseCategory.objects.filter(organization=organization, name=name)
+            .exclude(pk=self.instance.pk)
+            .exists()
+        ):
+            raise forms.ValidationError("Une catégorie porte déjà ce nom.")
+        return name
+
+
 @admin.register(ExpenseCategory)
-class ExpenseCategoryAdmin(ModelAdmin):
+class ExpenseCategoryAdmin(TenantAdminMixin, ModelAdmin):
+    form = ExpenseCategoryAdminForm
     list_display = ("name", "requires_description", "is_active", "sort_order")
     list_editable = ("sort_order",)
     list_filter = ("is_active",)
     search_fields = ("name",)
     fields = ("name", "requires_description", "is_active", "sort_order")
+
+    def get_fields(self, request, obj=None):
+        # La plateforme choisit le commerce ; un commerce crée chez lui.
+        if is_platform_admin(request) and obj is None:
+            return ("organization", *self.fields)
+        return self.fields
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        tenant = get_tenant(request)
+
+        class ScopedCategoryForm(form):
+            organization_scope = obj.organization if obj is not None else (
+                tenant.organization if tenant else None
+            )
+
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                # Plateforme : une catégorie appartient toujours à un commerce.
+                if "organization" in self.fields:
+                    self.fields["organization"].required = True
+
+        return ScopedCategoryForm
+
+    def save_model(self, request, obj: ExpenseCategory, form, change: bool) -> None:
+        if not change and not is_platform_admin(request):
+            obj.organization = get_tenant(request).organization
+        super().save_model(request, obj, form, change)
 
     def has_delete_permission(self, request, obj=None) -> bool:
         # Une catégorie se désactive : des dépenses y restent rattachées.
@@ -87,7 +141,7 @@ class CancelExpenseForm(forms.Form):
 
 
 @admin.register(Expense)
-class ExpenseAdmin(SingleStoreColumnsMixin, ModelAdmin):
+class ExpenseAdmin(SingleStoreColumnsMixin, TenantAdminMixin, ModelAdmin):
     """Dépenses saisies en caisse : consultables, jamais modifiables. Seule
     l'annulation (avec motif) est possible, tant que la session est ouverte."""
 
@@ -165,7 +219,7 @@ class ExpenseAdmin(SingleStoreColumnsMixin, ModelAdmin):
         if object_id is None:
             return True
         # Le bouton n'apparaît que si l'annulation peut réussir.
-        return Expense.objects.filter(
+        return visible_queryset(Expense, request).filter(
             pk=object_id, status=Expense.Status.POSTED
         ).exclude(cash_session__status=CashSession.Status.CLOSED).exists()
 
@@ -176,7 +230,9 @@ class ExpenseAdmin(SingleStoreColumnsMixin, ModelAdmin):
         permissions=["cancel"],
     )
     def cancel_expense_action(self, request: HttpRequest, object_id: str) -> HttpResponse:
-        expense = get_object_or_404(Expense.objects.select_related("category"), pk=object_id)
+        expense = get_object_or_404(
+            self.get_queryset(request).select_related("category"), pk=object_id
+        )
         if not request.user.has_perm("expenses.cancel_expense"):
             raise PermissionDenied
         back_url = reverse("admin:expenses_expense_change", args=[expense.pk])

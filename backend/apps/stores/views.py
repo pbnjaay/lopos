@@ -1,5 +1,7 @@
+from uuid import UUID
+
 from django.shortcuts import get_object_or_404
-from rest_framework import mixins, status, viewsets
+from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -8,11 +10,14 @@ from apps.cash.serializers import CashSessionSerializer
 
 from .models import CashRegister, Store
 from .serializers import CashRegisterSerializer, StoreSerializer
-from .access import cash_registers_accessible_to, stores_accessible_to
+from .access import (
+    cash_registers_accessible_to,
+    stores_accessible_to,
+    user_can_manage_store,
+)
 
 
 class StoreViewSet(
-    mixins.CreateModelMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet,
@@ -25,7 +30,6 @@ class StoreViewSet(
 
 
 class CashRegisterViewSet(
-    mixins.CreateModelMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet,
@@ -36,7 +40,14 @@ class CashRegisterViewSet(
     def get_queryset(self):
         queryset = cash_registers_accessible_to(self.request.user)
         store_id = self.request.query_params.get("store_id")
-        return queryset.filter(store_id=store_id) if store_id else queryset
+        if not store_id:
+            return queryset
+        try:
+            return queryset.filter(store_id=UUID(store_id))
+        except ValueError as exc:
+            raise serializers.ValidationError(
+                {"store_id": "Identifiant de magasin invalide."}
+            ) from exc
 
     @action(detail=True, methods=("get",), url_path="current-session")
     def current_session(self, request, pk=None) -> Response:
@@ -46,7 +57,9 @@ class CashRegisterViewSet(
             cash_register=cash_register,
             status=CashSession.Status.OPEN,
         )
-        if session.cashier_id != request.user.pk and not request.user.is_staff:
+        if session.cashier_id != request.user.pk and not user_can_manage_store(
+            request.user, cash_register.store_id
+        ):
             return Response(
                 {
                     "code": "CASH_SESSION_NOT_OWNED",

@@ -5,7 +5,9 @@ from rest_framework import serializers
 from apps.cash.models import CashSession
 
 from apps.customers.services import reducible_credit
+from apps.tenancy.fields import TenantPrimaryKeyRelatedField
 
+from . import approvals
 from .models import Payment, Sale, SaleItem, SaleReturn, SaleReturnItem
 
 
@@ -35,7 +37,7 @@ class PaymentInputSerializer(serializers.Serializer):
 
 
 class CompleteSaleSerializer(serializers.Serializer):
-    cash_session_id = serializers.PrimaryKeyRelatedField(
+    cash_session_id = TenantPrimaryKeyRelatedField(
         source="cash_session",
         queryset=CashSession.objects.all(),
     )
@@ -123,6 +125,8 @@ class SaleSerializer(serializers.ModelSerializer):
             "credit_reducible",
             "customer",
             "items",
+            "cancelled_at",
+            "cancellation_reason",
         )
 
     def get_store(self, sale: Sale) -> dict:
@@ -177,8 +181,8 @@ class SaleReturnItemInputSerializer(serializers.Serializer):
 
 
 class CreateSaleReturnSerializer(serializers.Serializer):
-    sale_id = serializers.PrimaryKeyRelatedField(source="original_sale", queryset=Sale.objects.all())
-    cash_session_id = serializers.PrimaryKeyRelatedField(source="cash_session", queryset=CashSession.objects.all())
+    sale_id = TenantPrimaryKeyRelatedField(source="original_sale", queryset=Sale.objects.all())
+    cash_session_id = TenantPrimaryKeyRelatedField(source="cash_session", queryset=CashSession.objects.all())
     idempotency_key = serializers.UUIDField()
     # Inutile quand tout le retour est déduit du cahier ; le service l'exige
     # dès qu'une part est rendue en argent.
@@ -186,6 +190,31 @@ class CreateSaleReturnSerializer(serializers.Serializer):
         choices=Payment.Method.choices, required=False, allow_null=True, default=None
     )
     items = SaleReturnItemInputSerializer(many=True, allow_empty=False)
+    # Validation d'un gérant (`POST /approvals/`), quand le retour l'exige.
+    approval_token = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True, default=None, max_length=1024
+    )
+
+
+class CancelSaleSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=500, trim_whitespace=True)
+    approval_token = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True, default=None, max_length=1024
+    )
+
+
+class ApprovalApproversQuerySerializer(serializers.Serializer):
+    cash_session_id = serializers.UUIDField()
+
+
+class CreateApprovalSerializer(serializers.Serializer):
+    cash_session_id = serializers.UUIDField()
+    action = serializers.ChoiceField(choices=approvals.Action.choices)
+    # Vente annulée ou retournée ; pour une remise, l'identifiant que le
+    # poste donnera à la vente.
+    sale_id = serializers.UUIDField()
+    approver_id = serializers.IntegerField(min_value=1)
+    pin = serializers.CharField(max_length=12, trim_whitespace=False)
 
 
 class SaleReturnItemSerializer(serializers.ModelSerializer):

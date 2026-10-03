@@ -4,6 +4,8 @@ from rest_framework import serializers
 
 from apps.cash.models import CashSession
 from apps.sales.models import Payment
+from apps.stores.access import user_can_manage_store
+from apps.tenancy.fields import TenantPrimaryKeyRelatedField
 
 from .models import Expense, ExpenseCategory
 
@@ -16,10 +18,10 @@ class ExpenseCategorySerializer(serializers.ModelSerializer):
 
 class CreateExpenseSerializer(serializers.Serializer):
     idempotency_key = serializers.UUIDField()
-    cash_session_id = serializers.PrimaryKeyRelatedField(
+    cash_session_id = TenantPrimaryKeyRelatedField(
         source="cash_session", queryset=CashSession.objects.all()
     )
-    category_id = serializers.PrimaryKeyRelatedField(
+    category_id = TenantPrimaryKeyRelatedField(
         source="category", queryset=ExpenseCategory.objects.all()
     )
     payment_method = serializers.ChoiceField(choices=Payment.Method.choices)
@@ -93,6 +95,8 @@ class ExpenseSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if request is None or expense.status != Expense.Status.POSTED:
             return False
-        if not request.user.is_staff and expense.created_by_id != request.user.pk:
+        if expense.created_by_id != request.user.pk and not user_can_manage_store(
+            request.user, expense.store_id
+        ):
             return False
         return expense.cash_session is None or expense.cash_session.status == CashSession.Status.OPEN

@@ -3,6 +3,10 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.stores.access import user_can_manage_store
+from apps.tenancy.context import get_tenant
+from apps.tenancy.scoping import scope
+
 from .exceptions import (
     CashRegisterInactive,
     CashRegisterNotAllowed,
@@ -23,8 +27,21 @@ from .serializers import (
 from .services import close_cash_session, get_cash_session_summary, open_cash_session
 
 
+def _visible_session(request, pk) -> CashSession:
+    """Session d'un magasin du compte ; sinon 404, comme une session qui
+    n'existe pas."""
+    return get_object_or_404(
+        scope(CashSession.objects, get_tenant(request)).select_related(
+            "cash_register", "cashier"
+        ),
+        pk=pk,
+    )
+
+
 def _forbidden_if_not_owner(request, cash_session: CashSession) -> Response | None:
-    if cash_session.cashier_id != request.user.pk and not request.user.is_staff:
+    if cash_session.cashier_id != request.user.pk and not user_can_manage_store(
+        request.user, cash_session.cash_register.store_id
+    ):
         return Response(
             {
                 "code": "CASH_SESSION_NOT_OWNED",
@@ -37,7 +54,9 @@ def _forbidden_if_not_owner(request, cash_session: CashSession) -> Response | No
 
 class OpenCashSessionView(APIView):
     def post(self, request) -> Response:
-        serializer = OpenCashSessionSerializer(data=request.data)
+        serializer = OpenCashSessionSerializer(
+            data=request.data, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
 
         try:
@@ -79,10 +98,7 @@ class OpenCashSessionView(APIView):
 
 class CashSessionSummaryView(APIView):
     def get(self, request, pk=None) -> Response:
-        cash_session = get_object_or_404(
-            CashSession.objects.select_related("cash_register", "cashier"),
-            pk=pk,
-        )
+        cash_session = _visible_session(request, pk)
         forbidden = _forbidden_if_not_owner(request, cash_session)
         if forbidden is not None:
             return forbidden
@@ -94,10 +110,7 @@ class CashSessionSummaryView(APIView):
 
 class CloseCashSessionView(APIView):
     def post(self, request, pk=None) -> Response:
-        cash_session = get_object_or_404(
-            CashSession.objects.select_related("cash_register", "cashier"),
-            pk=pk,
-        )
+        cash_session = _visible_session(request, pk)
         forbidden = _forbidden_if_not_owner(request, cash_session)
         if forbidden is not None:
             return forbidden

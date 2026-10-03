@@ -22,6 +22,14 @@ from apps.inventory.models import Stock
 from apps.inventory.services import adjust_stock, receive_stock
 from apps.observability import posthog_client
 from apps.stores.models import Store
+from apps.tenancy.admin_mixins import (
+    TenantAdminMixin,
+    is_platform_admin,
+    visible_queryset,
+    visible_store_ids,
+)
+from apps.tenancy.context import get_tenant
+from apps.tenancy.models import Organization
 
 from .admin_summary import build_product_card
 from .models import Product
@@ -71,6 +79,9 @@ class ProductAdminForm(forms.ModelForm):
                 "initial_store",
                 "Sélectionnez un magasin pour enregistrer le stock initial.",
             )
+        organization = self._organization()
+        if store is not None and organization is not None and store.organization != organization:
+            self.add_error("initial_store", "Ce magasin n'appartient pas à ce commerce.")
         # Un stock initial entre au coût d'achat : sans lui, sa valeur et la
         # marge de ses ventes resteraient inconnues. 0 compte comme inconnu.
         if quantity > 0 and not cleaned_data.get("purchase_price"):
@@ -84,8 +95,40 @@ class ProductAdminForm(forms.ModelForm):
     def clean_sale_unit(self):
         return self.cleaned_data.get("sale_unit") or Product.SaleUnit.UNIT
 
+    # Commerce du produit, posé par l'admin pour un compte de commerce (le
+    # champ `organization` n'est alors pas dans le formulaire, et Django ne
+    # vérifierait pas l'unicité du code-barres dans son catalogue) ; la
+    # plateforme, elle, le choisit dans le formulaire.
+    catalog_organization = None
 
-class ReceiveStockForm(forms.Form):
+    def _organization(self):
+        return self.catalog_organization or self.cleaned_data.get("organization")
+
+    def clean_barcode(self):
+        barcode = self.cleaned_data.get("barcode") or None
+        organization = self._organization()
+        if (
+            barcode
+            and organization is not None
+            and Product.objects.filter(organization=organization, barcode=barcode)
+            .exclude(pk=self.instance.pk)
+            .exists()
+        ):
+            raise forms.ValidationError("Ce code-barres est déjà utilisé dans votre catalogue.")
+        return barcode
+
+
+class StoreChoiceFormMixin:
+    """Le choix du magasin se limite à ceux que le compte voit. Posé sur
+    l'instance (jamais sur le champ de la classe, partagé entre requêtes)."""
+
+    def __init__(self, *args, stores=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if stores is not None:
+            self.fields["store"].queryset = stores
+
+
+class ReceiveStockForm(StoreChoiceFormMixin, forms.Form):
     store = forms.ModelChoiceField(
         queryset=Store.objects.filter(is_active=True),
         label="Magasin",
@@ -109,7 +152,7 @@ class ReceiveStockForm(forms.Form):
     )
 
 
-class AdjustStockForm(forms.Form):
+class AdjustStockForm(StoreChoiceFormMixin, forms.Form):
     store = forms.ModelChoiceField(
         queryset=Store.objects.filter(is_active=True),
         label="Magasin",
@@ -125,6 +168,13 @@ class AdjustStockForm(forms.Form):
 
 
 class ImportProductsForm(forms.Form):
+    # Plateforme seulement : le commerce dont on importe le catalogue. Un
+    # compte de commerce importe toujours dans le sien (champ retiré).
+    organization = forms.ModelChoiceField(
+        queryset=Organization.objects.all(),
+        label="Commerce",
+        widget=UnfoldAdminSelectWidget(),
+    )
     csv_file = forms.FileField(
         label="Fichier CSV",
         help_text=(
@@ -137,7 +187,7 @@ class ImportProductsForm(forms.Form):
 
 
 @admin.register(Product)
-class ProductAdmin(ModelAdmin):
+class ProductAdmin(TenantAdminMixin, ModelAdmin):
     form = ProductAdminForm
     actions_list = ["import_products_view"]
     list_display = ("name", "barcode", "sale_unit", "selling_price_display", "is_active", "updated_at")
@@ -146,6 +196,12 @@ class ProductAdmin(ModelAdmin):
     list_filter = ("sale_unit", "is_active")
     search_fields = ("name", "barcode")
     readonly_fields = ("id", "created_at", "updated_at")
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj is not None:
+            return (*self.readonly_fields, "organization")
+        return self.readonly_fields
+
     # Fiche d'un produit existant : stock, valeur et ventes en tête (voir
     # admin_summary), le formulaire en dessous pour modifier.
     change_form_outer_before_template = "admin/catalog/product_summary.html"
@@ -156,7 +212,9 @@ class ProductAdmin(ModelAdmin):
             extra_context = {
                 **(extra_context or {}),
                 "product_card": build_product_card(
-                    product, can_view_costs=can_view_stock_costs(request.user)
+                    product,
+                    can_view_costs=can_view_stock_costs(request.user),
+                    store_ids=visible_store_ids(request),
                 ),
             }
         return super().change_view(request, object_id, form_url, extra_context)
@@ -167,8 +225,13 @@ class ProductAdmin(ModelAdmin):
                 "Informations générales",
                 {"fields": ("name", "sale_unit", "low_stock_threshold", "is_active")},
             ),
-            ("Prix", {"fields": ("purchase_price", "selling_price")}),
+            ("Prix", {"fields": self._price_fields(request, obj)}),
         ]
+        if is_platform_admin(request):
+            # Choisi à la création, figé ensuite (un produit ne change pas de
+            # catalogue : son stock et ses ventes y sont attachés).
+            name, options = fieldsets[0]
+            fieldsets[0] = (name, {**options, "fields": ("organization", *options["fields"])})
         if obj is None:
             fieldsets.append(
                 ("Stock initial", {"fields": ("initial_store", "initial_quantity")})
@@ -193,12 +256,41 @@ class ProductAdmin(ModelAdmin):
         )
         return fieldsets
 
+    @staticmethod
+    def _price_fields(request, obj) -> tuple[str, ...]:
+        """Le prix d'achat se saisit à la création (il valorise le stock
+        initial), mais un produit existant ne le montre — ni ne le laisse
+        modifier — qu'à qui voit les coûts : hors du formulaire, il n'est ni
+        affiché ni accepté en POST."""
+        if obj is None or can_view_stock_costs(request.user):
+            return ("purchase_price", "selling_price")
+        return ("selling_price",)
+
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
         if obj is not None:
             form.base_fields.pop("initial_store", None)
             form.base_fields.pop("initial_quantity", None)
-        return form
+        stores = self._active_stores(request)
+        tenant = get_tenant(request)
+
+        class TenantProductForm(form):
+            catalog_organization = obj.organization if obj is not None else (
+                tenant.organization if tenant else None
+            )
+
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                if "initial_store" in self.fields:
+                    self.fields["initial_store"].queryset = stores
+                # Plateforme : un produit appartient toujours à un commerce.
+                if "organization" in self.fields:
+                    self.fields["organization"].required = True
+
+        return TenantProductForm
+
+    def _active_stores(self, request):
+        return visible_queryset(Store, request).filter(is_active=True)
 
     def save_model(self, request, obj, form, change):
         if change:
@@ -207,6 +299,10 @@ class ProductAdmin(ModelAdmin):
 
         quantity = form.cleaned_data.get("initial_quantity") or 0
         store = form.cleaned_data.get("initial_store")
+        # Le produit rejoint le catalogue du commerce qui le crée ; la
+        # plateforme, elle, l'a choisi dans le formulaire (obligatoire).
+        if not is_platform_admin(request):
+            obj.organization = get_tenant(request).organization
 
         with transaction.atomic():
             super().save_model(request, obj, form, change)
@@ -257,14 +353,15 @@ class ProductAdmin(ModelAdmin):
         return custom_urls + super().get_urls()
 
     def _get_product_for_stock_action(self, request, object_id):
-        product = get_object_or_404(Product, pk=object_id)
+        product = get_object_or_404(self.get_queryset(request), pk=object_id)
         if not self.has_change_permission(request, product):
             raise PermissionDenied
         return product
 
-    def _current_stocks(self, product):
+    def _current_stocks(self, request, product):
         return (
-            Stock.objects.filter(product=product)
+            visible_queryset(Stock, request)
+            .filter(product=product)
             .select_related("store")
             .order_by("store__name")
         )
@@ -289,7 +386,7 @@ class ProductAdmin(ModelAdmin):
                 "fieldset_title": fieldset_title,
                 "submit_label": submit_label,
                 "product": product,
-                "stocks": self._current_stocks(product),
+                "stocks": self._current_stocks(request, product),
                 "can_view_stock_costs": can_view_stock_costs(request.user),
                 "form": form,
                 "opts": Product._meta,
@@ -304,7 +401,7 @@ class ProductAdmin(ModelAdmin):
         product = self._get_product_for_stock_action(request, object_id)
 
         if request.method == "POST":
-            form = ReceiveStockForm(request.POST)
+            form = ReceiveStockForm(request.POST, stores=self._active_stores(request))
             if form.is_valid():
                 store = form.cleaned_data["store"]
                 quantity = form.cleaned_data["quantity"]
@@ -344,7 +441,14 @@ class ProductAdmin(ModelAdmin):
                         reverse("admin:catalog_product_change", args=[product.pk])
                     )
         else:
-            form = ReceiveStockForm(initial={"unit_cost": product.purchase_price})
+            # Le dernier prix d'achat ne pré-remplit le coût que pour qui voit
+            # les coûts ; les autres saisissent celui de leur facture.
+            initial = (
+                {"unit_cost": product.purchase_price}
+                if can_view_stock_costs(request.user)
+                else {}
+            )
+            form = ReceiveStockForm(initial=initial, stores=self._active_stores(request))
 
         return self._render_stock_action_page(
             request,
@@ -361,7 +465,7 @@ class ProductAdmin(ModelAdmin):
         product = self._get_product_for_stock_action(request, object_id)
 
         if request.method == "POST":
-            form = AdjustStockForm(request.POST)
+            form = AdjustStockForm(request.POST, stores=self._active_stores(request))
             if form.is_valid():
                 store = form.cleaned_data["store"]
                 counted_quantity = form.cleaned_data["counted_quantity"]
@@ -400,7 +504,7 @@ class ProductAdmin(ModelAdmin):
                         reverse("admin:catalog_product_change", args=[product.pk])
                     )
         else:
-            form = AdjustStockForm()
+            form = AdjustStockForm(stores=self._active_stores(request))
 
         return self._render_stock_action_page(
             request,
@@ -413,6 +517,12 @@ class ProductAdmin(ModelAdmin):
             template_name="admin/catalog/adjust_stock.html",
         )
 
+    def _import_form(self, request, *args) -> ImportProductsForm:
+        form = ImportProductsForm(*args)
+        if get_tenant(request) is not None:
+            del form.fields["organization"]
+        return form
+
     @action(
         description="Importer des produits",
         icon="upload",
@@ -420,10 +530,19 @@ class ProductAdmin(ModelAdmin):
         permissions=["add"],
     )
     def import_products_view(self, request):
+        tenant = get_tenant(request)
         if request.method == "POST":
-            form = ImportProductsForm(request.POST, request.FILES)
+            form = self._import_form(request, request.POST, request.FILES)
             if form.is_valid():
-                result = import_products_from_csv(form.cleaned_data["csv_file"])
+                if tenant is not None:
+                    organization = tenant.organization
+                    stores = visible_queryset(Store, request)
+                else:
+                    organization = form.cleaned_data["organization"]
+                    stores = None  # tous les magasins de ce commerce
+                result = import_products_from_csv(
+                    form.cleaned_data["csv_file"], organization=organization, stores=stores
+                )
                 if result.errors:
                     for error in result.errors:
                         form.add_error(None, f"Ligne {error.line} : {error.message}")
@@ -435,7 +554,7 @@ class ProductAdmin(ModelAdmin):
                     )
                     return redirect(reverse("admin:catalog_product_changelist"))
         else:
-            form = ImportProductsForm()
+            form = self._import_form(request)
 
         context = self.admin_site.each_context(request)
         context.update(

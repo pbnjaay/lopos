@@ -15,7 +15,9 @@ from apps.stores.models import CashRegister, Store, StoreAssignment
 
 
 def test_unfold_is_loaded_before_django_admin() -> None:
-    assert settings.INSTALLED_APPS.index("unfold") < settings.INSTALLED_APPS.index(
+    # Unfold passe par `TenantUnfoldConfig`, qui pose le site d'admin tenant.
+    unfold = "apps.tenancy.admin_config.TenantUnfoldConfig"
+    assert settings.INSTALLED_APPS.index(unfold) < settings.INSTALLED_APPS.index(
         "django.contrib.admin"
     )
 

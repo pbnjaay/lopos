@@ -1,3 +1,5 @@
+export type MemberRole = "OWNER" | "MANAGER" | "CASHIER"
+
 export type CurrentUser = {
   id: number
   username: string
@@ -5,7 +7,32 @@ export type CurrentUser = {
   first_name: string
   last_name: string
   is_staff: boolean
+  /** Commerce du compte, calculé par le serveur — jamais choisi par le poste. */
+  organization: { id: string; name: string }
+  role: MemberRole
+  /** Magasins où le compte peut travailler. */
+  store_ids: string[]
+  can_view_costs: boolean
+  /**
+   * Ce qu'un gérant doit valider (PIN) pour ce compte. Absent d'un compte
+   * reconstruit hors ligne avant cette version : voir `approvalPolicyFor`.
+   */
+  approval_policy?: ApprovalPolicy
 }
+
+export type ApprovalPolicy = {
+  /** Faux pour un gérant ou un propriétaire : il valide lui-même. */
+  required: boolean
+  /** Montant (FCFA) à partir duquel annulation, retour ou remise exigent un gérant. */
+  amount_threshold: string
+  /** Taux de remise par ligne au-delà duquel un gérant doit valider (ex. "0.10"). */
+  max_discount_rate: string
+  return_window_days: number
+}
+
+export type ApprovalAction = "CANCEL_SALE" | "SALE_RETURN" | "DISCOUNT"
+
+export type Approver = { id: number; name: string }
 
 export type Store = {
   id: string

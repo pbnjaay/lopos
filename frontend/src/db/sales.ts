@@ -41,6 +41,10 @@ export class InvalidLocalPaymentError extends Error {
 }
 
 export type CreateLocalSaleInput = {
+  /** Identifiant choisi d'avance : une validation de remise y est liée. */
+  id?: string
+  /** Validation d'un gérant pour une remise, liée à `id`. */
+  approvalToken?: string
   session: LocalCashSession
   items: Array<{ productId: string; quantityMilli?: number; quantity?: number; unitPrice?: number }>
   // Un seul élément pour un paiement classique, plusieurs pour un paiement
@@ -179,7 +183,9 @@ export async function createLocalSale(
     const total = saleItems.reduce((sum, item) => sum + item.lineTotal, 0)
 
     const sale: LocalSale = {
-      id: crypto.randomUUID(),
+      id: input.id ?? crypto.randomUUID(),
+      ...(input.approvalToken ? { approvalToken: input.approvalToken } : {}),
+      ...(session.organizationId ? { organizationId: session.organizationId } : {}),
       serverId: null,
       syncEventId: crypto.randomUUID(),
       cashSessionId: session.id,
@@ -331,54 +337,6 @@ export async function markLocalSaleSynced(
       conflictCode: null,
       conflictMessage: null,
     })
-  })
-}
-
-/**
- * Annule une vente locale pas encore synchronisée : elle n'existe nulle part
- * côté serveur, donc "annuler" revient à faire comme si elle n'avait jamais
- * eu lieu — suppression pure, jamais un nouveau statut CANCELLED (qui
- * obligerait à le traiter partout où PENDING_SYNC est filtré aujourd'hui).
- *
- * Retourne `false` sans rien modifier si la vente a déjà synchronisé (ou
- * n'existe pas localement) entre le moment où l'appelant l'a vue et cet
- * appel — l'appelant doit alors passer par l'annulation serveur à la place.
- */
-export async function cancelPendingLocalSale(
-  id: string,
-  database: PosDatabase = db,
-): Promise<boolean> {
-  return database.transaction("rw", [database.products, database.localSales], async () => {
-    const sale = await database.localSales.get(id)
-    if (!sale || sale.status !== "PENDING_SYNC") return false
-
-    const soldByProduct = new Map<string, number>()
-    for (const item of sale.items) {
-      const quantityMilli = item.quantityMilli ?? (item.quantity ?? 0) * 1000
-      soldByProduct.set(
-        item.productId,
-        (soldByProduct.get(item.productId) ?? 0) + quantityMilli,
-      )
-    }
-
-    for (const [productId, soldQuantityMilli] of soldByProduct) {
-      const product = await database.products.get([sale.storeId, productId])
-      if (!product) continue
-      const pendingQuantityMilli =
-        product.pendingSoldQuantityMilli ??
-        (product.pendingSoldQuantity ?? 0) * 1000
-      const nextPendingQuantityMilli = Math.max(
-        pendingQuantityMilli - soldQuantityMilli,
-        0,
-      )
-      await database.products.update([sale.storeId, productId], {
-        pendingSoldQuantityMilli: nextPendingQuantityMilli,
-        pendingSoldQuantity: nextPendingQuantityMilli / 1000,
-      })
-    }
-
-    await database.localSales.delete(id)
-    return true
   })
 }
 

@@ -1,11 +1,13 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 
+from apps.tenancy.admin_mixins import TenantAdminMixin
+
 from .models import ProcessedSyncEvent
 
 
 @admin.register(ProcessedSyncEvent)
-class ProcessedSyncEventAdmin(ModelAdmin):
+class ProcessedSyncEventAdmin(TenantAdminMixin, ModelAdmin):
     list_display = (
         "processed_at",
         "event_id",
@@ -14,8 +16,16 @@ class ProcessedSyncEventAdmin(ModelAdmin):
         "entity_id",
         "pushed_by",
         "stock_discrepancy",
+        "catalog_price_discrepancy",
+        "unapproved_discount",
     )
-    list_filter = ("event_type", "stock_discrepancy", "terminal_id")
+    list_filter = (
+        "event_type",
+        "stock_discrepancy",
+        "catalog_price_discrepancy",
+        "unapproved_discount",
+        "terminal_id",
+    )
     search_fields = ("event_id", "entity_id", "terminal_id")
     date_hierarchy = "processed_at"
 

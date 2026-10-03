@@ -17,10 +17,17 @@ from .exceptions import (
     ProductNotFound,
     InvalidReturn,
 )
+from apps.tenancy.context import get_tenant
+from apps.tenancy.scoping import scope
+
+from . import approvals
 from .access import get_pos_cash_session, returns_for_pos_session, sales_for_pos_session
 from .models import Sale, SaleReturn
 from .serializers import (
+    ApprovalApproversQuerySerializer,
+    CancelSaleSerializer,
     CompleteSaleSerializer,
+    CreateApprovalSerializer,
     CreateSaleReturnSerializer,
     SaleListQuerySerializer,
     SaleReturnSerializer,
@@ -91,7 +98,7 @@ class CompleteSaleView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     def post(self, request) -> Response:
-        serializer = CompleteSaleSerializer(data=request.data)
+        serializer = CompleteSaleSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         cash_session = serializer.validated_data["cash_session"]
         if cash_session.cashier_id != request.user.pk:
@@ -166,13 +173,23 @@ class SaleDetailView(APIView):
 
 class CancelSaleView(APIView):
     def post(self, request, pk=None) -> Response:
+        # Une vente hors des magasins du compte n'existe pas pour lui : même
+        # réponse qu'un identifiant inconnu, jamais un refus qui la trahirait.
+        if not scope(Sale.objects, get_tenant(request)).filter(pk=pk).exists():
+            return _sale_not_found()
+        serializer = CancelSaleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         try:
-            sale = cancel_sale(sale_id=pk, cancelled_by=request.user)
-        except Sale.DoesNotExist:
-            return Response(
-                {"code": "SALE_NOT_FOUND", "message": "Cette vente n'existe pas."},
-                status=status.HTTP_404_NOT_FOUND,
+            sale = cancel_sale(
+                sale_id=pk,
+                cancelled_by=request.user,
+                reason=serializer.validated_data["reason"],
+                approval_token=serializer.validated_data["approval_token"],
             )
+        except Sale.DoesNotExist:
+            return _sale_not_found()
+        except approvals.ApprovalRequired as exc:
+            return _approval_required(exc)
         except InvalidCancellation as exc:
             return Response(
                 {"code": "INVALID_CANCELLATION", "message": str(exc)},
@@ -189,9 +206,25 @@ class CancelSaleView(APIView):
         return Response(SaleSerializer(sale).data, status=status.HTTP_200_OK)
 
 
+def _approval_required(exc: Exception) -> Response:
+    return Response(
+        {"code": "MANAGER_APPROVAL_REQUIRED", "message": str(exc)},
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def _sale_not_found() -> Response:
+    return Response(
+        {"code": "SALE_NOT_FOUND", "message": "Cette vente n'existe pas."},
+        status=status.HTTP_404_NOT_FOUND,
+    )
+
+
 class SaleReturnListCreateView(APIView):
     def post(self, request) -> Response:
-        serializer = CreateSaleReturnSerializer(data=request.data)
+        serializer = CreateSaleReturnSerializer(
+            data=request.data, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
         try:
             sale_return = create_sale_return(**serializer.validated_data, created_by=request.user)
@@ -204,6 +237,8 @@ class SaleReturnListCreateView(APIView):
             )
         except InvalidReturn as exc:
             return Response({"code": "INVALID_RETURN", "message": str(exc)}, status=status.HTTP_409_CONFLICT)
+        except approvals.ApprovalRequired as exc:
+            return _approval_required(exc)
         sale_return = SaleReturn.objects.select_related("created_by").prefetch_related(
             "items__original_sale_item"
         ).get(pk=sale_return.pk)
@@ -226,3 +261,81 @@ class SaleReturnDetailView(APIView):
             pk=pk,
         )
         return Response(SaleReturnSerializer(sale_return).data)
+
+
+def _own_open_session(request, cash_session_id):
+    """La session ouverte de l'appelant : seul le caissier à son poste
+    demande une validation."""
+    return get_pos_cash_session(user=request.user, cash_session_id=cash_session_id)
+
+
+class ApprovalApproversView(APIView):
+    """Qui peut valider sur ce poste : propriétaire et gérants du magasin
+    ayant un code PIN. Les noms seulement."""
+
+    def get(self, request) -> Response:
+        query = ApprovalApproversQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        cash_session = _own_open_session(request, query.validated_data["cash_session_id"])
+        if cash_session is None:
+            return _open_session_required()
+        approvers = approvals.approvers_for_store(cash_session.cash_register.store)
+        return Response(
+            [
+                {"id": user.pk, "name": user.get_full_name() or user.username}
+                for user in approvers
+            ]
+        )
+
+
+class ApprovalCreateView(APIView):
+    """Le gérant tape son PIN sur le poste du caissier : en échange, une
+    validation signée, valable quelques minutes pour cette opération sur
+    cette vente seulement."""
+
+    def post(self, request) -> Response:
+        serializer = CreateApprovalSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        cash_session = _own_open_session(request, data["cash_session_id"])
+        if cash_session is None:
+            return _open_session_required()
+        try:
+            approver = approvals.check_pin(
+                store=cash_session.cash_register.store,
+                approver_id=data["approver_id"],
+                pin=data["pin"],
+            )
+        except approvals.ApprovalPinLocked as exc:
+            return Response(
+                {"code": "APPROVAL_PIN_LOCKED", "message": str(exc)},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        except approvals.InvalidApprovalPin as exc:
+            return Response(
+                {"code": "INVALID_APPROVAL_PIN", "message": str(exc)},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        token = approvals.issue(
+            approver=approver,
+            cash_session=cash_session,
+            action=data["action"],
+            sale_id=data["sale_id"],
+        )
+        return Response(
+            {
+                "approval_token": token,
+                "approver": {"id": approver.pk, "name": approver.get_full_name() or approver.username},
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+def _open_session_required() -> Response:
+    return Response(
+        {
+            "code": "OPEN_CASH_SESSION_REQUIRED",
+            "message": "Une session de caisse ouverte vous appartenant est requise.",
+        },
+        status=status.HTTP_403_FORBIDDEN,
+    )

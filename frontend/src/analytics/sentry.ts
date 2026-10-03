@@ -16,11 +16,13 @@ export function initSentry() {
 }
 
 export function setSentryUser(user: CurrentUser) {
-  Sentry.setUser({ id: String(user.id), role: user.is_staff ? "staff" : "cashier" })
+  Sentry.setUser({ id: String(user.id), role: user.role })
+  Sentry.setTag("organization_id", user.organization.id)
 }
 
 export function clearSentryUser() {
   Sentry.setUser(null)
+  Sentry.setTag("organization_id", undefined)
 }
 
 export { Sentry }

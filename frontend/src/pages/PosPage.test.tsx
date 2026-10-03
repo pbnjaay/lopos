@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ToastProvider } from "../components/ui/Toast"
 import { db } from "../db/database"
+import { AUTHENTICATED_USER_KEY } from "../db/tenancy"
 import {
   findLocalProductByBarcode,
   getProductCatalogMetadata,
@@ -155,14 +156,14 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
-function renderPos(localSession?: LocalCashSession) {
+function renderPos(localSession?: LocalCashSession, currentUser: CurrentUser = user) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Infinity },
       mutations: { retry: false },
     },
   })
-  queryClient.setQueryData(currentUserQueryKey, user)
+  queryClient.setQueryData(currentUserQueryKey, currentUser)
   queryClient.setQueryData(["cash-registers"], [cashRegister])
   queryClient.setQueryData(
     ["cash-registers", cashRegister.id, "current-session"],
@@ -196,7 +197,22 @@ async function openCashPayment(userEvents: ReturnType<typeof userEvent.setup>) {
   await userEvents.click(screen.getByRole("button", { name: /Espèces/ }))
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Le caissier connecté en ligne sur ce poste : le sync n'envoie que pour lui.
+  await db.metadata.put({
+    key: AUTHENTICATED_USER_KEY,
+    value: {
+      id: user.id,
+      username: user.username,
+      firstName: user.first_name,
+      organizationId: "org-id",
+      organizationName: "Commerce",
+      role: "CASHIER",
+      storeIds: [store.id],
+      canViewCosts: false,
+    },
+    updatedAt: "2026-08-17T00:00:00Z",
+  })
   vi.mocked(getProductCatalogMetadata).mockResolvedValue({
     storeId: store.id,
     cachedAt: "2026-08-17T00:00:00Z",
@@ -217,6 +233,104 @@ afterEach(async () => {
   await db.cashSessions.clear()
   await db.carts.clear()
   await db.products.clear()
+  await db.metadata.clear()
+})
+
+// Produit tel que l'API le renvoie aujourd'hui : avec son unité de vente
+// (un prix modifié n'est porté que par ces lignes-là).
+const cocaByUnit: Product = { ...coca, sale_unit: "UNIT" }
+
+const cashierWithPolicy: CurrentUser = {
+  ...user,
+  role: "CASHIER",
+  approval_policy: {
+    required: true,
+    amount_threshold: "5000.00",
+    max_discount_rate: "0.10",
+    return_window_days: 7,
+  },
+}
+
+async function discountCocaTo(userEvents: ReturnType<typeof userEvent.setup>, price: string) {
+  await userEvents.click(screen.getByRole("button", { name: `Modifier le prix de ${coca.name}` }))
+  const input = screen.getByLabelText("Prix pour cette vente")
+  await userEvents.clear(input)
+  await userEvents.type(input, price)
+  await userEvents.click(screen.getByRole("button", { name: "Appliquer" }))
+}
+
+describe("POS discount approval", () => {
+  it("asks a manager's PIN for a discount beyond 10 %, then records the sale with the approval", async () => {
+    const userEvents = userEvent.setup()
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([cocaByUnit])
+      if (url.includes("/approvals/approvers/")) return jsonResponse([{ id: 3, name: "Awa Gérante" }])
+      if (url.endsWith("/approvals/")) {
+        return jsonResponse({ approval_token: "signed-token", approver: { id: 3, name: "Awa Gérante" } }, 201)
+      }
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderPos(undefined, cashierWithPolicy)
+    await scanCoca(userEvents)
+    await discountCocaTo(userEvents, "400")
+    await userEvents.click(screen.getByRole("button", { name: /Wave/ }))
+    await userEvents.click(screen.getByRole("button", { name: "Paiement reçu" }))
+
+    expect(await screen.findByRole("heading", { name: "Un gérant doit valider" })).toBeInTheDocument()
+    expect(createLocalSale).not.toHaveBeenCalled()
+    await screen.findByRole("option", { name: "Awa Gérante" })
+    await userEvents.type(screen.getByLabelText("Code PIN du gérant"), "4821")
+    await userEvents.click(screen.getByRole("button", { name: "Valider" }))
+
+    expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
+    const [input] = vi.mocked(createLocalSale).mock.calls[0] ?? []
+    expect(input?.approvalToken).toBe("signed-token")
+    expect(input?.id).toEqual(expect.any(String))
+  })
+
+  it("does not record the sale when the manager does not approve", async () => {
+    const userEvents = userEvent.setup()
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([cocaByUnit])
+      if (url.includes("/approvals/approvers/")) return jsonResponse([{ id: 3, name: "Awa Gérante" }])
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderPos(undefined, cashierWithPolicy)
+    await scanCoca(userEvents)
+    await discountCocaTo(userEvents, "400")
+    await userEvents.click(screen.getByRole("button", { name: /Wave/ }))
+    await userEvents.click(screen.getByRole("button", { name: "Paiement reçu" }))
+    const approvalDialog = await screen.findByRole("dialog", { name: "Un gérant doit valider" })
+    await userEvents.click(within(approvalDialog).getByRole("button", { name: "Annuler" }))
+
+    expect(await screen.findByText(/Remise non validée/)).toBeInTheDocument()
+    expect(createLocalSale).not.toHaveBeenCalled()
+  })
+
+  it("records a small discount without asking anyone", async () => {
+    const userEvents = userEvent.setup()
+    document.cookie = "csrftoken=test-token; path=/"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.includes("/products/")) return jsonResponse([cocaByUnit])
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderPos(undefined, cashierWithPolicy)
+    await scanCoca(userEvents)
+    await discountCocaTo(userEvents, "460")
+    await userEvents.click(screen.getByRole("button", { name: /Wave/ }))
+    await userEvents.click(screen.getByRole("button", { name: "Paiement reçu" }))
+
+    expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Un gérant doit valider" })).not.toBeInTheDocument()
+  })
 })
 
 describe("POS sale workflow", () => {
@@ -245,6 +359,7 @@ describe("POS sale workflow", () => {
     // vente part dans l'outbox locale et sera poussée par le sync engine.
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/sales/"))).toBe(false)
     expect(createLocalSale).toHaveBeenCalledWith({
+      id: expect.any(String),
       session: expect.objectContaining({ id: cashSession.id, cashierId: user.id }),
       items: [{ productId: coca.id, quantity: 2 }],
       payments: [{ method: "CASH", amount: 1_000, receivedAmount: 2_000 }],
@@ -305,6 +420,7 @@ describe("POS sale workflow", () => {
 
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
     expect(createLocalSale).toHaveBeenCalledWith({
+      id: expect.any(String),
       session: expect.objectContaining({ id: cashSession.id, cashierId: user.id }),
       items: [{ productId: coca.id, quantity: 1 }],
       payments: [
@@ -464,6 +580,7 @@ describe("POS sale workflow offline", () => {
     expect(screen.getByText(/Référence locale/)).toHaveTextContent("0F9E8D7C")
     expect(screen.getByText("Panier vide")).toBeInTheDocument()
     expect(createLocalSale).toHaveBeenCalledWith({
+      id: expect.any(String),
       session: expect.objectContaining({ id: localSession.id, cashierId: user.id }),
       items: [{ productId: coca.id, quantity: 2 }],
       payments: [{ method: "CASH", amount: 1_000, receivedAmount: 2_000 }],
@@ -514,6 +631,7 @@ describe("POS sale workflow offline", () => {
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
     expect(screen.getByText(/Référence locale/)).toHaveTextContent("1A2B3C4D")
     expect(createLocalSale).toHaveBeenCalledWith({
+      id: expect.any(String),
       session: expect.objectContaining({ id: localSession.id, cashierId: user.id }),
       items: [{ productId: coca.id, quantity: 1 }],
       payments: [{ method: "WAVE", amount: 500, receivedAmount: null }],
@@ -811,6 +929,7 @@ describe("POS credit sale (cahier client)", () => {
 
     expect(await screen.findByRole("heading", { name: "Vente validée" })).toBeInTheDocument()
     expect(createLocalSale).toHaveBeenCalledWith({
+      id: expect.any(String),
       session: expect.objectContaining({ id: cashSession.id }),
       items: [{ productId: coca.id, quantity: 1 }],
       payments: [],
