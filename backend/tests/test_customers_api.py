@@ -74,16 +74,15 @@ def test_book_includes_deactivated_customers(api_client, store) -> None:
     assert response.data[0]["is_active"] is False
 
 
-def test_book_requires_store_access(store, api_client) -> None:
+def test_book_requires_store_access(store) -> None:
     outsider = User.objects.create_user(username="outsider")
     client = APIClient()
     client.force_authenticate(outsider)
 
     response = _book(client, store)
 
-    # Même réponse qu'un magasin inexistant : rien ne trahit son existence.
-    assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert response.data == _book(api_client, Store(pk=uuid4())).data
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.data["code"] == "STORE_NOT_ALLOWED"
 
 
 def test_book_for_unknown_store(api_client) -> None:
@@ -157,8 +156,7 @@ def test_quick_create_requires_store_access(store) -> None:
         format="json",
     )
 
-    assert response.status_code == status.HTTP_404_NOT_FOUND
-    assert response.data["code"] == "STORE_NOT_FOUND"
+    assert response.status_code == status.HTTP_403_FORBIDDEN
     assert Customer.objects.count() == 0
 
 
@@ -203,7 +201,7 @@ def test_customer_detail_requires_store_access(store) -> None:
 
     response = client.get(reverse("customer-detail", kwargs={"pk": customer.pk}))
 
-    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
 def test_customer_detail_unknown(api_client) -> None:

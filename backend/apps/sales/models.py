@@ -54,34 +54,6 @@ class Sale(models.Model):
         ),
     )
     status = models.CharField("statut", max_length=10, choices=Status.choices)
-    # Remise au-delà de ce qu'un caissier accorde seul : qui l'a validée.
-    discount_approved_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name="approved_sale_discounts",
-        verbose_name="remise validée par",
-        blank=True,
-        null=True,
-    )
-    # Annulation : qui, quand, pourquoi, et qui l'a validée au besoin.
-    cancelled_at = models.DateTimeField("annulée le", blank=True, null=True)
-    cancelled_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name="cancelled_sales",
-        verbose_name="annulée par",
-        blank=True,
-        null=True,
-    )
-    cancellation_reason = models.CharField("motif d'annulation", max_length=500, blank=True)
-    cancellation_approved_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name="approved_sale_cancellations",
-        verbose_name="annulation validée par",
-        blank=True,
-        null=True,
-    )
     created_at = models.DateTimeField("créée le", auto_now_add=True)
     occurred_at = models.DateTimeField(
         "réalisée le",
@@ -164,21 +136,6 @@ class SaleItem(models.Model):
     )
     catalog_unit_price = models.DecimalField(
         "prix catalogue", max_digits=14, decimal_places=2, default=Decimal("0")
-    )
-    # Vente hors ligne : `catalog_unit_price` est celui que le poste affichait
-    # (le catalogue a pu changer depuis). Le poste n'étant pas une source de
-    # confiance, le prix serveur est gardé ici quand il diffère, pour revue.
-    server_catalog_unit_price = models.DecimalField(
-        "prix catalogue serveur",
-        max_digits=14,
-        decimal_places=2,
-        blank=True,
-        null=True,
-        help_text=(
-            "Vente hors ligne seulement : prix catalogue connu du serveur à la "
-            "synchronisation, renseigné quand il diffère du prix catalogue "
-            "envoyé par le poste."
-        ),
     )
     unit_price = models.DecimalField("prix unitaire", max_digits=14, decimal_places=2)
     quantity = models.DecimalField("quantité", max_digits=12, decimal_places=3)
@@ -347,15 +304,6 @@ class SaleReturn(models.Model):
         help_text="Vide quand tout le retour a été déduit du cahier (aucun argent rendu).",
     )
     status = models.CharField("statut", max_length=10, choices=Status.choices, default=Status.COMPLETED)
-    # Retour au-delà de ce qu'un caissier fait seul : qui l'a validé.
-    approved_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name="approved_sale_returns",
-        verbose_name="validé par",
-        blank=True,
-        null=True,
-    )
     idempotency_key = models.UUIDField("clé d’idempotence", unique=True)
     created_at = models.DateTimeField("créé le", auto_now_add=True)
 

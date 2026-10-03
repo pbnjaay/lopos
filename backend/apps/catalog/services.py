@@ -47,14 +47,7 @@ def _parse_decimal(raw_value: str, row_errors: list[str], label: str) -> Decimal
     return value
 
 
-def import_products_from_csv(csv_file, *, organization, stores=None) -> ProductImportResult:
-    """Importe des produits dans le catalogue d'`organization`.
-
-    Les magasins nommés dans le fichier sont cherchés parmi `stores` (par
-    défaut ceux du commerce) et les codes-barres dans son seul catalogue :
-    un autre commerce n'influence jamais le résultat."""
-    if stores is None:
-        stores = Store.objects.filter(organization=organization)
+def import_products_from_csv(csv_file) -> ProductImportResult:
     content = csv_file.read().decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(content))
 
@@ -73,7 +66,7 @@ def import_products_from_csv(csv_file, *, organization, stores=None) -> ProductI
             ],
         )
 
-    stores_by_name = {store.name.strip().lower(): store for store in stores}
+    stores_by_name = {store.name.strip().lower(): store for store in Store.objects.all()}
 
     errors: list[ProductImportRowError] = []
     parsed_rows: list[_ParsedRow] = []
@@ -92,7 +85,7 @@ def import_products_from_csv(csv_file, *, organization, stores=None) -> ProductI
         if barcode:
             if barcode in seen_barcodes:
                 row_errors.append(f"Code-barres {barcode} en double dans le fichier.")
-            elif Product.objects.filter(organization=organization, barcode=barcode).exists():
+            elif Product.objects.filter(barcode=barcode).exists():
                 row_errors.append("Un produit avec ce code-barres existe déjà.")
 
         selling_price_raw = (raw_row.get("selling_price") or "").strip()
@@ -158,7 +151,6 @@ def import_products_from_csv(csv_file, *, organization, stores=None) -> ProductI
     with transaction.atomic():
         for row in parsed_rows:
             product = Product.objects.create(
-                organization=organization,
                 name=row.name,
                 barcode=row.barcode,
                 purchase_price=row.purchase_price,

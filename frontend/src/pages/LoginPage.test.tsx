@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest"
-import "fake-indexeddb/auto"
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
@@ -9,8 +8,6 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { db } from "../db/database"
-import { AUTHENTICATED_USER_KEY, TERMINAL_ORGANIZATION_KEY } from "../db/tenancy"
 import { LoginPage } from "./LoginPage"
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -37,8 +34,7 @@ function renderLoginPage() {
   )
 }
 
-afterEach(async () => {
-  await db.metadata.clear()
+afterEach(() => {
   vi.restoreAllMocks()
   document.cookie = "csrftoken=; Max-Age=0; path=/"
 })
@@ -60,10 +56,6 @@ describe("LoginPage", () => {
           first_name: "",
           last_name: "",
           is_staff: false,
-          organization: { id: "org-id", name: "Boutique" },
-          role: "CASHIER",
-          store_ids: ["store-id"],
-          can_view_costs: false,
         }),
       )
 
@@ -73,9 +65,6 @@ describe("LoginPage", () => {
     await user.click(screen.getByRole("button", { name: "Se connecter" }))
 
     expect(await screen.findByText("Destination authentifiée")).toBeInTheDocument()
-    // Le poste est lié au commerce du compte, qu'il retrouvera hors ligne.
-    expect((await db.metadata.get(TERMINAL_ORGANIZATION_KEY))?.value).toBe("org-id")
-    expect((await db.metadata.get(AUTHENTICATED_USER_KEY))?.value).toMatchObject({ id: 1 })
   })
 
   it("keeps the form and displays the backend credential error", async () => {

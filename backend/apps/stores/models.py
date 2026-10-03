@@ -3,17 +3,9 @@ import uuid
 from django.conf import settings
 from django.db import models
 
-from apps.tenancy.models import Organization
-
 
 class Store(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    organization = models.ForeignKey(
-        Organization,
-        on_delete=models.PROTECT,
-        related_name="stores",
-        verbose_name="organisation",
-    )
     name = models.CharField("nom", max_length=255)
     address = models.TextField("adresse", blank=True, null=True)
     is_active = models.BooleanField("actif", default=True)

@@ -38,13 +38,6 @@ import {
   type ResumeStrategy,
 } from "../features/cart/HeldCartsPanel"
 import { HeldCartsSection } from "../features/cart/HeldCartsSection"
-import { ManagerApprovalDialog } from "../features/approvals/ManagerApprovalDialog"
-import {
-  approvalPolicyFor,
-  DiscountNeedsConnectionError,
-  discountNeedsApproval,
-  DiscountNotApprovedError,
-} from "../features/approvals/policy"
 import { usePosSession } from "../features/cash-session/queries"
 import { CashPaymentModal } from "../features/checkout/CashPaymentModal"
 import { MobileMoneyConfirmation } from "../features/checkout/MobileMoneyConfirmation"
@@ -62,10 +55,11 @@ import { CustomerPicker } from "../features/customers/CustomerPicker"
 import type { CustomerSummary } from "../features/customers/customerService"
 import { CreditConfirmation } from "../features/checkout/CreditConfirmation"
 import type { CatalogProduct } from "../features/products/types"
-import { type CancelSaleInput, cancelSaleEverywhere } from "../features/sales/cancelSale"
+import { cancelSaleEverywhere } from "../features/sales/cancelSale"
 import { type ReceiptView, receiptViewFromLocalSale } from "../features/sales/receiptView"
 import { useSyncStatus } from "../features/sync/useSyncStatus"
 import type { PaymentMethod } from "../types/api"
+import { describeErrorShort } from "../utils/errorCopy"
 import { formatQuantity } from "../utils/quantity"
 
 /** Une part d'un encaissement — le seul élément d'une vente classique, un
@@ -98,9 +92,7 @@ function getCheckoutErrorMessage(error: Error | null): string | undefined {
   if (
     error instanceof InsufficientLocalStockError ||
     error instanceof LocalSaleProductNotFoundError ||
-    error instanceof InvalidLocalPaymentError ||
-    error instanceof DiscountNeedsConnectionError ||
-    error instanceof DiscountNotApprovedError
+    error instanceof InvalidLocalPaymentError
   ) {
     return error.message
   }
@@ -116,14 +108,6 @@ export function PosPage() {
   const toast = useToast()
   const cart = useCart(ownSession?.id ?? null, selectedRegister?.store_id ?? null)
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep | null>(null)
-  // Remise au-delà de la limite du caissier : le gérant valide par son PIN
-  // avant que la vente ne soit enregistrée (voir saleMutation).
-  const [discountApproval, setDiscountApproval] = useState<{
-    saleId: string
-    cashSessionId: string
-    resolve: (approvalToken: string) => void
-    reject: (error: Error) => void
-  } | null>(null)
   // Client choisi pour la part mise au cahier, le temps de la confirmation.
   const [creditCustomer, setCreditCustomer] = useState<CustomerSummary | null>(null)
   // Versements déjà appliqués à la vente en cours d'encaissement — vide pour
@@ -218,24 +202,7 @@ export function PosPage() {
       // synchronisation est opportuniste, déclenchée après le succès, et son
       // échec ne peut pas transformer une vente enregistrée en erreur.
       const session = await resolveCheckoutSession()
-      // L'identifiant de la vente est choisi d'avance : une validation de
-      // remise y est liée, le serveur la vérifie à la synchronisation.
-      const saleId = crypto.randomUUID()
-      let approvalToken: string | undefined
-      const discountLines = cart.items.map((item) => ({
-        catalogUnitPrice: item.catalogUnitPrice ?? item.unitPrice,
-        unitPrice: item.unitPrice,
-        quantityMilli: item.quantityMilli ?? (item.quantity ?? 0) * 1000,
-      }))
-      if (discountNeedsApproval(discountLines, approvalPolicyFor(user))) {
-        if (!isOnline) throw new DiscountNeedsConnectionError()
-        approvalToken = await new Promise<string>((resolve, reject) => {
-          setDiscountApproval({ saleId, cashSessionId: session.id, resolve, reject })
-        })
-      }
       const sale = await createLocalSale({
-        id: saleId,
-        ...(approvalToken ? { approvalToken } : {}),
         session,
         items: cart.items.map((item) => item.saleUnit ? ({
           productId: item.productId,
@@ -314,10 +281,7 @@ export function PosPage() {
             ? "INSUFFICIENT_STOCK"
             : error instanceof LocalSaleProductNotFoundError
               ? "PRODUCT_NOT_FOUND"
-              : error instanceof DiscountNotApprovedError ||
-                  error instanceof DiscountNeedsConnectionError
-                ? "DISCOUNT_NOT_APPROVED"
-                : "LOCAL_PERSIST_FAILED",
+              : "LOCAL_PERSIST_FAILED",
         payment_method: legs[0]?.method ?? (credit ? "CREDIT" : null),
         is_split_payment: legs.length > 1,
         offline: !isOnline,
@@ -325,11 +289,10 @@ export function PosPage() {
     },
   })
 
-  // Toujours sur le serveur, la vente en attente envoyée d'abord — cf.
-  // cancelSale.ts. Motif et validation gérant : CancelSaleDialog.
+  // Local d'abord, retombe sur le serveur si la synchronisation en tâche de
+  // fond a déjà eu lieu entre l'encaissement et le clic — cf. cancelSale.ts.
   const cancelSaleMutation = useMutation({
-    mutationFn: ({ saleId, input }: { saleId: string; input: CancelSaleInput }) =>
-      cancelSaleEverywhere(saleId, input),
+    mutationFn: (saleId: string) => cancelSaleEverywhere(saleId),
     onSuccess: () => {
       setCompletedSale(null)
       toast.success("Vente annulée")
@@ -785,22 +748,6 @@ export function PosPage() {
           }
         />
       ) : null}
-      {discountApproval ? (
-        <ManagerApprovalDialog
-          cashSessionId={discountApproval.cashSessionId}
-          action="DISCOUNT"
-          saleId={discountApproval.saleId}
-          summary="Le panier contient une remise au-delà de ce qu’un caissier accorde seul."
-          onApproved={(token) => {
-            discountApproval.resolve(token)
-            setDiscountApproval(null)
-          }}
-          onClose={() => {
-            discountApproval.reject(new DiscountNotApprovedError())
-            setDiscountApproval(null)
-          }}
-        />
-      ) : null}
       {completedSale ? (
         <SaleSuccessModal
           sale={shownCompletedSale!}
@@ -813,8 +760,12 @@ export function PosPage() {
             setCompletedSale(null)
             focusProductSearch()
           }}
-          onCancelSale={(input) =>
-            cancelSaleMutation.mutateAsync({ saleId: completedSale.id, input })
+          onCancelSale={() => cancelSaleMutation.mutateAsync(completedSale.id)}
+          isCancelling={cancelSaleMutation.isPending}
+          cancelErrorMessage={
+            cancelSaleMutation.error
+              ? describeErrorShort(cancelSaleMutation.error, "vente")
+              : null
           }
         />
       ) : null}

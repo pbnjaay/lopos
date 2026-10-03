@@ -3,13 +3,12 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from apps.stores.models import CashRegister
-from apps.tenancy.fields import TenantPrimaryKeyRelatedField
 
 from .models import CashSession
 
 
 class OpenCashSessionSerializer(serializers.Serializer):
-    cash_register_id = TenantPrimaryKeyRelatedField(
+    cash_register_id = serializers.PrimaryKeyRelatedField(
         source="cash_register",
         queryset=CashRegister.objects.all(),
     )

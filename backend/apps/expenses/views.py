@@ -7,8 +7,7 @@ from rest_framework.views import APIView
 
 from apps.cash.exceptions import CashSessionClosed
 from apps.sales.access import get_pos_cash_session
-from apps.tenancy.context import get_tenant
-from apps.tenancy.scoping import scope
+from apps.stores.access import stores_accessible_to
 
 from .exceptions import (
     ExpenseAlreadyCancelled,
@@ -73,7 +72,7 @@ class ExpenseCategoryListView(APIView):
     """Catégories proposées à la saisie : seulement les actives."""
 
     def get(self, request) -> Response:
-        categories = scope(ExpenseCategory.objects, get_tenant(request)).filter(is_active=True)
+        categories = ExpenseCategory.objects.filter(is_active=True)
         return Response(ExpenseCategorySerializer(categories, many=True).data)
 
 
@@ -128,7 +127,7 @@ class ExpenseListCreateView(APIView):
         après une coupure reçoit la dépense déjà enregistrée, jamais une
         seconde.
         """
-        serializer = CreateExpenseSerializer(data=request.data, context={"request": request})
+        serializer = CreateExpenseSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         if data["cash_session"].cashier_id != request.user.pk:
@@ -172,7 +171,7 @@ def _not_owned() -> Response:
 
 def _accessible_expense(request, pk) -> Expense:
     return get_object_or_404(
-        _with_relations(scope(Expense.objects, get_tenant(request))),
+        _with_relations(Expense.objects.filter(store__in=stores_accessible_to(request.user))),
         pk=pk,
     )
 

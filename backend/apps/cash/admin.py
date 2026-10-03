@@ -4,14 +4,13 @@ from unfold.admin import ModelAdmin
 
 from apps.dashboard.admin_columns import money_column, render_badge, status_badge
 from apps.dashboard.formatting import format_fcfa
-from apps.tenancy.admin_mixins import TenantAdminMixin
 
 from .admin_summary import build_session_z
 from .models import CashSession
 
 
 @admin.register(CashSession)
-class CashSessionAdmin(TenantAdminMixin, ModelAdmin):
+class CashSessionAdmin(ModelAdmin):
     list_display = (
         "opened_at",
         "cash_register",

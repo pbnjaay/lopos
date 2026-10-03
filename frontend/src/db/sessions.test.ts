@@ -74,35 +74,10 @@ describe("local cash session", () => {
       store_id: register.store_id,
       name: register.name,
     })
-    expect(
-      localSessionToCurrentUser(local, {
-        id: user.id,
-        username: "caissier",
-        firstName: "Awa",
-        organizationId: "org-id",
-        organizationName: "Boutique",
-        role: "CASHIER",
-        storeIds: ["store-id"],
-        canViewCosts: false,
-      }),
-    ).toMatchObject({
+    expect(localSessionToCurrentUser(local)).toMatchObject({
       id: user.id,
-      username: "caissier",
-      first_name: "Awa",
-      organization: { id: "org-id", name: "Boutique" },
-      role: "CASHIER",
-      store_ids: ["store-id"],
-      is_staff: false,
+      username: "Awa",
     })
-  })
-
-  it("notes the commerce of the cashier on the cached session", () => {
-    const local = buildLocalCashSession(session, register, {
-      ...user,
-      organization: { id: "org-id", name: "Boutique" },
-    })
-
-    expect(local.organizationId).toBe("org-id")
   })
 
   it("rejects fractional opening balances", () => {

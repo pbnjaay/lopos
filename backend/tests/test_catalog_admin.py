@@ -9,7 +9,6 @@ from django.urls import reverse
 from apps.catalog.models import Product
 from apps.inventory.models import InventoryMovement, Stock
 from apps.stores.models import Store
-from apps.tenancy.models import Organization
 
 
 pytestmark = pytest.mark.django_db
@@ -48,8 +47,6 @@ def _product_post_data(**overrides) -> dict:
         "is_active": "on",
         "initial_store": "",
         "initial_quantity": "0",
-        # La plateforme choisit le commerce du produit : le commerce pilote.
-        "organization": str(Organization.objects.sole().pk),
     }
     data.update(overrides)
     return data
@@ -332,9 +329,7 @@ def _csv_upload(content: str) -> SimpleUploadedFile:
     )
 
 
-def test_import_products_view_creates_products(
-    admin_client, store: Store, pilot_organization
-) -> None:
+def test_import_products_view_creates_products(admin_client, store: Store) -> None:
     content = (
         "barcode,name,purchase_price,selling_price,store,initial_stock\n"
         f"1234567890123,Pain,100,150,{store.name},40\n"
@@ -342,8 +337,7 @@ def test_import_products_view_creates_products(
 
     response = admin_client.post(
         reverse("admin:catalog_product_import_products_view"),
-        # La plateforme choisit le commerce dont elle importe le catalogue.
-        {"csv_file": _csv_upload(content), "organization": pilot_organization.pk},
+        {"csv_file": _csv_upload(content)},
         follow=True,
     )
 
@@ -356,15 +350,12 @@ def test_import_products_view_creates_products(
     )
 
 
-def test_import_products_view_reports_errors_and_imports_nothing(
-    admin_client, pilot_organization
-) -> None:
+def test_import_products_view_reports_errors_and_imports_nothing(admin_client) -> None:
     content = "barcode,name,purchase_price,selling_price,store,initial_stock\n,,,,,\n"
 
     response = admin_client.post(
         reverse("admin:catalog_product_import_products_view"),
-        # La plateforme choisit le commerce dont elle importe le catalogue.
-        {"csv_file": _csv_upload(content), "organization": pilot_organization.pk},
+        {"csv_file": _csv_upload(content)},
     )
 
     assert response.status_code == 200
@@ -379,7 +370,7 @@ def test_import_products_button_visible_on_changelist(admin_client) -> None:
     assert "Importer des produits" in response.content.decode()
 
 
-def test_import_products_view_requires_add_permission(client, store: Store, pilot_organization) -> None:
+def test_import_products_view_requires_add_permission(client, store: Store) -> None:
     User.objects.create_user(username="cashier", password="pass1234", is_staff=True)
     client.login(username="cashier", password="pass1234")
 
@@ -390,8 +381,7 @@ def test_import_products_view_requires_add_permission(client, store: Store, pilo
 
     response = client.post(
         reverse("admin:catalog_product_import_products_view"),
-        # La plateforme choisit le commerce dont elle importe le catalogue.
-        {"csv_file": _csv_upload(content), "organization": pilot_organization.pk},
+        {"csv_file": _csv_upload(content)},
     )
 
     assert response.status_code == 403

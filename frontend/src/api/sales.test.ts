@@ -76,14 +76,10 @@ describe("sales API", () => {
       }),
     )
 
-    await cancelSale("sale-id", { reason: "Mauvais article", approvalToken: "token" })
+    await cancelSale("sale-id")
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/sales/sale-id/cancel/")
     const [, request] = fetchMock.mock.calls[0] ?? []
     expect(request?.method).toBe("POST")
-    expect(JSON.parse(String(request?.body))).toEqual({
-      reason: "Mauvais article",
-      approval_token: "token",
-    })
   })
 })

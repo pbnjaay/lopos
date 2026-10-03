@@ -28,17 +28,6 @@ class ProcessedSyncEvent(models.Model):
         "type d'événement", max_length=32, choices=EventType.choices
     )
     entity_id = models.UUIDField("identifiant de l'entité (ex. sale_id)")
-    # Magasin de la vente produite : rattache l'événement à un commerce sans
-    # passer par `entity_id`, qui n'est pas une clé étrangère. Vide seulement
-    # pour un événement antérieur dont la vente n'existe plus.
-    store = models.ForeignKey(
-        "stores.Store",
-        on_delete=models.PROTECT,
-        related_name="sync_events",
-        verbose_name="magasin",
-        blank=True,
-        null=True,
-    )
     pushed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -56,23 +45,6 @@ class ProcessedSyncEvent(models.Model):
         "divergence de stock",
         default=False,
         help_text="Vrai si cette vente a fait passer un stock sous zéro.",
-    )
-    unapproved_discount = models.BooleanField(
-        "remise non validée",
-        default=False,
-        help_text=(
-            "Vrai si la vente porte une remise au-delà de ce qu'un caissier "
-            "accorde seul, sans validation de gérant valable."
-        ),
-    )
-    catalog_price_discrepancy = models.BooleanField(
-        "prix catalogue à vérifier",
-        default=False,
-        help_text=(
-            "Vrai si le prix catalogue envoyé par le poste diffère du prix "
-            "catalogue du serveur pour au moins un article (changement de prix "
-            "pendant la coupure, ou poste altéré)."
-        ),
     )
     processed_at = models.DateTimeField("traité le", auto_now_add=True)
 

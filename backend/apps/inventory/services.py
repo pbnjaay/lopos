@@ -5,7 +5,6 @@ from django.db import IntegrityError, transaction
 
 from apps.catalog.models import Product
 from apps.stores.models import Store
-from apps.tenancy.exceptions import ensure_same_organization
 
 from .exceptions import InvalidStockCost, InvalidStockQuantity
 from .models import InventoryMovement, Stock, StockCostChange
@@ -98,8 +97,6 @@ def apply_inbound_cost(stock: Stock, quantity: Decimal, unit_cost: Decimal | Non
 
 
 def _get_or_create_locked_stock(*, store: Store, product: Product) -> Stock:
-    # Un produit n'a de stock que dans les magasins de son commerce.
-    ensure_same_organization(store, product)
     try:
         return Stock.objects.select_for_update().get(store=store, product=product)
     except Stock.DoesNotExist:

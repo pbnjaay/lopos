@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react"
 
 import { Button, buttonClassName } from "../../components/ui/Button"
+import { Dialog, DialogBody, DialogFooter } from "../../components/ui/Dialog"
+import { InlineAlert } from "../../components/ui/InlineAlert"
 import { Money } from "../../components/ui/Money"
 import { useDialogFocusTrap } from "../../components/ui/useDialogFocusTrap"
-import { CancelSaleDialog } from "../sales/CancelSaleDialog"
-import type { CancelSaleInput } from "../sales/cancelSale"
 import { withSaleOrigin } from "../sales/origin"
 import { describeSettlement, PAYMENT_LABELS } from "../sales/paymentLabels"
 import type { ReceiptView } from "../sales/receiptView"
@@ -14,8 +14,9 @@ type SaleSuccessModalProps = {
   cashSessionId?: string
   onNewSale: () => void
   onPrintTicket?: () => void
-  /** Rejette en cas d'échec : le dialogue d'annulation reste ouvert. */
-  onCancelSale: (input: CancelSaleInput) => Promise<unknown>
+  onCancelSale: () => void | Promise<void>
+  isCancelling?: boolean
+  cancelErrorMessage?: string | null
 }
 
 /**
@@ -29,9 +30,12 @@ export function SaleSuccessModal({
   onNewSale,
   onPrintTicket,
   onCancelSale,
+  isCancelling = false,
+  cancelErrorMessage = null,
 }: SaleSuccessModalProps) {
   const dialogRef = useRef<HTMLElement>(null)
   const newSaleButtonRef = useRef<HTMLButtonElement>(null)
+  const keepSaleButtonRef = useRef<HTMLButtonElement>(null)
   useDialogFocusTrap(dialogRef)
   const [isConfirmingCancel, setIsConfirmingCancel] = useState(false)
   const isSplitPayment = sale.payments.length > 1
@@ -76,6 +80,17 @@ export function SaleSuccessModal({
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [onNewSale, isConfirmingCancel])
+
+  async function confirmCancelSale() {
+    try {
+      await onCancelSale()
+      // Succès : le parent vide `completedSale`, ce composant se démonte.
+      setIsConfirmingCancel(false)
+    } catch {
+      // Échec : la modale de confirmation reste ouverte, l'erreur y est
+      // affichée via cancelErrorMessage — rien à faire ici.
+    }
+  }
 
   return (
     <div className="dialog-backdrop">
@@ -187,14 +202,16 @@ export function SaleSuccessModal({
       </section>
 
       {isConfirmingCancel ? (
-        <CancelSaleDialog
+        <Dialog
           eyebrow="Vente validée"
-          saleId={sale.id}
-          cashSessionId={cashSessionId}
+          title="Annuler cette vente ?"
+          size="sm"
+          initialFocusRef={keepSaleButtonRef}
+          dismissible={!isCancelling}
           onClose={() => setIsConfirmingCancel(false)}
-          onCancel={onCancelSale}
-          description={
-            <>
+        >
+          <DialogBody>
+            <p>
               Le stock sera remis à jour.
               {sale.payments.length > 0 ? (
                 <>
@@ -209,9 +226,30 @@ export function SaleSuccessModal({
                   retirée de son solde.
                 </>
               ) : null}
-            </>
-          }
-        />
+            </p>
+            {cancelErrorMessage ? (
+              <InlineAlert tone="error">{cancelErrorMessage}</InlineAlert>
+            ) : null}
+            <DialogFooter>
+              <Button
+                ref={keepSaleButtonRef}
+                variant="secondary"
+                disabled={isCancelling}
+                onClick={() => setIsConfirmingCancel(false)}
+              >
+                Garder la vente
+              </Button>
+              <Button
+                variant="destructive"
+                loading={isCancelling}
+                loadingLabel="Annulation…"
+                onClick={() => void confirmCancelSale()}
+              >
+                Confirmer l'annulation
+              </Button>
+            </DialogFooter>
+          </DialogBody>
+        </Dialog>
       ) : null}
     </div>
   )

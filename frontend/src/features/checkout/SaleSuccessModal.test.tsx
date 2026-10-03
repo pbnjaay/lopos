@@ -4,11 +4,8 @@ import "@testing-library/jest-dom/vitest"
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import * as approvalsApi from "../../api/approvals"
-import { ApiError } from "../../api/client"
 import type { ReceiptView } from "../sales/receiptView"
 import { SaleSuccessModal } from "./SaleSuccessModal"
 
@@ -33,10 +30,7 @@ const sale: ReceiptView = {
   items: [],
 }
 
-afterEach(() => {
-  cleanup()
-  vi.restoreAllMocks()
-})
+afterEach(cleanup)
 
 describe("SaleSuccessModal", () => {
   it("uses the sale amounts and starts a new sale", async () => {
@@ -171,79 +165,36 @@ describe("SaleSuccessModal", () => {
       expect(onNewSale).not.toHaveBeenCalled()
     })
 
-    it("requires a reason, then calls onCancelSale with it", async () => {
+    it("calls onCancelSale once confirmed", async () => {
       const user = userEvent.setup()
       const onCancelSale = vi.fn().mockResolvedValue(undefined)
       render(<SaleSuccessModal sale={sale} onNewSale={vi.fn()} onCancelSale={onCancelSale} />)
 
       await user.click(screen.getByRole("button", { name: "Erreur ? Annuler cette vente" }))
-      expect(screen.getByRole("button", { name: "Confirmer l'annulation" })).toBeDisabled()
-      await user.type(screen.getByLabelText("Motif (obligatoire)"), "Mauvais article")
       await user.click(screen.getByRole("button", { name: "Confirmer l'annulation" }))
 
-      expect(onCancelSale).toHaveBeenCalledWith({ reason: "Mauvais article", approvalToken: null })
+      expect(onCancelSale).toHaveBeenCalledOnce()
     })
 
     it("keeps the confirmation open and shows the error when cancelling fails", async () => {
       const user = userEvent.setup()
-      const onCancelSale = vi.fn().mockRejectedValue(
-        new ApiError(409, { code: "INVALID_CANCELLATION", message: "Impossible d’annuler cette vente." }),
+      const onCancelSale = vi.fn().mockRejectedValue(new Error("boom"))
+      render(
+        <SaleSuccessModal
+          sale={sale}
+          onNewSale={vi.fn()}
+          onCancelSale={onCancelSale}
+          cancelErrorMessage="Impossible d’annuler cette vente."
+        />,
       )
-      render(<SaleSuccessModal sale={sale} onNewSale={vi.fn()} onCancelSale={onCancelSale} />)
 
       await user.click(screen.getByRole("button", { name: "Erreur ? Annuler cette vente" }))
-      await user.type(screen.getByLabelText("Motif (obligatoire)"), "Erreur")
       await user.click(screen.getByRole("button", { name: "Confirmer l'annulation" }))
 
       expect(
         screen.getByRole("heading", { name: "Annuler cette vente ?" }),
       ).toBeInTheDocument()
-      expect(await screen.findByText("Impossible d’annuler cette vente.")).toBeInTheDocument()
-    })
-
-    it("asks a manager's PIN when the server requires it, then retries with the approval", async () => {
-      const user = userEvent.setup()
-      vi.spyOn(approvalsApi, "listApprovers").mockResolvedValue([{ id: 7, name: "Awa" }])
-      const approvalSpy = vi.spyOn(approvalsApi, "requestApproval").mockResolvedValue({
-        approval_token: "signed-token",
-        approver: { id: 7, name: "Awa" },
-      })
-      const onCancelSale = vi
-        .fn()
-        .mockRejectedValueOnce(
-          new ApiError(403, { code: "MANAGER_APPROVAL_REQUIRED", message: "Validation requise." }),
-        )
-        .mockResolvedValueOnce(undefined)
-      render(
-        <QueryClientProvider client={new QueryClient()}>
-          <SaleSuccessModal
-            sale={sale}
-            cashSessionId="session-id"
-            onNewSale={vi.fn()}
-            onCancelSale={onCancelSale}
-          />
-        </QueryClientProvider>,
-      )
-
-      await user.click(screen.getByRole("button", { name: "Erreur ? Annuler cette vente" }))
-      await user.type(screen.getByLabelText("Motif (obligatoire)"), "Client parti")
-      await user.click(screen.getByRole("button", { name: "Confirmer l'annulation" }))
-      expect(await screen.findByRole("heading", { name: "Un gérant doit valider" })).toBeInTheDocument()
-      await screen.findByRole("option", { name: "Awa" })
-      await user.type(screen.getByLabelText("Code PIN du gérant"), "4821")
-      await user.click(screen.getByRole("button", { name: "Valider" }))
-
-      expect(approvalSpy).toHaveBeenCalledWith({
-        cashSessionId: "session-id",
-        action: "CANCEL_SALE",
-        saleId: "sale-id",
-        approverId: 7,
-        pin: "4821",
-      })
-      expect(onCancelSale).toHaveBeenLastCalledWith({
-        reason: "Client parti",
-        approvalToken: "signed-token",
-      })
+      expect(screen.getByText("Impossible d’annuler cette vente.")).toBeInTheDocument()
     })
 
     it("backs out without cancelling via « Garder la vente »", async () => {
